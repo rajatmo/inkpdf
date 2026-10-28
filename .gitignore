@@ -1,0 +1,16 @@
+# Build output (the standalone and portable builds use their own target folders)
+/target/
+/target-portable/
+# Installers, portable packages and anything else the packaging scripts produce
+/apps/inkpdf/installer/Output/
+# Editor and OS litter
+*.tmp
+*.orig
+*.rej
+.vs/
+.vscode/
+*.user
+Thumbs.db
+desktop.ini
+# Local scratch: screenshots and settings from the end-to-end runs
+/tools/e2e/out/

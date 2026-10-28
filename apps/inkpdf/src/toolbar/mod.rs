@@ -1,0 +1,303 @@
+//! The floating toolbars: layout, hit testing and drawing. Everything is rounded panels and
+//! round-ended line segments, so it needs no text or image rendering; the icons are TikZ drawings
+//! (see [`icons`]).
+//!
+//! There are three pills along the top, as in Notewise: the document's buttons on the left (close,
+//! undo, redo, save), the tools in the middle (pen, laser) and full screen on the right. The pen's
+//! colour, thickness and smoothing are in a panel that opens under the pen button
+//! (see [`PenPanel`]).
+
+mod icons;
+mod prompt;
+mod theme;
+mod tool_panel;
+
+#[cfg(test)]
+mod tests;
+
+use crate::ink::rect_contains;
+
+use icons::icons;
+pub use prompt::{Choice, PromptLayout, PromptView};
+pub use theme::Ui;
+use theme::{ACCENT, ACCENT_WASH, HOVER_WASH, INK, INK_DIM, RIM, SEPARATOR};
+#[cfg(test)]
+pub use tool_panel::ToolPanel;
+pub use tool_panel::{Channel, PanelState, PanelView, Slider};
+
+/// The colour slots a fresh install starts with; each can be replaced with any colour.
+pub const PALETTE: [[u8; 4]; 5] = [[28, 30, 36, 255], [32, 96, 224, 255], [224, 52, 52, 255], [38, 160, 84, 255], [244, 148, 28, 255]];
+/// The pen's thickness, in points, until it is changed.
+pub const DEFAULT_WIDTH: f32 = 2.5;
+/// The thinnest and thickest pen, in points.
+pub const MIN_WIDTH: f32 = 0.25;
+pub const MAX_WIDTH: f32 = 24.0;
+
+/// A width in `range` for a position `t` (0 to 1) along the slider. Widths span a decade or two, so
+/// the slider is logarithmic: the same drag makes the same proportional change at any thickness.
+pub fn width_in(range: (f32, f32), t: f32) -> f32 {
+    range.0 * (range.1 / range.0).powf(t.clamp(0.0, 1.0))
+}
+
+/// Where along the slider a width sits, 0 to 1; the inverse of [`width_in`].
+pub fn position_in(range: (f32, f32), width: f32) -> f32 {
+    ((width.max(range.0) / range.0).ln() / (range.1 / range.0).ln()).clamp(0.0, 1.0)
+}
+
+/// [`width_in`] for a pen.
+#[cfg(test)]
+pub fn width_at(t: f32) -> f32 {
+    width_in((MIN_WIDTH, MAX_WIDTH), t)
+}
+
+/// [`position_in`] for a pen.
+#[cfg(test)]
+pub fn slider_position(width: f32) -> f32 {
+    position_in((MIN_WIDTH, MAX_WIDTH), width)
+}
+
+/// What the pen does on the page.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Tool {
+    /// Draws ink (and its eraser end erases, its barrel button lassos).
+    #[default]
+    Pen,
+    /// Draws shapes (see [crate::geometry]): a drag makes a line, a rectangle, an ellipse or a
+    /// set of axes; a curve is dragged out and then shaped by its handles.
+    Geometry,
+    /// Types text: a tap of the stylus starts a text box (or edits the one tapped), and the keyboard
+    /// types into it.
+    Text,
+    /// Points: a dot that follows the pen, with a trail that fades. Draws nothing.
+    Laser,
+}
+
+impl Tool {
+    /// The name used in the settings file.
+    pub fn name(self) -> &'static str {
+        match self {
+            Tool::Pen => "pen",
+            Tool::Geometry => "geometry",
+            Tool::Text => "text",
+            Tool::Laser => "laser",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Tool> {
+        [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Laser].into_iter().find(|t| t.name() == name)
+    }
+}
+
+/// How a tool that draws ink writes: which colour slot and how thick, in points.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ToolStyle {
+    pub colour: usize,
+    pub width: f32,
+}
+
+impl ToolStyle {
+    pub const PEN: ToolStyle = ToolStyle { colour: 0, width: DEFAULT_WIDTH };
+    /// Shapes start thinner than handwriting, in blue.
+    pub const SHAPES: ToolStyle = ToolStyle { colour: 1, width: 1.5 };
+    /// Text starts at a comfortable reading size (the "width" is its size in points).
+    pub const TEXT: ToolStyle = ToolStyle { colour: 0, width: 18.0 };
+}
+
+/// The smallest and largest `width` a tool's style may have: a pen's line width, or the size of
+/// text in points.
+pub fn width_range(tool: Tool) -> (f32, f32) {
+    if tool == Tool::Text { (TEXT_SIZES.0, TEXT_SIZES.1) } else { (MIN_WIDTH, MAX_WIDTH) }
+}
+
+/// The smallest and largest text, in points.
+pub const TEXT_SIZES: (f32, f32) = (6.0, 144.0);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Item {
+    /// Close the document and start a blank one.
+    Close,
+    Undo,
+    Redo,
+    Save,
+    /// Add a blank page after the one being looked at.
+    AddPage,
+    Tool(Tool),
+    /// Fill the whole screen, or give it back.
+    Fullscreen,
+}
+
+/// Everything the toolbars' look depends on.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct State {
+    pub can_undo: bool,
+    pub can_redo: bool,
+    pub unsaved: bool,
+    pub fullscreen: bool,
+    pub tool: Tool,
+    /// The colours the pen and the shape tool write in, shown on their buttons.
+    pub pen_colour: [u8; 4],
+    pub shape_colour: [u8; 4],
+    pub text_colour: [u8; 4],
+    /// The button the mouse is over.
+    pub hover: Option<Item>,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            can_undo: false,
+            can_redo: false,
+            unsaved: false,
+            fullscreen: false,
+            tool: Tool::Pen,
+            pen_colour: PALETTE[0],
+            shape_colour: PALETTE[1],
+            text_colour: PALETTE[0],
+            hover: None,
+        }
+    }
+}
+
+/// What goes in each pill, left to right; `None` is a gap with a hairline in it.
+const LEFT: [Option<Item>; 7] = [Some(Item::Close), None, Some(Item::Undo), Some(Item::Redo), Some(Item::Save), None, Some(Item::AddPage)];
+const MIDDLE: [Option<Item>; 4] =
+    [Some(Item::Tool(Tool::Pen)), Some(Item::Tool(Tool::Geometry)), Some(Item::Tool(Tool::Text)), Some(Item::Tool(Tool::Laser))];
+const RIGHT: [Option<Item>; 1] = [Some(Item::Fullscreen)];
+
+/// Buttons in all.
+const BUTTONS: usize = 10;
+
+pub struct Toolbar {
+    /// The three pills, `[x0, y0, x1, y1]` in pixels: left, middle, right.
+    pub pills: [[f32; 4]; 3],
+    /// Every button and where it is; a fixed array, so laying the toolbar out (which happens on
+    /// every pen and mouse event near it) allocates nothing.
+    items: [(Item, [f32; 4]); BUTTONS],
+    unit: f32,
+    dpr: f32,
+}
+
+impl Toolbar {
+    /// Along the top of a viewport of `viewport` pixels, sized for `dpr`.
+    pub fn layout(viewport: [f32; 2], dpr: f32) -> Toolbar {
+        let (gap, pad, margin) = (10.0 * dpr, 8.0 * dpr, 12.0 * dpr);
+        // Shrink to fit narrow windows, never below something still tappable: the left pill (four
+        // buttons and a gap) and half the middle one must fit in half the window.
+        let unit = (44.0 * dpr).min(((viewport[0] / 2.0 - margin - 3.0 * pad - 3.0 * gap) / 7.0).max(24.0 * dpr));
+        let height = unit + 2.0 * pad;
+        let width_of = |slots: &[Option<Item>]| slots.iter().map(|s| if s.is_some() { unit } else { gap }).sum::<f32>() + 2.0 * pad;
+        let (left_w, middle_w, right_w) = (width_of(&LEFT), width_of(&MIDDLE), width_of(&RIGHT));
+        let lefts = [margin, (viewport[0] - middle_w) / 2.0, (viewport[0] - margin - right_w).max(0.0)];
+        let widths = [left_w, middle_w, right_w];
+        let mut items = [(Item::Close, [0.0; 4]); BUTTONS];
+        let mut placed = 0;
+        let mut pills = [[0.0; 4]; 3];
+        for (i, slots) in [&LEFT[..], &MIDDLE[..], &RIGHT[..]].into_iter().enumerate() {
+            let mut x = lefts[i] + pad;
+            for slot in slots {
+                match slot {
+                    Some(item) => {
+                        items[placed] = (*item, [x, margin + pad, x + unit, margin + pad + unit]);
+                        placed += 1;
+                        x += unit;
+                    }
+                    None => x += gap,
+                }
+            }
+            pills[i] = [lefts[i], margin, lefts[i] + widths[i], margin + height];
+        }
+        debug_assert_eq!(placed, BUTTONS, "every button is placed");
+        Toolbar { pills, items, unit, dpr }
+    }
+
+    /// The bottom edge of the pills.
+    pub fn bottom(&self) -> f32 {
+        self.pills[0][3]
+    }
+
+    fn button(&self, item: Item) -> Option<[f32; 4]> {
+        self.items.iter().find(|(i, _)| *i == item).map(|(_, r)| *r)
+    }
+
+    /// The middle of a button, for tests that press it.
+    #[cfg(test)]
+    pub fn centre_of(&self, item: Item) -> [f32; 2] {
+        let r = self.button(item).unwrap_or([0.0; 4]);
+        [(r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0]
+    }
+
+    pub fn contains(&self, p: [f32; 2]) -> bool {
+        self.pills.iter().any(|&r| rect_contains(r, p))
+    }
+
+    pub fn hit(&self, p: [f32; 2]) -> Option<Item> {
+        self.items.iter().find(|(_, r)| rect_contains(*r, p)).map(|(i, _)| *i)
+    }
+
+    pub fn draw(&self, state: &State, ui: &mut Ui) {
+        let u = self.unit;
+        let px = self.dpr;
+        for pill in self.pills {
+            ui.floating(pill, 0.5 * (pill[3] - pill[1]), px);
+        }
+        let icons = icons();
+        let line = (u * 0.04).max(1.4 * px);
+        let mut last_end: Option<(usize, f32)> = None;
+        for &(item, r) in &self.items {
+            let (cx, cy) = ((r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0);
+            let pill = self.pills.iter().position(|&p| rect_contains(p, [cx, cy])).unwrap_or(0);
+            if let Some((was, end)) = last_end
+                && was == pill
+                && r[0] - end > 1.0
+            {
+                let x = end + (r[0] - end) / 2.0;
+                ui.line([x, cy - 0.32 * u], [x, cy + 0.32 * u], px.max(1.0), SEPARATOR);
+            }
+            last_end = Some((pill, r[2]));
+            let active = item == Item::Tool(state.tool);
+            let enabled = match item {
+                Item::Undo => state.can_undo,
+                Item::Redo => state.can_redo,
+                _ => true,
+            };
+            // The wash behind a button: blue for the tool in use, grey under the mouse.
+            let wash = if active {
+                Some(ACCENT_WASH)
+            } else if state.hover == Some(item) && enabled {
+                Some(HOVER_WASH)
+            } else {
+                None
+            };
+            if let Some(colour) = wash {
+                ui.panel([cx - 0.46 * u, cy - 0.46 * u, cx + 0.46 * u, cy + 0.46 * u], 0.3 * u, colour);
+            }
+            let half = 0.33 * u;
+            let ink = |on: bool| if on { INK } else { INK_DIM };
+            match item {
+                Item::Undo => icons.undo.draw(&mut ui.lines, cx, cy, half, line, ink(state.can_undo)),
+                Item::Redo => icons.redo.draw(&mut ui.lines, cx, cy, half, line, ink(state.can_redo)),
+                Item::Save => icons.save.draw(&mut ui.lines, cx, cy, half, line, if state.unsaved { ACCENT } else { INK }),
+                Item::Close => icons.close.draw(&mut ui.lines, cx, cy, half, line, INK),
+                Item::AddPage => icons.plus.draw(&mut ui.lines, cx, cy, half, line, INK),
+                Item::Fullscreen => {
+                    let icon = if state.fullscreen { &icons.exit_fullscreen } else { &icons.fullscreen };
+                    icon.draw(&mut ui.lines, cx, cy, half, line, INK);
+                }
+                Item::Tool(tool @ (Tool::Pen | Tool::Geometry | Tool::Text)) => {
+                    let (icon, colour) = match tool {
+                        Tool::Pen => (&icons.pen, state.pen_colour),
+                        Tool::Geometry => (&icons.geometry, state.shape_colour),
+                        _ => (&icons.text, state.text_colour),
+                    };
+                    icon.draw(&mut ui.lines, cx, cy, half * 1.05, line, if active { ACCENT } else { INK });
+                    // The colour the tool writes in, as a dot on its corner.
+                    let dot = [r[2] - 0.2 * u, r[3] - 0.2 * u];
+                    ui.disc(dot, 0.3 * u, [255, 255, 255, 255]);
+                    ui.disc(dot, 0.24 * u, RIM);
+                    ui.disc(dot, 0.2 * u, colour);
+                }
+                Item::Tool(Tool::Laser) => icons.laser.draw(&mut ui.lines, cx, cy, half * 1.05, line, if active { ACCENT } else { INK }),
+            }
+        }
+    }
+}

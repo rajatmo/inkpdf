@@ -1,0 +1,28 @@
+[package]
+name = "inkpdf-thumb"
+description = "Explorer thumbnail handler for InkPDF: shows a PDF's first page as the file's icon"
+version = "0.2.0"
+authors = ["Rajat Mandal"]
+edition.workspace = true
+license.workspace = true
+publish = false
+
+# Not `[lints] workspace = true`: a COM DLL has to use unsafe code (exported functions, raw
+# pointers handed over by the shell), confined to this one small crate.
+
+[lib]
+crate-type = ["cdylib"]
+
+# No PDF code in here on purpose: the DLL runs inside Explorer (and other programs that show
+# thumbnails), so it only reads the file and asks `inkpdf.exe --thumbnail` to draw it.
+[target.'cfg(windows)'.dependencies]
+# The implement macro names windows-core directly.
+windows-core = "0.62"
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_Com",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_PropertiesSystem",
+] }

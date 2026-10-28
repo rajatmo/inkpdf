@@ -1,0 +1,46 @@
+[workspace]
+resolver = "3"
+members = ["apps/inkpdf", "apps/inkpdf-thumb"]
+
+[workspace.package]
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.95"
+
+# InkPDF reads, renders and writes PDFs with crates from pdfcraft (https://github.com/storytold/pdfcraft),
+# pinned to one commit so a build never changes under us. To move to a newer pdfcraft, change PDFCRAFT_REV
+# in all of the lines below (they must agree), run `cargo update -p pdfcraft-cos`, and run the tests.
+[workspace.dependencies]
+pdfcraft-cos = { git = "https://github.com/storytold/pdfcraft", rev = "1dd2737b47a9c1c9562f0af563053d1bf510e4bf" }
+pdfcraft-annot = { git = "https://github.com/storytold/pdfcraft", rev = "1dd2737b47a9c1c9562f0af563053d1bf510e4bf" }
+pdfcraft-render = { git = "https://github.com/storytold/pdfcraft", rev = "1dd2737b47a9c1c9562f0af563053d1bf510e4bf" }
+pdfcraft-create = { git = "https://github.com/storytold/pdfcraft", rev = "1dd2737b47a9c1c9562f0af563053d1bf510e4bf" }
+pdfcraft-organize = { git = "https://github.com/storytold/pdfcraft", rev = "1dd2737b47a9c1c9562f0af563053d1bf510e4bf" }
+rfd = "0.17"
+
+[profile.dev]
+opt-level = 1
+debug = "line-tables-only"
+
+# Dependencies (the PDF renderer above all) are slow unoptimised even in a dev build.
+[profile.dev.package."*"]
+opt-level = 2
+debug = false
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+# pdfcraft carries patched copies of a few third-party crates under its `vendor/` directory (each patch is
+# meant to go upstream); the same copies are used here, from the same commit. `winit` is pdfcraft's pinned
+# fork of 0.30 (the one InkPDF has been developed and tested against).
+[patch.crates-io]
+hayro = { git = "https://github.com/storytold/pdfcraft", rev = "1dd2737b47a9c1c9562f0af563053d1bf510e4bf" }
+hayro-syntax = { git = "https://github.com/storytold/pdfcraft", rev = "1dd2737b47a9c1c9562f0af563053d1bf510e4bf" }
+hayro-interpret = { git = "https://github.com/storytold/pdfcraft", rev = "1dd2737b47a9c1c9562f0af563053d1bf510e4bf" }
+hayro-cmap = { git = "https://github.com/storytold/pdfcraft", rev = "1dd2737b47a9c1c9562f0af563053d1bf510e4bf" }
+hayro-postscript = { git = "https://github.com/storytold/pdfcraft", rev = "1dd2737b47a9c1c9562f0af563053d1bf510e4bf" }
+hayro-jbig2 = { git = "https://github.com/storytold/pdfcraft", rev = "1dd2737b47a9c1c9562f0af563053d1bf510e4bf" }
+lopdf = { git = "https://github.com/storytold/pdfcraft", rev = "1dd2737b47a9c1c9562f0af563053d1bf510e4bf" }
+vello_common = { git = "https://github.com/storytold/pdfcraft", rev = "1dd2737b47a9c1c9562f0af563053d1bf510e4bf" }
+winit = { git = "https://github.com/storytold/winit.git", rev = "a517b3846ee8457d84ee4975110bfda6797c44dc" }

@@ -1,0 +1,15 @@
+InkPDF
+Copyright (c) 2026 Rajat Mandal.
+Written by Rajat Mandal with Claude (Anthropic).
+Licensed under the MIT License or the Apache License, Version 2.0, at your option
+(LICENSE-MIT, LICENSE-APACHE).
+
+Built on PdfCraft (https://github.com/storytold/pdfcraft), MIT OR Apache-2.0, which supplies the PDF
+reading, rendering, annotation and page-organising crates InkPDF uses, and the patched copies of
+third-party crates (hayro, lopdf, vello_common) and the winit fork it pins. Those are fetched from their
+own repositories at the commits named in Cargo.toml; none of their source is copied into this one. The
+ArtCraft name and logos belong to the ArtCraft team and are not used here.
+
+Assets: every icon (apps/inkpdf/icons/*.tex and the SVG drawn from them) and the application icon
+(apps/inkpdf/installer/app-icon.tex) was drawn for this project. No font file is bundled: typed text uses
+the Arial installed with Windows, read from the system at run time.

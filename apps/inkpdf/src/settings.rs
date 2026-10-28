@@ -1,0 +1,309 @@
+//! What the app remembers between sessions: the tool in use, the five colours, and each tool's own
+//! settings (the pen's colour, thickness and smoothing; the shape tool's shape, colour and
+//! thickness; the text tool's colour and size).
+//!
+//! A small text file in the user's application-data folder, one setting per line:
+//!
+//! ```text
+//! tool geometry
+//! color 2 d72828
+//! slot 2
+//! width 2.50
+//! smoothing 0.50
+//! shape ellipse
+//! shape-slot 1
+//! shape-width 1.50
+//! text-slot 0
+//! text-size 18.00
+//! ```
+//!
+//! Anything unreadable is ignored, so a damaged or hand-edited file can never stop the app
+//! starting; it just falls back to the defaults for those lines. (Older files had three width
+//! slots, `width 1 2.5`; those lines are ignored.)
+
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use crate::geometry::Shape;
+use crate::smooth::DEFAULT_AMOUNT;
+use crate::toolbar::{MAX_WIDTH, MIN_WIDTH, PALETTE, TEXT_SIZES, Tool, ToolStyle};
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Settings {
+    pub palette: [[u8; 4]; 5],
+    pub tool: Tool,
+    pub pen: ToolStyle,
+    pub smoothing: f32,
+    pub shape: Shape,
+    pub shape_style: ToolStyle,
+    pub text_style: ToolStyle,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            palette: PALETTE,
+            tool: Tool::Pen,
+            pen: ToolStyle::PEN,
+            smoothing: DEFAULT_AMOUNT,
+            shape: Shape::default(),
+            shape_style: ToolStyle::SHAPES,
+            text_style: ToolStyle::TEXT,
+        }
+    }
+}
+
+impl Settings {
+    /// Read settings from text, keeping the default for anything missing or unreadable.
+    pub fn parse(text: &str) -> Settings {
+        let mut out = Settings::default();
+        for line in text.lines() {
+            let words: Vec<&str> = line.split_whitespace().collect();
+            match words[..] {
+                ["color", slot, value] => {
+                    if let (Ok(slot), Some(rgb)) = (slot.parse::<usize>(), parse_hex(value))
+                        && let Some(cell) = out.palette.get_mut(slot)
+                    {
+                        *cell = [rgb[0], rgb[1], rgb[2], 255];
+                    }
+                }
+                ["tool", name] => out.tool = Tool::from_name(name).unwrap_or(out.tool),
+                ["shape", name] => out.shape = Shape::from_name(name).unwrap_or(out.shape),
+                ["slot", slot] => {
+                    if let Some(slot) = parse_slot(slot) {
+                        out.pen.colour = slot;
+                    }
+                }
+                ["shape-slot", slot] => {
+                    if let Some(slot) = parse_slot(slot) {
+                        out.shape_style.colour = slot;
+                    }
+                }
+                ["text-slot", slot] => {
+                    if let Some(slot) = parse_slot(slot) {
+                        out.text_style.colour = slot;
+                    }
+                }
+                ["text-size", value] => {
+                    if let Some(size) = parse_finite(value) {
+                        out.text_style.width = size.clamp(TEXT_SIZES.0, TEXT_SIZES.1);
+                    }
+                }
+                ["width", value] => {
+                    if let Some(w) = parse_finite(value) {
+                        out.pen.width = w.clamp(MIN_WIDTH, MAX_WIDTH);
+                    }
+                }
+                ["shape-width", value] => {
+                    if let Some(w) = parse_finite(value) {
+                        out.shape_style.width = w.clamp(MIN_WIDTH, MAX_WIDTH);
+                    }
+                }
+                ["smoothing", value] => {
+                    if let Some(s) = parse_finite(value) {
+                        out.smoothing = s.clamp(0.0, 1.0);
+                    }
+                }
+                _ => {}
+            }
+        }
+        out
+    }
+
+    pub fn to_text(&self) -> String {
+        let mut text = String::new();
+        for (i, c) in self.palette.iter().enumerate() {
+            text.push_str(&format!("color {i} {:02x}{:02x}{:02x}\n", c[0], c[1], c[2]));
+        }
+        text.push_str(&format!(
+            "tool {}\nslot {}\nwidth {:.2}\nsmoothing {:.2}\n",
+            self.tool.name(),
+            self.pen.colour,
+            self.pen.width,
+            self.smoothing
+        ));
+        text.push_str(&format!("shape {}\nshape-slot {}\nshape-width {:.2}\n", self.shape.name(), self.shape_style.colour, self.shape_style.width));
+        text.push_str(&format!("text-slot {}\ntext-size {:.2}\n", self.text_style.colour, self.text_style.width));
+        text
+    }
+}
+
+fn parse_finite(text: &str) -> Option<f32> {
+    text.parse::<f32>().ok().filter(|v| v.is_finite())
+}
+
+/// A colour slot: one of the five.
+fn parse_slot(text: &str) -> Option<usize> {
+    text.parse::<usize>().ok().filter(|&slot| slot < PALETTE.len())
+}
+
+fn parse_hex(text: &str) -> Option<[u8; 3]> {
+    let hex = text.trim_start_matches('#');
+    if hex.len() != 6 || !hex.is_ascii() {
+        return None;
+    }
+    let channel = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok();
+    Some([channel(0)?, channel(2)?, channel(4)?])
+}
+
+/// The file whose presence beside the exe makes the app portable: its settings are kept there too.
+const PORTABLE_MARKER: &str = "portable.txt";
+
+/// Where the settings file lives: `settings.txt` beside the exe if `portable.txt` is there too (a copy on
+/// a stick leaves nothing on the PC), else `%APPDATA%\InkPDF\settings.txt`.
+fn path() -> Option<PathBuf> {
+    let exe_dir = std::env::current_exe().ok().and_then(|exe| exe.parent().map(PathBuf::from));
+    settings_path(exe_dir.as_deref(), std::env::var_os("APPDATA").map(PathBuf::from))
+}
+
+fn settings_path(exe_dir: Option<&Path>, appdata: Option<PathBuf>) -> Option<PathBuf> {
+    if let Some(dir) = exe_dir.filter(|d| d.join(PORTABLE_MARKER).is_file()) {
+        return Some(dir.join("settings.txt"));
+    }
+    Some(appdata?.join("InkPDF").join("settings.txt"))
+}
+
+/// The saved settings, or the defaults when there are none (or they cannot be read).
+pub fn load() -> Settings {
+    path().and_then(|p| fs::read_to_string(p).ok()).map_or_else(Settings::default, |t| Settings::parse(&t))
+}
+
+/// Remember the settings. A failure is reported, not fatal: losing a colour must never stop work.
+pub fn save(settings: &Settings) -> Result<(), String> {
+    let path = path().ok_or("no application-data folder")?;
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir).map_err(|e| format!("could not create {}: {e}", dir.display()))?;
+    }
+    // Written beside the file and renamed over it, so a crash half-way leaves the old settings.
+    let temp = path.with_extension("tmp");
+    fs::write(&temp, settings.to_text()).map_err(|e| format!("could not write {}: {e}", temp.display()))?;
+    fs::rename(&temp, &path).map_err(|e| format!("could not replace {}: {e}", path.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::toolbar::DEFAULT_WIDTH;
+
+    #[test]
+    fn a_portable_marker_beside_the_exe_keeps_the_settings_there_else_they_go_to_appdata() {
+        let dir = std::env::temp_dir().join(format!("inkpdf-portable-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let appdata = PathBuf::from("C:\\appdata");
+        assert_eq!(settings_path(Some(&dir), Some(appdata.clone())), Some(appdata.join("InkPDF").join("settings.txt")));
+        std::fs::write(dir.join(PORTABLE_MARKER), "").unwrap();
+        assert_eq!(settings_path(Some(&dir), Some(appdata)), Some(dir.join("settings.txt")));
+        assert_eq!(settings_path(Some(&dir), None), Some(dir.join("settings.txt")), "no appdata needed when portable");
+        assert_eq!(settings_path(None, None), None);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    fn everything_changed() -> Settings {
+        let mut s = Settings::default();
+        s.palette[2] = [12, 34, 255, 255];
+        s.palette[4] = [0, 0, 0, 255];
+        s.tool = Tool::Geometry;
+        s.pen = ToolStyle { colour: 3, width: 17.5 };
+        s.smoothing = 0.8;
+        s.shape = Shape::Axes3d;
+        s.shape_style = ToolStyle { colour: 4, width: 0.5 };
+        s.text_style = ToolStyle { colour: 2, width: 40.0 };
+        s
+    }
+
+    #[test]
+    fn settings_round_trip_through_text() {
+        let s = everything_changed();
+        assert_eq!(Settings::parse(&s.to_text()), s);
+        for tool in [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Laser] {
+            for shape in crate::geometry::SHAPES {
+                let s = Settings { tool, shape, ..everything_changed() };
+                assert_eq!(Settings::parse(&s.to_text()), s, "{tool:?} {shape:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_empty_or_missing_file_means_the_defaults() {
+        assert_eq!(Settings::parse(""), Settings::default());
+        assert_eq!(Settings::parse("\n\n   \n"), Settings::default());
+    }
+
+    #[test]
+    fn unreadable_lines_are_ignored_and_the_rest_still_apply() {
+        let text = "color 1 not-a-colour\ncolor 9 ff0000\nwidth x\nwidth NaN\nwidth\nsmoothing 2 3 4\nbanana 1 2\ntool hammer\nshape hexagon\nslot 9\nslot -1\nshape-slot x\ncolor 0 #00ff00\nwidth 3.5\ntool laser\n";
+        let s = Settings::parse(text);
+        // Only the three good lines took effect.
+        assert_eq!(s.palette[0], [0, 255, 0, 255]);
+        assert_eq!(s.pen.width, 3.5);
+        assert_eq!(s.tool, Tool::Laser);
+        assert_eq!(s.palette[1], PALETTE[1]);
+        assert_eq!(s.smoothing, DEFAULT_AMOUNT);
+        assert_eq!((s.pen.colour, s.shape, s.shape_style), (Settings::default().pen.colour, Shape::default(), ToolStyle::SHAPES));
+    }
+
+    #[test]
+    fn the_old_three_slot_widths_are_ignored() {
+        assert_eq!(Settings::parse("width 0 7\nwidth 1 9\nwidth 2 11\n").pen.width, DEFAULT_WIDTH);
+    }
+
+    #[test]
+    fn settings_from_before_the_shape_tool_still_read() {
+        // What the previous version wrote.
+        let old = "color 0 1c1e24\ncolor 1 2060e0\ncolor 2 e03434\ncolor 3 26a054\ncolor 4 f4941c\nwidth 4.00\nsmoothing 0.30\n";
+        let s = Settings::parse(old);
+        assert_eq!((s.pen.width, s.smoothing, s.tool), (4.0, 0.3, Tool::Pen));
+        assert_eq!((s.shape, s.shape_style), (Shape::Line, ToolStyle::SHAPES), "the new settings are the defaults");
+    }
+
+    #[test]
+    fn widths_and_smoothing_are_kept_in_range() {
+        let s = Settings::parse("width -4\nsmoothing 9\nshape-width 1000\n");
+        assert_eq!((s.pen.width, s.smoothing, s.shape_style.width), (MIN_WIDTH, 1.0, MAX_WIDTH));
+        let s = Settings::parse("width 9999\nsmoothing -1\nshape-width 0\n");
+        assert_eq!((s.pen.width, s.smoothing, s.shape_style.width), (MAX_WIDTH, 0.0, MIN_WIDTH));
+        let s = Settings::parse("width inf\nsmoothing NaN\nshape-width NaN\n");
+        assert_eq!(
+            (s.pen.width, s.smoothing, s.shape_style.width),
+            (DEFAULT_WIDTH, DEFAULT_AMOUNT, ToolStyle::SHAPES.width),
+            "infinity and NaN are not settings"
+        );
+    }
+
+    #[test]
+    fn text_size_is_kept_in_the_text_range() {
+        assert_eq!(Settings::parse("text-size 1\n").text_style.width, TEXT_SIZES.0);
+        assert_eq!(Settings::parse("text-size 9999\n").text_style.width, TEXT_SIZES.1);
+        assert_eq!(Settings::parse("text-size NaN\ntext-slot 9\n").text_style, ToolStyle::TEXT);
+    }
+
+    #[test]
+    fn colour_codes_are_strict() {
+        assert_eq!(parse_hex("ff8000"), Some([255, 128, 0]));
+        assert_eq!(parse_hex("#FF8000"), Some([255, 128, 0]));
+        assert_eq!(parse_hex("ff80"), None);
+        assert_eq!(parse_hex("gg0000"), None);
+        // Multi-byte text must not be sliced mid-character.
+        assert_eq!(parse_hex("éééé"), None);
+        assert_eq!(parse_hex("ff80000"), None);
+    }
+
+    #[test]
+    fn a_saved_file_is_read_back_by_the_next_session_and_garbage_cannot_stop_it() {
+        // Through the real file, in a folder of its own.
+        let dir = std::env::temp_dir().join(format!("inkpdf-settings-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let file = dir.join("settings.txt");
+        let s = everything_changed();
+        std::fs::write(&file, s.to_text()).expect("write");
+        assert_eq!(Settings::parse(&std::fs::read_to_string(&file).expect("read")), s);
+        // A file cut off in the middle of a line, or full of binary rubbish, still gives settings.
+        let text = s.to_text();
+        for cut in [0, 5, text.len() / 2, text.len() - 3] {
+            let _ = Settings::parse(&text[..cut]);
+        }
+        let junk: String = (0..2000u32).map(|i| char::from_u32(32 + (i * 7919) % 200).unwrap_or(' ')).collect();
+        let _ = Settings::parse(&junk);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+}

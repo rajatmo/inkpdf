@@ -1,0 +1,10 @@
+\documentclass[tikz,border=0pt]{standalone}
+\input{style}
+\begin{document}
+\begin{tikzpicture}
+  \iconbox
+  % The arrowhead, then a line that turns back on itself in a round bend.
+  \draw (-0.35,0.7) -- (-0.8,0.25) -- (-0.35,-0.2);
+  \draw (-0.8,0.25) -- (0.2,0.25) arc[start angle=90, end angle=-90, radius=0.45] -- (-0.2,-0.65);
+\end{tikzpicture}
+\end{document}

@@ -1,0 +1,12 @@
+\documentclass[tikz,border=0pt]{standalone}
+\input{style}
+\begin{document}
+\begin{tikzpicture}
+  \iconbox
+  % A laser dot with rays around it.
+  \draw (0,0) circle (0.26);
+  \foreach \a in {0,45,...,315} {
+    \draw (\a:0.55) -- (\a:0.88);
+  }
+\end{tikzpicture}
+\end{document}

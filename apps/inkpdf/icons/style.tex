@@ -1,0 +1,7 @@
+% Shared look of the toolbar icons. Each icon is drawn in the square from (-1,-1) to (1,1), y up,
+% as stroked paths only (the app draws them with its own line width, so only the paths matter).
+\tikzset{
+  every picture/.style={x=1cm, y=1cm, line cap=round, line join=round, line width=1.6pt},
+  soft/.style={rounded corners=0.16cm},
+}
+\def\iconbox{\useasboundingbox (-1,-1) rectangle (1,1);}

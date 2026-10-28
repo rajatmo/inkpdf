@@ -7,6 +7,7 @@ mod draft;
 mod inputs;
 mod laser;
 mod links;
+mod modes;
 mod pages;
 mod pen;
 mod prompt;

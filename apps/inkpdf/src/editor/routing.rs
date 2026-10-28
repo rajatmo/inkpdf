@@ -5,11 +5,14 @@
 
 use crate::figure::Figure;
 use crate::geometry::Shape;
-use crate::input::{Device, PenButtons, Phase, Sample};
+use crate::input::{Device, Mode, PenButtons, Phase, Sample};
 use crate::toolbar::Tool;
-use crate::tools::{Key, PageEvent, TextEdit};
+use crate::tools::{Key, MouseUse, PageEvent, TextEdit};
 
 use super::{Editor, Request};
+
+/// The pointer id the mouse has when it stands in for a stylus (real pointer ids are small).
+const MOUSE_AS_STYLUS_ID: u32 = u32::MAX;
 
 impl Editor {
     /// The text box being typed into, for drawing it.
@@ -97,8 +100,51 @@ impl Editor {
         if self.prompt.is_some() {
             return false;
         }
+        let mode = self.mode;
         let tool = self.tools.get_mut(self.ws.tool);
-        tool.policy().keyboard && tool.key(&mut self.ws, key)
+        tool.policy(mode).keyboard && tool.key(&mut self.ws, key)
+    }
+
+    /// How the machine is being used now (see [`Mode`]).
+    #[cfg(test)]
+    pub fn mode(&self) -> Mode {
+        self.mode
+    }
+
+    /// Change the mode (the machine was turned into a tablet, or back). Whatever the devices were in the middle
+    /// of is ended first, so a stroke or a drag is never left half done under rules that no longer apply.
+    pub fn set_mode(&mut self, mode: Mode) {
+        if mode == self.mode {
+            return;
+        }
+        self.tools.end_all(&mut self.ws);
+        self.mouse_press = None;
+        self.mode = mode;
+        self.redraw = true;
+    }
+
+    /// Whether the mouse draws, as a stylus does, with the tool in use in the mode in use.
+    pub(super) fn mouse_draws(&self) -> bool {
+        self.tools.get(self.tool).policy(self.mode).mouse == MouseUse::AsStylus
+    }
+
+    /// A keyboard shortcut, in the desktop mode only (a tablet has no keyboard to rely on): `key` is the letter
+    /// pressed with Ctrl. Z undoes (with Shift, redoes), Y redoes, S saves. Returns whether it was one.
+    pub fn shortcut(&mut self, key: &str, shift: bool) -> bool {
+        if self.mode != Mode::Desktop || self.prompt.is_some() {
+            return false;
+        }
+        match (key.to_ascii_lowercase().as_str(), shift) {
+            ("z", false) => self.undo(),
+            ("z", true) | ("y", _) => self.redo(),
+            ("s", _) => {
+                self.settle();
+                self.requests.push(Request::Save);
+            }
+            _ => return false,
+        }
+        self.redraw = true;
+        true
     }
 
     /// The colour or size in the panel changed.
@@ -119,11 +165,18 @@ impl Editor {
     /// Hand a stylus or mouse message on the page to the tool in use, if it listens to that device (or
     /// already has a gesture of it under way).
     pub(super) fn route_to_tool(&mut self, dev: Device, id: u32, phase: Phase, samples: &[Sample], pen: PenButtons) {
+        let mode = self.mode;
         let tool = self.tools.get_mut(self.ws.tool);
-        let policy = tool.policy();
+        let policy = tool.policy(mode);
+        // A mouse standing in for a stylus is handed over as one, with an id of its own: the tool is written for
+        // the stylus and cannot tell.
+        let (dev, id) = match (dev, policy.mouse) {
+            (Device::Mouse, MouseUse::AsStylus) => (Device::Pen, MOUSE_AS_STYLUS_ID),
+            _ => (dev, id),
+        };
         let listens = match dev {
             Device::Pen => policy.stylus,
-            Device::Mouse => policy.mouse,
+            Device::Mouse => policy.mouse == MouseUse::Itself,
             Device::Touch => false,
         };
         if listens || tool.owns(dev, id) {
@@ -131,10 +184,10 @@ impl Editor {
         }
     }
 
-    /// A mouse message at `pos` (screen) on the page.
-    pub(super) fn route_mouse(&mut self, phase: Phase, pos: [f32; 2]) {
+    /// A mouse message at `pos` (screen) on the page, with the buttons that stand for the stylus's.
+    pub(super) fn route_mouse(&mut self, phase: Phase, pos: [f32; 2], pen: PenButtons) {
         let samples = [Sample { pos, pressure: 0.5, t_ms: crate::win_pointer::now_ms() }];
-        self.route_to_tool(Device::Mouse, 0, phase, &samples, PenButtons::default());
+        self.route_to_tool(Device::Mouse, 0, phase, &samples, pen);
     }
 
     /// Whether a point is on a toolbar or the tool panel.

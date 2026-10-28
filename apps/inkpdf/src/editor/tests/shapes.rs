@@ -100,9 +100,11 @@ fn a_shape_is_kept_on_the_page_it_began_on() {
 }
 
 #[test]
-fn the_other_devices_do_not_make_shapes() {
+fn the_other_devices_do_not_make_shapes_in_the_tablet_mode() {
     let mut ed = shaping(Shape::Line);
-    // The mouse selects, as ever.
+    ed.set_mode(Mode::Tablet);
+    // (At a desk the mouse draws as a stylus does: see mouse_as_stylus.)
+    // The mouse scrolls and nothing else.
     ed.mouse_moved(on_page(&ed, 100.0, 300.0));
     ed.mouse_button(ElementState::Pressed, MouseButton::Left);
     ed.mouse_moved(on_page(&ed, 300.0, 400.0));

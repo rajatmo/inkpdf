@@ -595,8 +595,9 @@ fn anchors_and_handles_stay_on_the_page() {
 }
 
 #[test]
-fn the_mouse_cannot_touch_anchors() {
+fn the_mouse_cannot_touch_anchors_in_the_tablet_mode() {
     let mut ed = shaping(Shape::Curve);
+    ed.set_mode(Mode::Tablet);
     draw(&mut ed, [100.0, 200.0], [300.0, 320.0]);
     let before = figure_of(&ed);
     let handle = at(&ed, Control::Fwd(0));

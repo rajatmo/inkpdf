@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0
+
+- Desktop and tablet modes, chosen from the machine's posture (`SM_CONVERTIBLESLATEMODE`, guarded so that an
+  ordinary desktop PC, which reports "slate", stays a desktop) and re-checked when Windows announces a
+  posture change. `--mode desktop|tablet|auto` overrides it.
+- Desktop: the mouse stands in for a stylus on the pen, shape and pointer tools (left draws, right erases,
+  middle lassos); Ctrl+Z, Ctrl+Y, Ctrl+Shift+Z and Ctrl+S.
+- Tablet: the stylus places, edits and moves text with the text tool; the mouse only scrolls.
+- The window losing focus now ends a mouse gesture instead of leaving it half done.
+
 ## 0.2.0
 
 - The application layer was rewritten around a `Tool` trait: Pen, Shape, Text and Pointer are separate

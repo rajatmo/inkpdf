@@ -1,5 +1,7 @@
 . "$PSScriptRoot\lib.ps1"
-# PEN, POINTER (laser), TOUCH, MOUSE, KEYBOARD, TOOLBAR
+# PEN, POINTER (laser), TOUCH, MOUSE, KEYBOARD, TOOLBAR, in the tablet mode (where the mouse only scrolls;
+# r3 checks the desktop mode, where it draws).
+$script:extraArgs = @("--mode", "tablet")
 Launch "tool pen`n" "" "x"
 function Ink { Count 28 30 36 0 100 2000 1070 }
 Check (-not (Dirty)) "starts clean"

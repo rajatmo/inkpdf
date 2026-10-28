@@ -19,10 +19,11 @@ fn snapshot(ed: &Editor) -> (usize, Vec<u64>, [f32; 2], f32, bool, bool) {
 }
 
 #[test]
-fn the_mouse_does_nothing_to_the_page_with_any_tool_but_scroll() {
-    // (With the text tool it also places and selects text boxes: see `text`.)
+fn the_mouse_does_nothing_to_the_page_with_any_tool_but_scroll_in_the_tablet_mode() {
+    // (At a desk it draws, and with the text tool it also places and selects text boxes: see `mouse_as_stylus`.)
     for tool in TOOLS.into_iter().filter(|t| *t != Tool::Text) {
         let mut ed = with(tool);
+        ed.set_mode(Mode::Tablet);
         add_stroke(&mut ed, &[[100.0, 300.0], [300.0, 300.0]]);
         let before = snapshot(&ed);
         // Click, drag and release on the stroke and on empty page, with every button.

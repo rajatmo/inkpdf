@@ -21,6 +21,7 @@ impl Editor {
         // An eraser stroke that was under way is called off: what it had touched is not erased.
         self.erasing.clear();
         self.act = super::Act::Idle;
+        self.mouse_press = None;
         self.panel = None;
         self.hover = None;
         self.tools.cancel_all(&mut self.ws);

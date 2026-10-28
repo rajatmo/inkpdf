@@ -13,7 +13,7 @@ mod pointer;
 mod shape;
 mod text;
 
-use crate::input::{Device, PenButtons, Phase, Sample};
+use crate::input::{Device, Mode, PenButtons, Phase, Sample};
 use crate::toolbar::Tool as ToolId;
 use crate::workspace::Workspace;
 
@@ -28,16 +28,36 @@ pub use text::{TextEdit, TextTool};
 /// How near, in logical pixels, a tap must be to a shape or a text box to select it.
 pub const TAP_SELECT_PX: f32 = 8.0;
 
+/// What the mouse's buttons do on the page. (The wheel always scrolls.)
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MouseUse {
+    /// Nothing: the mouse only scrolls.
+    Scrolls,
+    /// Its presses reach the tool as a mouse's (the text tool: click to place, drag to move).
+    Itself,
+    /// It stands in for a stylus: the left button is the tip, the right the eraser end, the middle the barrel
+    /// button. (The tool is handed a stylus; it never knows.)
+    AsStylus,
+}
+
 /// Which devices a tool listens to on the page. (A finger always pans and zooms and never reaches a tool;
 /// every device can still press the buttons of the toolbars, which are the window's, not the page's.)
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct InputPolicy {
     /// The stylus: tip, eraser end and barrel button.
     pub stylus: bool,
-    /// The mouse: its button presses on the page (it always scrolls with the wheel).
-    pub mouse: bool,
+    pub mouse: MouseUse,
     /// The keyboard.
     pub keyboard: bool,
+}
+
+impl InputPolicy {
+    /// A tool the stylus drives (pen, shape, pointer): in the desktop the mouse can too, in the tablet it
+    /// only scrolls.
+    pub fn stylus_tool(mode: Mode) -> Self {
+        let mouse = if mode == Mode::Desktop { MouseUse::AsStylus } else { MouseUse::Scrolls };
+        Self { stylus: true, mouse, keyboard: false }
+    }
 }
 
 /// A pointer message for a tool: a stylus or mouse on the page.
@@ -60,7 +80,8 @@ pub enum Key<'a> {
 }
 
 pub trait Tool {
-    fn policy(&self) -> InputPolicy;
+    /// Which devices the tool listens to in `mode`.
+    fn policy(&self, mode: Mode) -> InputPolicy;
 
     /// A stylus or mouse message on the page (only ones the policy lets through).
     fn pointer(&mut self, ws: &mut Workspace, ev: &PageEvent<'_>);

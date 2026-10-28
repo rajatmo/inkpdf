@@ -14,7 +14,7 @@ mod draft;
 use crate::figure::{Control, Figure};
 use crate::geometry::{self, Shape, clamp_into};
 use crate::ink::{P, Style, dist2};
-use crate::input::{Device, Phase, Role, Sample, role};
+use crate::input::{Device, Mode, Phase, Role, Sample, role};
 use crate::workspace::Workspace;
 
 use super::gestures::{Eraser, Lasso, Mover};
@@ -256,8 +256,8 @@ fn on_anchor(ws: &Workspace, p: P) -> bool {
 }
 
 impl Tool for ShapeTool {
-    fn policy(&self) -> InputPolicy {
-        InputPolicy { stylus: true, mouse: false, keyboard: false }
+    fn policy(&self, mode: Mode) -> InputPolicy {
+        InputPolicy::stylus_tool(mode)
     }
 
     fn pointer(&mut self, ws: &mut Workspace, ev: &PageEvent<'_>) {

@@ -38,7 +38,7 @@ mod tests;
 use std::collections::HashMap;
 
 use crate::ink::PageStroke;
-use crate::input::{PalmGuard, TouchGestures};
+use crate::input::{Mode, PalmGuard, TouchGestures};
 use crate::toolbar::{self, Toolbar};
 use crate::tools::ToolSet;
 use crate::view::{Layout, View};
@@ -87,6 +87,10 @@ pub struct Editor {
     /// The tools that own their interaction (see [`crate::tools`]).
     pub tools: ToolSet,
     pub act: Act,
+    /// How the machine is being used: what the mouse and keyboard do depends on it.
+    mode: Mode,
+    /// The mouse button held on the page, if any.
+    mouse_press: Option<mouse::MousePress>,
     pub palm: PalmGuard,
     pub fingers: TouchGestures,
     /// The last pen sample the screen has not yet shown, for latency measurement.
@@ -113,6 +117,8 @@ impl Editor {
             colour_hsv: [0.0; 3],
             tools: ToolSet::new(),
             act: Act::Idle,
+            mode: Mode::default(),
+            mouse_press: None,
             palm: PalmGuard::default(),
             fingers: TouchGestures::default(),
             pending_sample_ms: None,
@@ -131,6 +137,7 @@ impl Editor {
         self.tools = ToolSet::new();
         self.erasing.clear();
         self.act = Act::Idle;
+        self.mouse_press = None;
         self.prompt = None;
         self.requests.clear_answer();
         self.prompt_grab = None;

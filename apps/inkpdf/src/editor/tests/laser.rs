@@ -75,8 +75,9 @@ fn no_dot_over_the_toolbar_or_without_the_laser() {
 }
 
 #[test]
-fn the_mouse_does_not_point_or_select_with_the_laser_either() {
+fn the_mouse_does_not_point_or_select_with_the_laser_in_the_tablet_mode() {
     let mut ed = lasering();
+    ed.set_mode(Mode::Tablet);
     let id = add_stroke(&mut ed, &[[100.0, 300.0], [300.0, 300.0]]);
     ed.mouse_moved(on_page(&ed, 100.0, 300.0));
     assert_eq!(ed.laser().head(), None, "no dot follows the mouse");

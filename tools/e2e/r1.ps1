@@ -2,6 +2,8 @@
 # one kind of input, then whether the document became changed (the title's dot) must match the rule.
 . "$PSScriptRoot\lib.ps1"
 $script:UseMouse = $true
+# This matrix is the tablet mode's rules (the mouse only scrolls); r3 checks the desktop mode.
+$script:extraArgs = @("--mode", "tablet")
 
 # (The eraser end is not here: Windows' synthetic pen injector drops the eraser flag on this OS build, so the
 # app sees an ordinary pen; the eraser is covered by the unit and seeded stress tests.)
@@ -17,7 +19,10 @@ $actions = @(
     @{ n = "finger drag";            do = { B drag 0.5 0.4 0.5 0.8 20 };                              dirty = @() },
     @{ n = "finger pinch";           do = { B pinch 0.5 0.5 0.05 0.2 20 };                            dirty = @() },
     @{ n = "keyboard typing";        do = { Type-Text "hello world"; Keys "{ENTER}{BACKSPACE}" };      dirty = @() },
-    @{ n = "mouse click then typing then click away"; do = { Mouse-Click 0.4 0.5; Type-Text "ab"; Mouse-Click 0.8 0.8 }; dirty = @("text") }
+    # In the tablet mode it is the stylus that places text, and the mouse that does not.
+    # (With the pen tool the two taps draw dots, so it changes too.)
+    @{ n = "stylus tap then typing then tap away"; do = { B tap 0.4 0.5; Type-Text "ab"; B tap 0.8 0.8 }; dirty = @("pen", "text") },
+    @{ n = "mouse click then typing then click away"; do = { Mouse-Click 0.4 0.5; Type-Text "ab"; Mouse-Click 0.8 0.8 }; dirty = @() }
 )
 $tools = @("pen", "shape", "text", "laser")
 $fail = 0; $total = 0

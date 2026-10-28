@@ -67,16 +67,33 @@ enforced by tests (`src/architecture.rs`, `src/editor/tests/contract.rs`).
 | **Incremental computation** | the live stroke's smooth curve is extended segment by segment (`curve_segments`) |
 | **Ports & Adapters** | `win_pointer` (Win32 → `PointerEvent`), `gpu` (scene → wgpu), `Painter` |
 
-## Device rules (`Tool::policy`)
+## Modes and device rules (`Tool::policy(mode)`)
 
-| Tool | Stylus | Mouse | Touch | Keyboard |
-|---|---|---|---|---|
-| Pen | draw, erase, lasso | scroll | pan/zoom | none |
-| Shape | select, draw, erase, lasso (tap-drawn polylines and splines) | scroll | pan/zoom | none |
-| Pointer | point | scroll | pan/zoom | none |
-| Text | none | scroll, place/select/move text | pan/zoom | types |
+The rules depend on a `Mode`, which follows the machine's posture (`src/posture.rs`):
 
-Every device still presses the window's chrome (toolbars, panel, prompt).
+| Mode | When | Mouse | Keyboard |
+|---|---|---|---|
+| **Desktop** | not in slate posture, or not a machine that has one (every desktop PC) | stands in for a stylus on the pen, shape and pointer tools; text as itself | shortcuts (Ctrl+Z, Ctrl+Y, Ctrl+Shift+Z, Ctrl+S) and typing |
+| **Tablet** | the OS reports slate posture on a portable machine with a touch or pen digitizer | scrolls only | typing (physical or Windows' touch keyboard), no shortcuts |
+
+| Tool | Stylus | Mouse (desktop) | Mouse (tablet) | Touch | Keyboard |
+|---|---|---|---|---|---|
+| Pen | draw, erase (eraser end), lasso (barrel) | as a stylus: left tip, right eraser end, middle barrel | scroll | pan/zoom | none |
+| Shape | select, draw, erase, lasso (tap-drawn polylines and splines) | as a stylus | scroll | pan/zoom | none |
+| Pointer | point | as a stylus (dot follows the mouse) | scroll | pan/zoom | none |
+| Text | desktop: none; tablet: place/select/move text | place/select/move text | scroll | pan/zoom | types |
+
+Every device still presses the window's chrome (toolbars, panel, prompt); the wheel always scrolls.
+
+How it fits the layers: a tool states a `Tool::policy(mode)` (an `InputPolicy` with a `MouseUse`: `Scrolls`,
+`Itself` or `AsStylus`) and never learns the mode. The editor's router hands a mouse to a stylus tool as a
+stylus with an id of its own, so no tool has a mouse code path. The mode is the session's (`Editor::set_mode`
+ends whatever was under way first); the shell sets it from `posture::detect()` at start and again when
+Windows sends `WM_SETTINGCHANGE` "ConvertibleSlateMode", unless `--mode desktop|tablet` forced it.
+
+`SM_CONVERTIBLESLATEMODE` alone cannot be trusted: an ordinary desktop PC reports 0 ("slate"). So `posture::decide`
+also needs a touch or pen digitizer and a platform role of mobile or slate (`PowerDeterminePlatformRole`). The
+rule is a pure function with a test per kind of machine; the flip itself cannot be tested without a convertible.
 
 ## Latency (input → pixels)
 

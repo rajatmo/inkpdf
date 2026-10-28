@@ -1,7 +1,7 @@
 [package]
 name = "inkpdf-thumb"
 description = "Explorer thumbnail handler for InkPDF: shows a PDF's first page as the file's icon"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Rajat Mandal"]
 edition.workspace = true
 license.workspace = true

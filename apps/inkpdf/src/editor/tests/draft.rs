@@ -214,9 +214,10 @@ fn a_tap_on_a_shapes_outline_selects_it_and_a_tap_on_empty_page_starts_a_stroke_
 }
 
 #[test]
-fn only_the_stylus_draws_by_tapping_and_the_other_tools_are_unaffected() {
-    // The mouse and a finger cannot start a stroke.
+fn only_the_stylus_draws_by_tapping_in_the_tablet_mode_and_the_other_tools_are_unaffected() {
+    // The mouse (as a tablet's) and a finger cannot start a stroke.
     let mut ed = drawing(Shape::Line);
+    ed.set_mode(Mode::Tablet);
     let at = on_page(&ed, 100.0, 300.0);
     mouse_click_at(&mut ed, at);
     ed.pointer_event(touch(1, Phase::Down, at, 30.0));

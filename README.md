@@ -15,14 +15,20 @@ no library, no sync: just the page and your pen.
 
 ## Tools and input
 
-Each kind of input does one thing, and what the stylus does depends on the tool.
+Each kind of input does one thing, and what it does depends on the tool and on the **mode**. InkPDF picks the
+mode itself from how the machine is being used: **desktop** (a keyboard and mouse in front of you) or
+**tablet** (a convertible turned into a slate, or a tablet). It reads the posture Windows reports, so a
+desktop PC is always in desktop mode; `--mode desktop|tablet` forces one.
 
-| Tool | Stylus | Mouse | Touch | Keyboard |
-|---|---|---|---|---|
-| **Pen** | draw; eraser end erases strokes; barrel button lassos | scroll | pan, zoom | none |
-| **Shape** | select, draw, erase, lasso | scroll | pan, zoom | none |
-| **Text** | none | scroll; click to place, edit and move text | pan, zoom | types |
-| **Pointer** | a red dot and fading trail, for presenting | scroll | pan, zoom | none |
+| Tool | Stylus | Mouse, desktop mode | Mouse, tablet mode | Touch | Keyboard |
+|---|---|---|---|---|---|
+| **Pen** | draw; eraser end erases strokes; barrel button lassos | as a stylus: left button draws, right erases, middle lassos | scroll | pan, zoom | none |
+| **Shape** | select, draw, erase, lasso | as a stylus | scroll | pan, zoom | none |
+| **Text** | desktop: none; tablet: place, edit and move text | click to place, edit and move text | scroll | pan, zoom | types |
+| **Pointer** | a red dot and fading trail, for presenting | as a stylus (the dot follows the mouse) | scroll | pan, zoom | none |
+
+In desktop mode the keyboard also has Ctrl+Z (undo), Ctrl+Y or Ctrl+Shift+Z (redo) and Ctrl+S (save). The
+wheel scrolls in both modes.
 
 Shapes are lines, polylines, polygons, splines, rectangles, ellipses and 2D/3D axes, each edited by the
 anchors that suit it (nodes, tangent handles, diagonals, bounding corners, axis ends). Line and curve are
@@ -37,7 +43,7 @@ Download the installer (`InkPDF-Setup-<version>.exe`, per-user, no admin rights)
 settings are kept beside it too) from the releases page. Both are unsigned, so SmartScreen may ask once.
 
 ```
-inkpdf [file.pdf] [--fullscreen] [--smoothing 0..1] [--gpu integrated|discrete|auto]
+inkpdf [file.pdf] [--fullscreen] [--smoothing 0..1] [--gpu integrated|discrete|auto] [--mode desktop|tablet|auto]
 ```
 
 ## Build

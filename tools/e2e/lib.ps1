@@ -28,6 +28,8 @@ public static class W {
 "@
 [void][W]::SetProcessDPIAware()
 
+# Extra command-line arguments for the next Launch (for example "--mode","tablet").
+$script:extraArgs = @()
 function Launch([string]$Settings = "", [string]$Base = "e2e-pen.pdf", [string]$Name = "t1") {
     Get-Process inkpdf -ErrorAction SilentlyContinue | Stop-Process -Force
     $env:APPDATA = Join-Path $script:sp "appdata"
@@ -38,6 +40,7 @@ function Launch([string]$Settings = "", [string]$Base = "e2e-pen.pdf", [string]$
     $script:pdf = Join-Path $script:sp "$Name.pdf"
     if ($Base) { Copy-Item (Join-Path $script:sp $Base) $script:pdf -Force }
     $a = if ($Base) { @("`"$script:pdf`"", "--topmost") } else { @("--topmost") }
+    $a = @($a) + @($script:extraArgs)
     $script:app = Start-Process "$script:target\inkpdf.exe" -ArgumentList $a -PassThru -RedirectStandardOutput (Join-Path $script:sp "app.out.txt") -RedirectStandardError (Join-Path $script:sp "app.err.txt")
     Start-Sleep 3.5
     $script:app.Refresh()
@@ -62,7 +65,14 @@ function Focus { [void][W]::SetForegroundWindow($script:app.MainWindowHandle); S
 function Px($fx, $fy) { @([int]($script:ox + $fx * $script:cw), [int]($script:oy + $fy * $script:ch)) }
 function Mouse-Click($fx, $fy) { $p = Px $fx $fy; [void][W]::SetCursorPos($p[0], $p[1]); Start-Sleep -Milliseconds 120; [W]::mouse_event(2,0,0,0,[UIntPtr]::Zero); Start-Sleep -Milliseconds 60; [W]::mouse_event(4,0,0,0,[UIntPtr]::Zero); Start-Sleep -Milliseconds 200 }
 function Mouse-Drag($fx0, $fy0, $fx1, $fy1) { $p = Px $fx0 $fy0; $q = Px $fx1 $fy1; [void][W]::SetCursorPos($p[0], $p[1]); Start-Sleep -Milliseconds 100; [W]::mouse_event(2,0,0,0,[UIntPtr]::Zero); foreach ($i in 1..15) { [void][W]::SetCursorPos([int]($p[0]+($q[0]-$p[0])*$i/15), [int]($p[1]+($q[1]-$p[1])*$i/15)); Start-Sleep -Milliseconds 12 }; [W]::mouse_event(4,0,0,0,[UIntPtr]::Zero); Start-Sleep -Milliseconds 200 }
-function Wheel($notches) { [W]::mouse_event(0x0800,0,0,[BitConverter]::ToUInt32([BitConverter]::GetBytes([int]($notches * 120)),0),[UIntPtr]::Zero); Start-Sleep -Milliseconds 600 }
+# A drag with any mouse button: "left", "right" or "middle".
+function Mouse-DragButton($fx0, $fy0, $fx1, $fy1, [string]$button = "left") {
+    $down = @{ left = 2; right = 8; middle = 32 }[$button]; $up = @{ left = 4; right = 16; middle = 64 }[$button]
+    $p = Px $fx0 $fy0; $q = Px $fx1 $fy1; [void][W]::SetCursorPos($p[0], $p[1]); Start-Sleep -Milliseconds 100
+    [W]::mouse_event($down,0,0,0,[UIntPtr]::Zero)
+    foreach ($i in 1..15) { [void][W]::SetCursorPos([int]($p[0]+($q[0]-$p[0])*$i/15), [int]($p[1]+($q[1]-$p[1])*$i/15)); Start-Sleep -Milliseconds 12 }
+    [W]::mouse_event($up,0,0,0,[UIntPtr]::Zero); Start-Sleep -Milliseconds 200
+}function Wheel([double]$notches) { [W]::mouse_event(0x0800,0,0,[BitConverter]::ToUInt32([BitConverter]::GetBytes([int]($notches * 120)),0),[UIntPtr]::Zero); Start-Sleep -Milliseconds 600 }
 function Shot([string]$n) {
     $script:app.Refresh(); $h = $script:app.MainWindowHandle
     $c = New-Object W+RECT; [void][W]::GetClientRect($h, [ref]$c)

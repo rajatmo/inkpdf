@@ -8,13 +8,13 @@
 //! if it was emptied). Undo while typing throws the typing away.
 
 use crate::ink::{P, Style, TextBlock};
-use crate::input::{Device, Phase};
+use crate::input::{Device, Mode, Phase};
 use crate::text;
 use crate::workspace::Workspace;
 
 use super::gestures::Mover;
 use super::paint::{ACCENT, Painter, polyline};
-use super::{InputPolicy, Key, PageEvent, TAP_SELECT_PX, Tool};
+use super::{InputPolicy, Key, MouseUse, PageEvent, TAP_SELECT_PX, Tool};
 
 /// A text box being typed into.
 #[derive(Clone, Debug, PartialEq)]
@@ -193,8 +193,14 @@ fn keep_on_page(ws: &Workspace, page: u32, mut outline: Vec<P>) -> Vec<P> {
 }
 
 impl Tool for TextTool {
-    fn policy(&self) -> InputPolicy {
-        InputPolicy { stylus: false, mouse: true, keyboard: true }
+    /// At a desk the mouse places, selects and moves text and the stylus does nothing to the page; as a tablet
+    /// the stylus does what the mouse does (and the mouse only scrolls). The keyboard types in both: the
+    /// physical one, or Windows' touch keyboard.
+    fn policy(&self, mode: Mode) -> InputPolicy {
+        match mode {
+            Mode::Desktop => InputPolicy { stylus: false, mouse: MouseUse::Itself, keyboard: true },
+            Mode::Tablet => InputPolicy { stylus: true, mouse: MouseUse::Scrolls, keyboard: true },
+        }
     }
 
     fn pointer(&mut self, ws: &mut Workspace, ev: &PageEvent<'_>) {

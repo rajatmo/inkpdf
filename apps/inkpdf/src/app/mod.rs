@@ -25,12 +25,14 @@ use std::time::{Duration, Instant};
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
-use winit::keyboard::{Key as Typed, NamedKey};
+use winit::keyboard::{Key as Typed, ModifiersState, NamedKey};
 use winit::window::{Icon, Window, WindowLevel};
 
 use crate::doc::Doc;
 use crate::editor::Editor;
 use crate::gpu::{Gpu, GpuChoice};
+use crate::input::Mode;
+use crate::posture;
 use crate::settings;
 use crate::tiles::Key;
 use crate::win_pointer;
@@ -63,6 +65,8 @@ pub struct Options {
     pub select_all: bool,
     /// How much the pen is steadied, 0 to 1, instead of what was saved.
     pub smoothing: Option<f32>,
+    /// The mode to keep whatever the machine's posture is (--mode desktop|tablet); None follows the posture.
+    pub mode: Option<Mode>,
 }
 
 pub struct State {
@@ -102,6 +106,10 @@ pub struct State {
     drawing: bool,
     /// What is waiting on the unsaved-changes prompt.
     then: Option<files::Then>,
+    /// The mode was chosen on the command line, so a change of posture does not change it.
+    mode_forced: bool,
+    /// Which of Ctrl, Shift, … are held (for the desktop mode's shortcuts).
+    modifiers: ModifiersState,
 }
 
 impl State {
@@ -151,8 +159,11 @@ impl State {
             text_index: text_layer::TextIndex::default(),
             drawing: false,
             then: None,
+            mode_forced: opts.mode.is_some(),
+            modifiers: ModifiersState::empty(),
         };
         state.ed.apply_settings(&settings::load());
+        state.set_mode(opts.mode.unwrap_or_else(posture::detect));
         if let Some(smoothing) = opts.smoothing {
             state.ed.smoothing = smoothing.clamp(0.0, 1.0);
         }
@@ -192,6 +203,8 @@ impl State {
                 self.ed.fullscreen = self.window.fullscreen().is_some();
             }
             WindowEvent::CursorLeft { .. } => self.ed.mouse_left(),
+            WindowEvent::Focused(false) => self.ed.focus_lost(),
+            WindowEvent::ModifiersChanged(m) => self.modifiers = m.state(),
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => self.ed.dpr = scale_factor as f32,
             WindowEvent::RedrawRequested => self.redraw(),
             WindowEvent::DroppedFile(path) => self.open(path),
@@ -207,8 +220,24 @@ impl State {
         self.service();
     }
 
-    /// The keyboard types into the text box being edited, and does nothing else.
+    /// Change how the devices are used (the posture changed, or it was asked for on the command line).
+    fn set_mode(&mut self, mode: Mode) {
+        if std::env::var_os("INKPDF_TRACE").is_some() {
+            eprintln!("mode: {mode:?}");
+        }
+        self.ed.set_mode(mode);
+        self.window.request_redraw();
+    }
+
+    /// The keyboard types into the text box being edited; with Ctrl held, in the desktop mode, it has a few
+    /// shortcuts; nothing else hears it.
     fn key_pressed(&mut self, event: &KeyEvent) {
+        if self.modifiers.control_key() {
+            if let Typed::Character(letter) = &event.logical_key {
+                self.ed.shortcut(letter, self.modifiers.shift_key());
+            }
+            return;
+        }
         if !self.ed.is_typing() {
             return;
         }
@@ -231,6 +260,10 @@ impl State {
         if self.pointer_layer && win_pointer::pending() {
             self.redraw();
             self.service();
+        }
+        // A convertible was turned into a tablet, or back.
+        if win_pointer::take_posture_change() && !self.mode_forced {
+            self.set_mode(posture::detect());
         }
         // `--exit-after` must fire even when the window is idle and nothing is redrawing.
         if self.exit_at.is_some_and(|t| Instant::now() >= t) {

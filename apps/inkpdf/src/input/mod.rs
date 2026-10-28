@@ -8,6 +8,9 @@
 //! * **Touch**: pans and zooms; a tap follows a link; pulling past the last page adds a page.
 //! * **Mouse**: scrolls. (It also presses the buttons of the toolbars.)
 //! * **Keyboard**: nothing.
+//!
+//! That is the *tablet* mode. In *desktop* mode (see [`Mode`]) the mouse also draws, as a stylus does,
+//! and the keyboard has a few shortcuts.
 
 mod gestures;
 mod palm;
@@ -16,6 +19,27 @@ mod predict;
 pub use gestures::{GestureDelta, TouchGestures};
 pub use palm::PalmGuard;
 pub use predict::predict;
+
+/// How the machine is being held, which decides what the devices do: with a keyboard and mouse in front of
+/// you (desktop), or as a slate you touch and write on (tablet). It follows the machine's posture (see
+/// [`crate::posture`]) and can be forced from the command line.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Mode {
+    #[default]
+    Desktop,
+    Tablet,
+}
+
+impl Mode {
+    /// `desktop` or `tablet`; anything else (`auto` is the caller's to handle) is `None`.
+    pub fn parse(name: &str) -> Option<Mode> {
+        match name.to_ascii_lowercase().as_str() {
+            "desktop" => Some(Mode::Desktop),
+            "tablet" => Some(Mode::Tablet),
+            _ => None,
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Device {

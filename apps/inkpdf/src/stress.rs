@@ -354,6 +354,21 @@ fn text_poke(ed: &mut Editor, rng: &mut Rng) -> String {
 fn poke(ed: &mut Editor, rng: &mut Rng, hostile: bool) -> String {
     let size = ed.view.viewport;
     let mut what = String::new();
+    // The machine is turned into a tablet or back, the window loses the focus, a shortcut is pressed.
+    if rng.chance(0.02) {
+        let mode = rng.pick(&[crate::input::Mode::Desktop, crate::input::Mode::Tablet]);
+        ed.set_mode(mode);
+        return format!("mode {mode:?}");
+    }
+    if rng.chance(0.01) {
+        ed.focus_lost();
+        return "focus lost".into();
+    }
+    if rng.chance(0.02) {
+        let (letter, shift) = (rng.pick(&["z", "y", "s", "q"]), rng.chance(0.3));
+        ed.shortcut(letter, shift);
+        return format!("shortcut {letter} shift {shift}");
+    }
     if rng.chance(0.3) {
         return gesture(ed, rng);
     }

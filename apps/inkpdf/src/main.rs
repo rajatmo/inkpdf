@@ -23,6 +23,7 @@ mod input;
 mod laser;
 mod links;
 mod native;
+mod posture;
 mod requests;
 mod settings;
 mod smooth;
@@ -85,7 +86,7 @@ impl ApplicationHandler for App {
     }
 }
 
-const USAGE: &str = "usage: inkpdf [file.pdf] [--gpu integrated|discrete|auto|NAME] [--list-gpus] [--smoothing 0..1] [--bench] [--stats] [--exit-after SECONDS] [--topmost] [--fullscreen]";
+const USAGE: &str = "usage: inkpdf [file.pdf] [--gpu integrated|discrete|auto|NAME] [--list-gpus] [--smoothing 0..1] [--mode desktop|tablet|auto] [--bench] [--stats] [--exit-after SECONDS] [--topmost] [--fullscreen]";
 
 fn parse_args() -> Result<app::Options, String> {
     let mut options = app::Options {
@@ -98,6 +99,7 @@ fn parse_args() -> Result<app::Options, String> {
         stats: false,
         select_all: false,
         smoothing: None,
+        mode: None,
     };
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -110,6 +112,13 @@ fn parse_args() -> Result<app::Options, String> {
             "--smoothing" => {
                 options.smoothing =
                     args.next().and_then(|v| v.parse().ok()).map(Some).ok_or("--smoothing needs a number from 0 (off) to 1 (strong)")?
+            }
+            "--mode" => {
+                options.mode = match args.next().as_deref() {
+                    Some("auto") => None,
+                    Some(name) => Some(input::Mode::parse(name).ok_or("--mode needs desktop, tablet or auto")?),
+                    None => return Err("--mode needs desktop, tablet or auto".into()),
+                }
             }
             "--list-gpus" => {
                 for gpu in gpu::list_gpus() {

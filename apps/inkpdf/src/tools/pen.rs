@@ -4,7 +4,7 @@
 //! keyboard does nothing.
 
 use crate::ink::{self, P, Style, dist2};
-use crate::input::{Device, Phase, Role, Sample, predict, role};
+use crate::input::{Device, Mode, Phase, Role, Sample, predict, role};
 use crate::smooth::{PenFilter, curve_segments};
 use crate::workspace::Workspace;
 
@@ -231,8 +231,8 @@ impl PenTool {
 }
 
 impl Tool for PenTool {
-    fn policy(&self) -> InputPolicy {
-        InputPolicy { stylus: true, mouse: false, keyboard: false }
+    fn policy(&self, mode: Mode) -> InputPolicy {
+        InputPolicy::stylus_tool(mode)
     }
 
     fn pointer(&mut self, ws: &mut Workspace, ev: &PageEvent<'_>) {

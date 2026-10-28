@@ -15,8 +15,8 @@
 use std::cell::RefCell;
 use std::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::Arc;
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
 
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::ClientToScreen;
@@ -33,7 +33,7 @@ use windows_sys::Win32::UI::Input::Pointer::{
 use windows_sys::Win32::UI::Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, MSG, PEN_FLAG_BARREL, PEN_FLAG_ERASER, PEN_FLAG_INVERTED, PEN_MASK_PRESSURE, PM_REMOVE, PT_PEN, PT_TOUCH, PeekMessageW,
-    WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERENTER, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE,
+    WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERENTER, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_SETTINGCHANGE,
 };
 use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use winit::window::Window;
@@ -152,6 +152,14 @@ pub fn pump() {
     }
 }
 
+/// Set when Windows said the machine's posture changed (a convertible became a tablet, or back).
+static POSTURE_CHANGED: AtomicBool = AtomicBool::new(false);
+
+/// Whether the posture changed since this was last asked.
+pub fn take_posture_change() -> bool {
+    POSTURE_CHANGED.swap(false, Ordering::Relaxed)
+}
+
 /// Whether any events are waiting to be taken.
 pub fn pending() -> bool {
     QUEUE.with(|q| !q.borrow().is_empty())
@@ -163,6 +171,14 @@ pub fn drain() -> Vec<PointerEvent> {
 }
 
 unsafe extern "system" fn subclass_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM, _id: usize, _data: usize) -> LRESULT {
+    if msg == WM_SETTINGCHANGE && crate::posture::is_posture_message(lparam) {
+        POSTURE_CHANGED.store(true, Ordering::Relaxed);
+        WAKE.with(|w| {
+            if let Some(window) = w.borrow().as_ref() {
+                window.request_redraw();
+            }
+        });
+    }
     if matches!(msg, WM_POINTERDOWN | WM_POINTERUPDATE | WM_POINTERUP | WM_POINTERENTER | WM_POINTERLEAVE | WM_POINTERCAPTURECHANGED) {
         let handled = catch_unwind(AssertUnwindSafe(|| handle_pointer(hwnd, msg, wparam))).unwrap_or(false);
         if handled {

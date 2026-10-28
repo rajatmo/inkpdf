@@ -2,7 +2,7 @@
 //! while it is pressed. Nothing is drawn into the document. Nothing else points: a finger pans and zooms,
 //! the mouse scrolls, the keyboard does nothing.
 
-use crate::input::{Device, Phase, Sample};
+use crate::input::{Device, Mode, Phase, Sample};
 use crate::laser::Laser;
 use crate::workspace::Workspace;
 
@@ -42,8 +42,8 @@ impl PointerTool {
 }
 
 impl Tool for PointerTool {
-    fn policy(&self) -> InputPolicy {
-        InputPolicy { stylus: true, mouse: false, keyboard: false }
+    fn policy(&self, mode: Mode) -> InputPolicy {
+        InputPolicy::stylus_tool(mode)
     }
 
     fn pointer(&mut self, ws: &mut Workspace, ev: &PageEvent<'_>) {

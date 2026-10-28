@@ -2,7 +2,7 @@
 //! breaks one of these cannot be put in the [`ToolSet`](crate::tools::ToolSet).
 
 use crate::stress::Rng;
-use crate::tools::{InputPolicy, PageEvent};
+use crate::tools::{InputPolicy, MouseUse, PageEvent};
 
 use super::*;
 
@@ -22,25 +22,34 @@ fn listens_to(tool: Tool) -> Device {
     }
 }
 
-fn policy(tool: Tool) -> InputPolicy {
-    crate::tools::ToolSet::new().get(tool).policy()
+fn policy(tool: Tool, mode: Mode) -> InputPolicy {
+    crate::tools::ToolSet::new().get(tool).policy(mode)
 }
 
 #[test]
-fn each_tools_policy_is_the_device_rule_of_the_design() {
-    // (stylus, mouse, keyboard): the mouse scrolls and the finger pans and zooms with every tool; the
-    // keyboard only types, in the text tool; the text tool is the one the stylus does nothing in.
-    let rules = [
-        (Tool::Pen, (true, false, false)),
-        (Tool::Geometry, (true, false, false)),
-        (Tool::Text, (false, true, true)),
-        (Tool::Laser, (true, false, false)),
+fn each_tools_policy_is_the_device_rule_of_the_design_in_each_mode() {
+    use MouseUse::{AsStylus, Itself, Scrolls};
+    // (stylus, mouse, keyboard). The finger pans and zooms and the wheel scrolls with every tool in every mode.
+    // At a desk the mouse draws as a stylus does (it places text, as itself, with the text tool) and the stylus
+    // does nothing in the text tool; as a tablet the mouse only scrolls and the stylus places text.
+    let desktop = [
+        (Tool::Pen, (true, AsStylus, false)),
+        (Tool::Geometry, (true, AsStylus, false)),
+        (Tool::Text, (false, Itself, true)),
+        (Tool::Laser, (true, AsStylus, false)),
     ];
-    for (tool, (stylus, mouse, keyboard)) in rules {
-        assert_eq!(policy(tool), InputPolicy { stylus, mouse, keyboard }, "{tool:?}");
+    let tablet = [
+        (Tool::Pen, (true, Scrolls, false)),
+        (Tool::Geometry, (true, Scrolls, false)),
+        (Tool::Text, (true, Scrolls, true)),
+        (Tool::Laser, (true, Scrolls, false)),
+    ];
+    for (mode, rules) in [(Mode::Desktop, desktop), (Mode::Tablet, tablet)] {
+        for (tool, (stylus, mouse, keyboard)) in rules {
+            assert_eq!(policy(tool, mode), InputPolicy { stylus, mouse, keyboard }, "{tool:?} in the {mode:?} mode");
+        }
     }
 }
-
 #[test]
 fn a_new_tool_is_idle_and_owns_no_pointer() {
     let ed = editor();
@@ -130,14 +139,15 @@ fn ending_settling_and_leaving_an_idle_tool_change_nothing_and_can_be_repeated()
 
 #[test]
 fn what_a_tool_does_not_listen_to_never_reaches_it() {
-    for tool in ALL {
+    for (tool, mode) in ALL.into_iter().flat_map(|t| [(t, Mode::Desktop), (t, Mode::Tablet)]) {
         let mut ed = editor();
+        ed.set_mode(mode);
         ed.tool = tool;
         add_stroke(&mut ed, &[[100.0, 100.0], [300.0, 100.0]]);
         let before = (ed.ink.revision(), ed.ink.len(), ed.selection.clone());
-        let policy = policy(tool);
+        let policy = policy(tool, ed.mode());
         let (a, b) = (on_page(&ed, 100.0, 100.0), on_page(&ed, 300.0, 100.0));
-        for (dev, listens) in [(Device::Pen, policy.stylus), (Device::Mouse, policy.mouse), (Device::Touch, false)] {
+        for (dev, listens) in [(Device::Pen, policy.stylus), (Device::Mouse, policy.mouse != MouseUse::Scrolls), (Device::Touch, false)] {
             if listens {
                 continue;
             }
@@ -171,6 +181,9 @@ fn any_stream_of_events_leaves_every_tool_sound() {
             let extent = if rng.chance(0.1) { 1.0e7 } else { 700.0 };
             let pts: Vec<[f32; 2]> = (0..1 + rng.below(4)).map(|_| on_page(&ed, rng.coord(extent), rng.coord(extent))).collect();
             ed.route_to_tool(dev, id, phase, &samples(&pts, 1000.0), pen);
+            if rng.chance(0.01) {
+                ed.set_mode(rng.pick(&[Mode::Desktop, Mode::Tablet]));
+            }
             if rng.chance(0.02) {
                 ed.type_text("x\n");
             }

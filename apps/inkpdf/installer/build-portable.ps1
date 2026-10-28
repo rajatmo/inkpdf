@@ -8,7 +8,9 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $crate = Split-Path -Parent $here
 $version = (Select-String -Path (Join-Path $crate "Cargo.toml") -Pattern '^version\s*=\s*"([^"]+)"' | Select-Object -First 1).Matches[0].Groups[1].Value
 $workspace = Split-Path -Parent (Split-Path -Parent $crate)
-$targetDir = Join-Path $workspace "target-portable"
+# Beside the normal target folder: `<CARGO_TARGET_DIR>-portable` if that is set (keep build output out of the
+# repository), else `target-portable` in it (git-ignored).
+$targetDir = if ($env:CARGO_TARGET_DIR) { "$($env:CARGO_TARGET_DIR.TrimEnd('\'))-portable" } else { Join-Path $workspace "target-portable" }
 if (-not $SkipBuild) {
     $env:CARGO_TARGET_DIR = $targetDir
     $env:RUSTFLAGS = "-C target-feature=+crt-static"

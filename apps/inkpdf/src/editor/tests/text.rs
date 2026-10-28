@@ -6,7 +6,7 @@ use super::*;
 fn with_text() -> Editor {
     let mut ed = editor();
     ed.set_tool(Tool::Text);
-    ed.panel = None;
+    ed.chrome.panel = None;
     ed
 }
 
@@ -141,7 +141,7 @@ fn the_stylus_can_still_press_the_buttons_of_the_toolbar_with_the_text_tool() {
 #[test]
 fn the_backspace_key_takes_a_character_away_and_enter_starts_a_line() {
     let mut ed = with_text();
-    tap(&mut ed, 100.0, 100.0);
+    tap(&mut ed, 100.0, 160.0);
     ed.type_text("abc");
     ed.backspace();
     ed.type_text("\n");
@@ -160,7 +160,7 @@ fn the_backspace_key_takes_a_character_away_and_enter_starts_a_line() {
 #[test]
 fn a_box_is_never_longer_than_the_limit() {
     let mut ed = with_text();
-    tap(&mut ed, 100.0, 100.0);
+    tap(&mut ed, 100.0, 160.0);
     ed.type_text(&"x".repeat(crate::text::MAX_CHARS - 1));
     ed.type_text("yyyyyyyy");
     assert_eq!(ed.text_edit().map(|e| e.text.chars().count()), Some(crate::text::MAX_CHARS));
@@ -277,7 +277,7 @@ fn the_colour_and_size_in_the_panel_style_the_box_being_typed() {
     let mut ed = with_text();
     tap(&mut ed, 100.0, 200.0);
     ed.type_text("big");
-    ed.panel = Some(PanelState::default());
+    ed.chrome.panel = Some(PanelState::default());
     ed.set_slider(Slider::Width, 60.0);
     ed.palette[2] = [200, 10, 10, 255];
     ed.text_style.colour = 2;
@@ -287,9 +287,9 @@ fn the_colour_and_size_in_the_panel_style_the_box_being_typed() {
     assert_eq!((s.text.as_ref().map(|t| t.size), s.style.rgba), (Some(60.0), [200, 10, 10, 255]));
     // The size stays in the text range, which is not the pen's.
     ed.set_slider(Slider::Width, 1.0e6);
-    assert_eq!(ed.text_style.width, crate::toolbar::TEXT_SIZES.1);
+    assert_eq!(ed.text_style.width, crate::tool::TEXT_SIZES.1);
     ed.set_slider(Slider::Width, -4.0);
-    assert_eq!(ed.text_style.width, crate::toolbar::TEXT_SIZES.0);
+    assert_eq!(ed.text_style.width, crate::tool::TEXT_SIZES.0);
     assert_eq!(ed.pen, ToolStyle::PEN, "the pen is untouched");
 }
 
@@ -298,7 +298,7 @@ fn typed_text_wraps_at_the_pages_right_edge_and_never_leaves_the_page() {
     let mut ed = with_text();
     let page = ed.page_rect(0).expect("page");
     // A long text from the middle: broken into lines that end at the page's edge.
-    tap(&mut ed, 300.0, 100.0);
+    tap(&mut ed, 300.0, 140.0);
     ed.type_text(&"word ".repeat(40));
     let edit = ed.text_edit().cloned().expect("typing");
     assert!(edit.text.lines().count() > 3 && edit.text.replace('\n', "") == "word ".repeat(40), "{:?}", edit.text);
@@ -338,22 +338,29 @@ fn typed_text_wraps_at_the_pages_right_edge_and_never_leaves_the_page() {
     ed.finish_text();
 }
 #[test]
-fn text_is_erased_and_lassoed_by_the_other_tools_and_moved_by_the_mouse() {
+fn text_is_erased_and_lassoed_by_the_text_tool_alone_and_moved_by_the_mouse() {
     let mut ed = with_text();
     written(&mut ed, 100.0, 200.0, "Hello");
-    // The stylus of the pen tool: its eraser end erases the box, its barrel button lassos it.
-    ed.set_tool(Tool::Pen);
     let across = [on_page(&ed, 100.0, 195.0), on_page(&ed, 110.0, 210.0), on_page(&ed, 120.0, 230.0)];
+    let around =
+        [on_page(&ed, 80.0, 180.0), on_page(&ed, 300.0, 180.0), on_page(&ed, 300.0, 260.0), on_page(&ed, 80.0, 260.0), on_page(&ed, 80.0, 180.0)];
+    // The pen tool works on handwriting: its eraser end and its barrel button pass the text by.
+    ed.set_tool(Tool::Pen);
+    pen_stroke(&mut ed, ERASER, &across);
+    pen_stroke(&mut ed, BARREL, &around);
+    assert_eq!((ed.ink.len(), ed.selection.len()), (1, 0));
+    // As a tablet the text tool takes the stylus: its eraser end erases the box, its barrel button lassos it.
+    ed.set_tool(Tool::Text);
+    ed.set_mode(Mode::Tablet);
     pen_stroke(&mut ed, ERASER, &across);
     assert_eq!(ed.ink.len(), 0);
     ed.undo();
     assert_eq!(texts(&ed), ["Hello"]);
     ed.selection.clear();
-    let around =
-        [on_page(&ed, 80.0, 180.0), on_page(&ed, 300.0, 180.0), on_page(&ed, 300.0, 260.0), on_page(&ed, 80.0, 260.0), on_page(&ed, 80.0, 180.0)];
     pen_stroke(&mut ed, BARREL, &around);
     assert_eq!(ed.selection.len(), 1);
     assert!(ed.text_edit().is_none());
+    ed.set_mode(Mode::Desktop);
     // With the text tool the mouse takes hold of a selection and drags it.
     ed.set_tool(Tool::Text);
     ed.selection = vec![ed.ink.strokes()[0].id];

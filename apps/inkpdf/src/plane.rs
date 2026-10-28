@@ -1,10 +1,17 @@
-//! Plane geometry for ink: distances, polygon tests, and thinning a point list.
+//! Plane geometry, the base everything that works with points stands on: the point type, distances, rectangle and polygon
+//! tests, and simplifying or thinning a point list. Pure arithmetic, with no dependency on anything else of the program.
 
-use super::P;
+/// A point, in whatever space the caller works in (document points, screen pixels).
+pub type P = [f32; 2];
 
 /// Whether `p` is inside `rect` (`[x0, y0, x1, y1]`), edges included.
 pub fn rect_contains(rect: [f32; 4], p: P) -> bool {
     p[0] >= rect[0] && p[0] <= rect[2] && p[1] >= rect[1] && p[1] <= rect[3]
+}
+
+/// `p` moved into `rect` (`x0, y0, x1, y1`), whichever way round the rectangle is given.
+pub fn clamp_into(rect: [f32; 4], p: P) -> P {
+    [p[0].clamp(rect[0].min(rect[2]), rect[0].max(rect[2])), p[1].clamp(rect[1].min(rect[3]), rect[1].max(rect[3]))]
 }
 
 pub fn dist2(a: P, b: P) -> f32 {
@@ -21,16 +28,16 @@ pub fn dist2_point_segment(p: P, a: P, b: P) -> f32 {
     dist2(p, [a[0] + ab[0] * t, a[1] + ab[1] * t])
 }
 
-pub(super) fn cross(o: P, a: P, b: P) -> f32 {
+pub fn cross(o: P, a: P, b: P) -> f32 {
     (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
 }
 
-pub(super) fn segments_intersect(a: P, b: P, c: P, d: P) -> bool {
+pub fn segments_intersect(a: P, b: P, c: P, d: P) -> bool {
     let (d1, d2, d3, d4) = (cross(c, d, a), cross(c, d, b), cross(a, b, c), cross(a, b, d));
     ((d1 > 0.0) != (d2 > 0.0) && d1 != 0.0 && d2 != 0.0) && ((d3 > 0.0) != (d4 > 0.0) && d3 != 0.0 && d4 != 0.0)
 }
 
-pub(super) fn dist2_segments(a: P, b: P, c: P, d: P) -> f32 {
+pub fn dist2_segments(a: P, b: P, c: P, d: P) -> f32 {
     if segments_intersect(a, b, c, d) {
         return 0.0;
     }
@@ -97,6 +104,13 @@ pub fn thin(pts: &[P], min_dist: f32) -> Vec<P> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_point_is_pulled_into_a_rectangle_whichever_way_it_is_given() {
+        assert_eq!(clamp_into([0.0, 0.0, 10.0, 20.0], [-5.0, 30.0]), [0.0, 20.0]);
+        assert_eq!(clamp_into([10.0, 20.0, 0.0, 0.0], [5.0, 5.0]), [5.0, 5.0], "a rectangle given the other way round");
+        assert_eq!(clamp_into([0.0, 0.0, 10.0, 10.0], [3.0, 4.0]), [3.0, 4.0]);
+    }
 
     #[test]
     fn simplify_keeps_ends_and_corners_and_drops_collinear_points() {

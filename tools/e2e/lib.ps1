@@ -98,13 +98,18 @@ function Type-Text([string]$s) {
 }
 function Keys([string]$k) { [System.Windows.Forms.SendKeys]::SendWait($k); Start-Sleep -Milliseconds 150 }
 # Toolbar buttons (window fractions, a maximised 4K window): close undo redo save | delete page, add page | pen shape text pointer | mode, fullscreen
-$script:btn = @{ close = 0.016; undo = 0.0365; redo = 0.0545; save = 0.0715; del = 0.093; plus = 0.1102; pen = 0.4745; shape = 0.4915; text = 0.5085; laser = 0.5255; mode = 0.9664; full = 0.9835 }
-function Press($name) { Click $script:btn[$name] 0.031 }
+$script:btn = @{ close = 0.0152; undo = 0.0340; redo = 0.0488; save = 0.0637; del = 0.0824; plus = 0.0973; pen = 0.4777; shape = 0.4926; text = 0.5074; laser = 0.5223; mode = 0.9699; full = 0.9848 }
+function Press($name) { Click $script:btn[$name] 0.0285 }
+# The bar under the tools (same window): draw select erase | duplicate copy paste delete | five colours, settings
+$script:bar = @{ draw = 0.4147; select = 0.4296; erase = 0.4444; duplicate = 0.4632; copy = 0.4780; paste = 0.4929; delete = 0.5077; black = 0.5245; blue = 0.5355; red = 0.5465; green = 0.5575; orange = 0.5684; style = 0.5821; remove = 0.5022; add = 0.5171 }
+function Bar($name) { Click $script:bar[$name] 0.0738 }
+# The same button with the stylus tip.
+function Pen-Bar($name) { B tap $script:bar[$name] 0.0738 }
 # The same button with the stylus, or with a finger.
-function Pen-Press($name) { B tap $script:btn[$name] 0.031 }
-function Finger-Press($name) { B finger down 1 $script:btn[$name] 0.031; B finger up 1 $script:btn[$name] 0.031 }
-# Choose a tool the way a person does: press its button (its panel opens) and tap the page to put the panel away.
-function Use-Tool($name) { Press $name; if ($name -ne "laser") { Click 0.95 0.95 } }
+function Pen-Press($name) { B tap $script:btn[$name] 0.0285 }
+function Finger-Press($name) { B finger down 1 $script:btn[$name] 0.0285; B finger up 1 $script:btn[$name] 0.0285 }
+# Choose a tool the way a person does: press its button (the settings are the bar's, so nothing else opens).
+function Use-Tool($name) { Press $name }
 
 # ---- Looking
 function Shot([string]$n) {

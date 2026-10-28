@@ -4,7 +4,7 @@
 
 use std::sync::LazyLock;
 
-use crate::gpu::Capsule;
+use crate::scene::Capsule;
 
 /// An icon: open or closed polylines in a box from -1 to 1, y down.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -28,6 +28,15 @@ pub(super) struct Icons {
     pub text: Icon,
     pub desktop: Icon,
     pub tablet: Icon,
+    pub select: Icon,
+    pub erase: Icon,
+    pub duplicate: Icon,
+    pub copy: Icon,
+    pub paste: Icon,
+    pub node_remove: Icon,
+    pub node_add: Icon,
+    pub node_smooth: Icon,
+    pub options: Icon,
 }
 
 static ICONS: LazyLock<Icons> = LazyLock::new(|| Icons {
@@ -46,6 +55,15 @@ static ICONS: LazyLock<Icons> = LazyLock::new(|| Icons {
     text: Icon::from_svg(include_str!("../../icons/svg/text.svg")),
     desktop: Icon::from_svg(include_str!("../../icons/svg/desktop.svg")),
     tablet: Icon::from_svg(include_str!("../../icons/svg/tablet.svg")),
+    select: Icon::from_svg(include_str!("../../icons/svg/select.svg")),
+    erase: Icon::from_svg(include_str!("../../icons/svg/erase.svg")),
+    duplicate: Icon::from_svg(include_str!("../../icons/svg/duplicate.svg")),
+    copy: Icon::from_svg(include_str!("../../icons/svg/copy.svg")),
+    paste: Icon::from_svg(include_str!("../../icons/svg/paste.svg")),
+    node_remove: Icon::from_svg(include_str!("../../icons/svg/node-remove.svg")),
+    node_add: Icon::from_svg(include_str!("../../icons/svg/node-add.svg")),
+    node_smooth: Icon::from_svg(include_str!("../../icons/svg/node-smooth.svg")),
+    options: Icon::from_svg(include_str!("../../icons/svg/options.svg")),
 });
 
 pub(super) fn icons() -> &'static Icons {
@@ -94,19 +112,22 @@ fn path_data(svg: &str) -> impl Iterator<Item = &str> {
 }
 
 /// A path's subpaths as polylines: lines kept, cubic curves cut into short straight pieces.
-/// Handles the commands dvisvgm writes (`M L H V C Z`, absolute); stops at any other.
+/// Handles the commands dvisvgm writes (`M L H V C S Z`, absolute); stops at any other.
 fn flatten(d: &str) -> Vec<Vec<[f32; 2]>> {
     let mut lines: Vec<Vec<[f32; 2]>> = Vec::new();
     let mut current: Vec<[f32; 2]> = Vec::new();
     let mut at = [0.0_f32; 2];
     let mut start = at;
     let mut command = ' ';
+    // The second control point of the cubic just drawn: a smooth cubic (`S`) continues from its reflection.
+    let mut last_control: Option<[f32; 2]> = None;
     let mut numbers = Numbers::new(d);
     while let Some(token) = numbers.next_token() {
         match token {
             Token::Command(c) => {
                 command = c;
                 if c == 'Z' || c == 'z' {
+                    last_control = None;
                     if !current.is_empty() {
                         current.push(start);
                         lines.push(std::mem::take(&mut current));
@@ -128,10 +149,14 @@ fn flatten(d: &str) -> Vec<Vec<[f32; 2]>> {
                 let arguments = match command {
                     'M' | 'L' => 2,
                     'H' | 'V' => 1,
+                    'S' => 4,
                     'C' => 6,
                     _ => break,
                 };
                 let Some(v) = take(arguments) else { break };
+                if !matches!(command, 'C' | 'S') {
+                    last_control = None;
+                }
                 match command {
                     'M' => {
                         if current.len() > 1 {
@@ -156,9 +181,17 @@ fn flatten(d: &str) -> Vec<Vec<[f32; 2]>> {
                         at = [at[0], v[0]];
                         current.push(at);
                     }
+                    'S' => {
+                        let p1 = last_control.map_or(at, |c| [2.0 * at[0] - c[0], 2.0 * at[1] - c[1]]);
+                        let (p2, p3) = ([v[0], v[1]], [v[2], v[3]]);
+                        cubic(at, p1, p2, p3, &mut current);
+                        last_control = Some(p2);
+                        at = p3;
+                    }
                     _ => {
                         let (p1, p2, p3) = ([v[0], v[1]], [v[2], v[3]], [v[4], v[5]]);
                         cubic(at, p1, p2, p3, &mut current);
+                        last_control = Some(p2);
                         at = p3;
                     }
                 }
@@ -263,6 +296,18 @@ mod tests {
     }
 
     #[test]
+    fn a_smooth_cubic_continues_from_the_reflection_of_the_last_control_point() {
+        // A circle as dvisvgm writes it: one cubic, then smooth cubics round to the start.
+        let svg = "<svg viewBox='0 0 4 4'><path d='M4 2C4 3.1 3.1 4 2 4S0 3.1 0 2S0.9 0 2 0S4 0.9 4 2Z'/></svg>";
+        let icon = Icon::from_svg(svg);
+        assert_eq!(icon.lines.len(), 1, "one closed outline");
+        let line = &icon.lines[0];
+        assert!(line.len() > 12, "the curves were cut into pieces, not dropped");
+        // Round: every point is about one unit (half the box) from the centre.
+        assert!(line.iter().all(|p| ((p[0] * p[0] + p[1] * p[1]).sqrt() - 1.0).abs() < 0.06), "{line:?}");
+    }
+
+    #[test]
     fn broken_input_gives_an_empty_icon_not_a_panic() {
         for svg in [
             "",
@@ -296,6 +341,15 @@ mod tests {
             ("text", &all.text),
             ("desktop", &all.desktop),
             ("tablet", &all.tablet),
+            ("select", &all.select),
+            ("erase", &all.erase),
+            ("duplicate", &all.duplicate),
+            ("copy", &all.copy),
+            ("paste", &all.paste),
+            ("node-remove", &all.node_remove),
+            ("node-add", &all.node_add),
+            ("node-smooth", &all.node_smooth),
+            ("options", &all.options),
         ] {
             assert!(!icon.lines.is_empty(), "{name} has no strokes");
             for p in icon.lines.iter().flatten() {

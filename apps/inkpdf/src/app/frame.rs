@@ -55,7 +55,7 @@ impl State {
         if self.print_stats
             && let Some(t) = self.ed.pending_sample_ms
         {
-            self.read_age_ms.push((win_pointer::now_ms() - t) as f32);
+            self.read_age_ms.push((crate::clock::now_ms() - t) as f32);
         }
         let now = Instant::now();
         let dt = now.duration_since(self.last_frame).as_secs_f32();
@@ -65,7 +65,7 @@ impl State {
         self.drive_bench(dt);
         let animating = self.ed.step_view(dt);
         // The laser's trail fades with the clock: keep drawing until it is gone, and no longer.
-        let pen_clock = win_pointer::now_ms();
+        let pen_clock = crate::clock::now_ms();
         let fading = self.ed.tools.pointer.prune(pen_clock);
         let settled = self.zoom_settled(now);
         let pending = self.stream_tiles(settled);
@@ -96,7 +96,7 @@ impl State {
             overlay_screen: &overlays.screen,
         };
         if let Some(t) = self.ed.pending_sample_ms.take() {
-            self.latency_ms.push((win_pointer::now_ms() - t) as f32);
+            self.latency_ms.push((crate::clock::now_ms() - t) as f32);
         }
         let t_ink = Instant::now();
         let result = self.gpu.draw(frame, &scene.quads, &ink_scene, BACKGROUND);

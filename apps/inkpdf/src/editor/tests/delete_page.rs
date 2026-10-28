@@ -28,7 +28,7 @@ fn the_button_asks_for_the_page_being_looked_at_with_every_device_and_asks_nobod
     let button = delete_button(&ed);
     mouse_click_at(&mut ed, button);
     assert!(ed.requests.has(&Request::DeletePage(0)), "the mouse: the page being looked at is the first");
-    assert!(ed.prompt.is_none(), "no question is asked");
+    assert!(ed.chrome.prompt.is_none(), "no question is asked");
     ed.requests.take(&Request::DeletePage(0));
     ed.pan_px(0.0, -1.0e6);
     pen_stroke(&mut ed, TIP, &[button, button]);
@@ -48,7 +48,7 @@ fn the_button_works_in_both_modes_and_with_every_tool() {
             let mut ed = pages(2);
             ed.set_mode(mode);
             ed.set_tool(tool);
-            ed.panel = None;
+            ed.chrome.panel = None;
             let button = delete_button(&ed);
             mouse_click_at(&mut ed, button);
             assert!(ed.requests.has(&Request::DeletePage(0)), "{mode:?} {tool:?}");
@@ -114,7 +114,7 @@ fn a_stroke_under_way_when_the_page_goes_is_ended_not_left_half_done() {
 fn typing_in_a_text_box_when_the_page_goes_does_not_survive_it() {
     let mut ed = pages(2);
     ed.set_tool(Tool::Text);
-    ed.panel = None;
+    ed.chrome.panel = None;
     let at = on_page(&ed, 100.0, 300.0);
     mouse_click_at(&mut ed, at);
     ed.type_text("about to vanish");

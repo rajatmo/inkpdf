@@ -81,7 +81,7 @@ impl State {
             t if t < 7.0 => {
                 let phase = ((t - 4.0) / 0.75) as u32;
                 let target = if phase.is_multiple_of(2) { bench.zoom_base * 2.5 } else { bench.zoom_base };
-                ed.view.zoom_to(target, centre);
+                ed.view_mut().zoom_to(target, centre);
             }
             t if t < 10.0 => ed.pan_px(0.0, -2400.0 * dt),
             _ => {}

@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 
 use crate::geometry::Shape;
 use crate::smooth::DEFAULT_AMOUNT;
-use crate::toolbar::{MAX_WIDTH, MIN_WIDTH, PALETTE, TEXT_SIZES, Tool, ToolStyle};
+use crate::tool::{MAX_WIDTH, MIN_WIDTH, PALETTE, TEXT_SIZES, Tool, ToolStyle};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Settings {
@@ -183,7 +183,7 @@ pub fn save(settings: &Settings) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::toolbar::DEFAULT_WIDTH;
+    use crate::tool::DEFAULT_WIDTH;
 
     #[test]
     fn a_portable_marker_beside_the_exe_keeps_the_settings_there_else_they_go_to_appdata() {
@@ -215,7 +215,7 @@ mod tests {
     fn settings_round_trip_through_text() {
         let s = everything_changed();
         assert_eq!(Settings::parse(&s.to_text()), s);
-        for tool in [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Laser] {
+        for tool in Tool::ALL {
             for shape in crate::geometry::SHAPES {
                 let s = Settings { tool, shape, ..everything_changed() };
                 assert_eq!(Settings::parse(&s.to_text()), s, "{tool:?} {shape:?}");

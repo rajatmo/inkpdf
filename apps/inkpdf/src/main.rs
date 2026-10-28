@@ -10,6 +10,8 @@
 mod app;
 #[cfg(test)]
 mod architecture;
+mod clipboard;
+mod clock;
 mod colour;
 mod coords;
 mod doc;
@@ -23,8 +25,11 @@ mod input;
 mod laser;
 mod links;
 mod native;
+mod plane;
 mod posture;
 mod requests;
+mod scene;
+mod selection;
 mod settings;
 mod smooth;
 #[cfg(test)]
@@ -34,6 +39,7 @@ mod testutil;
 mod text;
 mod thumbnail;
 mod tiles;
+mod tool;
 mod toolbar;
 mod tools;
 mod view;

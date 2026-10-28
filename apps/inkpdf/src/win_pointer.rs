@@ -18,9 +18,10 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 
+use crate::clock::{counter_ms, now_ms};
+
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::ClientToScreen;
-use windows_sys::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
 use windows_sys::Win32::UI::Controls::{
     FEEDBACK_GESTURE_PRESSANDTAP, FEEDBACK_PEN_BARRELVISUALIZATION, FEEDBACK_PEN_DOUBLETAP, FEEDBACK_PEN_PRESSANDHOLD, FEEDBACK_PEN_RIGHTTAP,
     FEEDBACK_PEN_TAP, FEEDBACK_TOUCH_CONTACTVISUALIZATION, FEEDBACK_TOUCH_DOUBLETAP, FEEDBACK_TOUCH_PRESSANDHOLD, FEEDBACK_TOUCH_RIGHTTAP,
@@ -56,24 +57,6 @@ thread_local! {
 fn trace_enabled() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("INKPDF_TRACE").is_some())
-}
-
-fn qpc_frequency() -> f64 {
-    static FREQ: OnceLock<f64> = OnceLock::new();
-    *FREQ.get_or_init(|| {
-        let mut f = 0_i64;
-        // SAFETY: `f` is a valid out-pointer for the call.
-        unsafe { QueryPerformanceFrequency(&mut f) };
-        if f > 0 { f as f64 } else { 1.0 }
-    })
-}
-
-/// Milliseconds on the clock pointer timestamps use (the performance counter).
-pub fn now_ms() -> f64 {
-    let mut c = 0_i64;
-    // SAFETY: `c` is a valid out-pointer for the call.
-    unsafe { QueryPerformanceCounter(&mut c) };
-    c as f64 * 1000.0 / qpc_frequency()
 }
 
 /// Start receiving pen and touch for `window`. Fails if the window has no Win32 handle.
@@ -249,7 +232,7 @@ fn client_pos(hwnd: HWND, info: &POINTER_INFO, fine: bool) -> [f32; 2] {
 }
 
 fn timestamp(info: &POINTER_INFO) -> f64 {
-    if info.PerformanceCount > 0 { info.PerformanceCount as f64 * 1000.0 / qpc_frequency() } else { now_ms() }
+    if info.PerformanceCount > 0 { counter_ms(info.PerformanceCount) } else { now_ms() }
 }
 
 fn pen_event(hwnd: HWND, msg: u32, id: u32) -> Option<PointerEvent> {

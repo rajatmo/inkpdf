@@ -2,9 +2,10 @@
 //! drag of a selection, the eraser, the lasso.
 
 use crate::ink::{self, P, dist2};
-use crate::input::{Device, Sample};
+use crate::input::{Device, Intent, Role, Sample, role};
 use crate::workspace::Workspace;
 
+use super::PageEvent;
 use super::paint::{ACCENT, Painter, polyline};
 
 /// The eraser's radius, in logical pixels.
@@ -78,7 +79,7 @@ impl Eraser {
             self.pos = s.pos;
             let from = self.last.unwrap_or(p);
             self.last = Some(p);
-            for id in ws.ink.touched_by_segment(from, p, radius) {
+            for id in ws.keep_own(ws.ink.touched_by_segment(from, p, radius)) {
                 ws.erasing.insert(id);
                 ws.selection.retain(|&sel| sel != id);
             }
@@ -107,16 +108,19 @@ impl Eraser {
     }
 }
 
-/// The barrel button's loop: what it encloses is selected when the pen lifts.
+/// A loop drawn with the pen: what it encloses is selected when the pen lifts. A tap, which makes no loop, selects
+/// the item under it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Lasso {
     pub id: u32,
     pub poly: Vec<P>,
+    /// It was begun with the stylus's barrel button (not by choosing to select on screen).
+    pub barrel: bool,
 }
 
 impl Lasso {
-    pub fn begin(id: u32, at: P) -> Self {
-        Self { id, poly: vec![at] }
+    pub fn begin(id: u32, at: P, barrel: bool) -> Self {
+        Self { id, poly: vec![at], barrel }
     }
 
     pub fn drag(&mut self, ws: &Workspace, samples: &[Sample]) {
@@ -129,10 +133,21 @@ impl Lasso {
         }
     }
 
-    /// Select what `poly` encloses.
+    /// Whether a loop that stayed this near where it began is a tap.
+    pub fn is_tap(ws: &Workspace, poly: &[P]) -> bool {
+        let reach = super::TAP_SELECT_PX * ws.dpr / ws.view.zoom;
+        poly.first().is_some_and(|&first| poly.iter().all(|&q| dist2(q, first) <= reach * reach))
+    }
+
+    /// Select what `poly` encloses (of the tool's own items), or, if it was a tap, the one item under it.
     pub fn select(ws: &mut Workspace, poly: &[P]) {
+        if Self::is_tap(ws, poly) {
+            let radius = super::TAP_SELECT_PX * ws.dpr / ws.view.zoom;
+            ws.selection = poly.first().and_then(|&at| ws.hit_own(at, radius)).into_iter().collect();
+            return;
+        }
         let poly = ink::simplify(poly, 0.5 / ws.view.zoom);
-        ws.selection = if poly.len() >= 3 { ws.ink.in_polygon(&poly) } else { Vec::new() };
+        ws.selection = if poly.len() >= 3 { ws.keep_own(ws.ink.in_polygon(&poly)) } else { Vec::new() };
     }
 
     pub fn paint(&self, ws: &Workspace, out: &mut dyn Painter) {
@@ -140,6 +155,107 @@ impl Lasso {
         polyline(out, &self.poly, 1.5 * px, ACCENT);
         if let (Some(first), Some(last)) = (self.poly.first(), self.poly.last()) {
             out.doc_line(*last, *first, 1.0 * px, [ACCENT[0], ACCENT[1], ACCENT[2], 110]);
+        }
+    }
+}
+
+/// What a press does when it is not making something, for every tool that makes items: erase what the tip passes
+/// over (the eraser end, or erase chosen on screen), loop or tap to select (the barrel button, or select chosen), and,
+/// with select chosen, drag what is selected where the press lands on it. A tool holds one in its own gesture and
+/// hands it the pointer, so that pen, shape and text do not each carry the same three gestures.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Pick {
+    Erase { dev: Device, eraser: Eraser },
+    Lasso { dev: Device, lasso: Lasso },
+    Move(Mover),
+}
+
+impl Pick {
+    /// What a press at `p` starts, if it is not one that makes something (`None` for that). `on_selection` is whether
+    /// `p` is on what is selected, as the tool judges it (a shape by its outline, ink and text by their box).
+    pub fn begin(ws: &mut Workspace, ev: &PageEvent<'_>, p: P, on_selection: bool) -> Option<Pick> {
+        // Select was chosen on screen, rather than asked for with the barrel button.
+        let chosen = role(&ev.pen) == Role::Draw && ws.intent == Intent::Select;
+        match ws.role(&ev.pen) {
+            Role::Draw => None,
+            Role::Erase => {
+                let mut eraser = Eraser::begin(ev.id);
+                eraser.drag(ws, ev.samples);
+                Some(Pick::Erase { dev: ev.dev, eraser })
+            }
+            Role::Lasso if chosen && on_selection => Some(Pick::grab(ev.dev, ev.id, p)),
+            Role::Lasso => {
+                let mut lasso = Lasso::begin(ev.id, p, !chosen);
+                lasso.drag(ws, ev.samples);
+                Some(Pick::Lasso { dev: ev.dev, lasso })
+            }
+        }
+    }
+
+    /// Take hold of the selection at `p`: a drag moves it.
+    pub fn grab(dev: Device, id: u32, p: P) -> Pick {
+        Pick::Move(Mover::begin(dev, id, p))
+    }
+
+    pub fn owns(&self, dev: Device, id: u32) -> bool {
+        match self {
+            Pick::Erase { dev: d, eraser } => *d == dev && eraser.id == id,
+            Pick::Lasso { dev: d, lasso } => *d == dev && lasso.id == id,
+            Pick::Move(m) => m.dev == dev && m.id == id,
+        }
+    }
+
+    pub fn id(&self) -> u32 {
+        match self {
+            Pick::Erase { eraser, .. } => eraser.id,
+            Pick::Lasso { lasso, .. } => lasso.id,
+            Pick::Move(m) => m.id,
+        }
+    }
+
+    /// The pointer moved through `samples`.
+    pub fn moved(&mut self, ws: &mut Workspace, samples: &[Sample]) {
+        match self {
+            Pick::Erase { eraser, .. } => eraser.drag(ws, samples),
+            Pick::Lasso { lasso, .. } => lasso.drag(ws, samples),
+            Pick::Move(m) => {
+                if let Some(s) = samples.last() {
+                    m.drag(ws, s.pos);
+                }
+            }
+        }
+    }
+
+    /// The pointer lifted: what was erased goes, what was looped is selected, what was dragged moves. A tool that does
+    /// something else with a loop (a tap that adds a point) says so in `taken`, which is given the loop first and
+    /// returns whether it dealt with it.
+    pub fn end(self, ws: &mut Workspace, taken: impl FnOnce(&mut Workspace, &Lasso) -> bool) {
+        match self {
+            Pick::Erase { .. } => Eraser::finish(ws),
+            Pick::Lasso { lasso, .. } => {
+                if !taken(ws, &lasso) {
+                    Lasso::select(ws, &lasso.poly);
+                }
+            }
+            Pick::Move(m) => {
+                m.finish(ws);
+            }
+        }
+    }
+
+    /// How far the selection is being dragged.
+    pub fn offset(&self) -> [f32; 2] {
+        match self {
+            Pick::Move(m) => m.offset(),
+            _ => [0.0; 2],
+        }
+    }
+
+    pub fn paint(&self, ws: &Workspace, out: &mut dyn Painter) {
+        match self {
+            Pick::Erase { eraser, .. } => eraser.paint(ws, out),
+            Pick::Lasso { lasso, .. } => lasso.paint(ws, out),
+            Pick::Move(_) => {}
         }
     }
 }

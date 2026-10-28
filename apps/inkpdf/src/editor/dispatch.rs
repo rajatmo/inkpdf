@@ -1,28 +1,30 @@
 //! Routing a pointer to the interaction it belongs to.
 
 use crate::input::{Device, PointerEvent, Sample};
-use crate::win_pointer;
 
 use super::{Act, Editor};
 
 impl Editor {
     /// Whether the chrome interaction under way belongs to this pointer.
     pub(super) fn act_belongs_to(&self, dev: Device, id: u32) -> bool {
-        match &self.act {
-            Act::Toolbar { dev: d, id: a, .. } | Act::Slider { dev: d, id: a, .. } | Act::Swallow { dev: d, id: a } => *d == dev && *a == id,
+        match &self.chrome.act {
+            Act::Toolbar { dev: d, id: a, .. }
+            | Act::Context { dev: d, id: a, .. }
+            | Act::Slider { dev: d, id: a, .. }
+            | Act::Swallow { dev: d, id: a } => *d == dev && *a == id,
             Act::Idle => false,
         }
     }
 
     /// A pen or touch message from the Windows pointer layer.
     pub(crate) fn pointer_event(&mut self, ev: PointerEvent) {
-        if self.prompt.is_some() {
+        if self.chrome.prompt.is_some() {
             self.prompt_event(&ev);
             return;
         }
         match ev.device {
             Device::Pen => {
-                self.palm.pen_event(&ev, win_pointer::now_ms());
+                self.palm.pen_event(&ev, (self.clock)());
                 self.pen_event(&ev);
             }
             Device::Touch => self.touch_event(&ev),
@@ -35,7 +37,7 @@ impl Editor {
         if !self.act_belongs_to(dev, id) {
             return;
         }
-        if let Act::Slider { slider, .. } = self.act
+        if let Act::Slider { slider, .. } = self.chrome.act
             && let Some(s) = samples.last()
         {
             self.drag_slider(slider, s.pos[0]);

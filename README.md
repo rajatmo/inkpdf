@@ -3,7 +3,7 @@
 A fast, pen-first PDF annotator for Windows. Open a PDF, write on it with a stylus, save it back. No account,
 no library, no sync: just the page and your pen.
 
-![InkPDF: pen strokes, a shape edited by its anchors, typed text, the desktop/tablet mode button, adding and deleting a page](docs/demo.gif)
+![InkPDF: pen strokes, selecting, colouring, duplicating, deleting and erasing from the bar under the tools, the settings unfolding from it, a shape edited by its anchors, typed text, the desktop/tablet mode button, adding and deleting a page](docs/demo.gif)
 
 - **Low latency.** The frame waits for the display, *then* reads the pen, so the ink carries the newest
   samples; the live stroke is extended a few milliseconds ahead of the pen. Pen sample to frame submitted is
@@ -26,13 +26,35 @@ then turned into a tablet or back, InkPDF looks again and follows.
 
 | Tool | Stylus | Mouse, desktop mode | Mouse, tablet mode | Touch | Keyboard |
 |---|---|---|---|---|---|
-| **Pen** | draw; eraser end erases strokes; barrel button lassos | as a stylus: left button draws, right erases, middle lassos | scroll | pan, zoom | none |
-| **Shape** | select, draw, erase, lasso | as a stylus | scroll | pan, zoom | none |
-| **Text** | desktop: none; tablet: place, edit and move text | click to place, edit and move text | scroll | pan, zoom | types |
+| **Pen** | draw; eraser end erases strokes; barrel button lassos | as a stylus: left button draws, right erases, middle lassos | scroll | pan, zoom | desktop: works on the selection (below) |
+| **Shape** | select, draw, erase, lasso | as a stylus | scroll | pan, zoom | desktop: works on the selection (below) |
+| **Text** | desktop: none; tablet: place, edit and move text | click to place, edit and move text | scroll | pan, zoom | types, moves the caret, selects |
 | **Pointer** | a red dot and fading trail, for presenting | as a stylus (the dot follows the mouse) | scroll | pan, zoom | none |
 
 In desktop mode the keyboard also has Ctrl+Z (undo), Ctrl+Y or Ctrl+Shift+Z (redo) and Ctrl+S (save). The
 wheel scrolls in both modes.
+
+### Select, erase, copy, restyle: with whatever you have
+
+With a tool chosen, every item it made can be created, selected, moved, restyled, duplicated, copied, pasted,
+erased and deleted, and each of those undone, with only what the mode guarantees: at a desk the left mouse
+button and the keyboard, as a tablet the tip of the stylus. The stylus's barrel button and eraser end and the
+mouse's right and middle buttons are shortcuts, never the only way.
+
+A bar under the tools has the buttons: **draw, select, erase** (what the plain tip, or the left mouse button,
+does), then **duplicate, copy, paste, delete**, the buttons for a **point** of the shape being edited (add one,
+take it away, smooth or sharpen it), the **five colours** and a **settings** button. With select chosen, a tap on an
+item or a loop round several selects them, and a drag moves them. A colour tapped in the bar is the tool's colour and
+the colour of what is selected, in one tap; the settings button unfolds the tool's panel (thickness, smoothing, the
+shape) from the bar as one card, and what is chosen there changes what is selected too. (A tool's own button only
+chooses the tool; on a narrow window the five colours are one dot that opens the panel.) A tool works on what it made: the pen on handwriting, the shape tool on shapes, the text tool on text
+boxes, so a loop drawn round a shape with the pen does not pick it up.
+
+At a desk the keyboard does the same: Ctrl+A selects all of the tool's items on the page, Ctrl+C, Ctrl+X, Ctrl+V and
+Ctrl+D (duplicate), Delete, Esc (let go), the arrows (Shift for a bigger step), and Backspace takes away the
+point of a shape that was pressed last. In a text box the caret goes where it is pressed, the arrows, Home and End
+move it (with Shift they select, and so does a drag), and Ctrl+A, C, X and V work on the text with the Windows
+clipboard, which also takes the text of a copied box and gives a new box the text copied anywhere.
 
 Shapes are lines, polylines, polygons, splines, rectangles, ellipses and 2D/3D axes, each edited by the
 anchors that suit it (nodes, tangent handles, diagonals, bounding corners, axis ends). Line and curve are

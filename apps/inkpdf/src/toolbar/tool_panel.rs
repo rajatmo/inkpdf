@@ -8,11 +8,12 @@
 use std::f32::consts::TAU;
 
 use crate::colour::{self, Hsv};
-use crate::geometry::{self, SHAPES, Shape};
+use crate::figure::shape_points;
+use crate::geometry::{SHAPES, Shape};
 use crate::ink::rect_contains;
 
 use super::theme::{ACCENT, ACCENT_WASH, INK, RIM, TRACK, Ui};
-use super::{Item, Tool, Toolbar, position_in, width_in, width_range};
+use super::{Tool, Toolbar, position_in, width_in, width_range};
 
 /// What is open in the panel beyond its basics.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -94,18 +95,19 @@ pub struct ToolPanel {
 }
 
 impl Toolbar {
-    /// The panel of `tool` (the pen or the shape tool; the laser has none), centred under its button
-    /// and kept on screen; `editing` makes room for the colour editor.
+    /// The panel of `tool` (the pen, the shape tool or the text tool; the pointer has none), unfolded from the bar
+    /// under the tools and centred like it, kept on screen; `editing` makes room for the colour editor. (The card
+    /// behind it is the bar's: see [`super::ContextBar::draw`].)
     pub fn tool_panel(&self, tool: Tool, viewport_width: f32, editing: bool) -> Option<ToolPanel> {
-        if tool == Tool::Laser {
+        if !tool.makes_items() {
             return None;
         }
-        let button = self.button(Item::Tool(tool))?;
-        let (u, centre) = (self.unit, (button[0] + button[2]) / 2.0);
+        let (u, centre) = (self.unit, viewport_width / 2.0);
         let width = (8.4 * u).min(viewport_width - 0.4 * u).max(5.0 * u);
         let left = (centre - width / 2.0).clamp(0.2 * u, (viewport_width - width - 0.2 * u).max(0.2 * u));
         let right = left + width;
-        let top = self.bottom() + 0.25 * u;
+        // Just under the bar that is under the tools.
+        let top = self.bottom() + self.context_drop() + 0.15 * u;
         // The text tool has only a size and the colours, so its panel is shorter.
         let text = tool == Tool::Text;
         let base = top + if text { 5.3 } else { 6.3 } * u;
@@ -146,6 +148,11 @@ fn white_thumb(ui: &mut Ui, at: [f32; 2], diameter: f32) {
 }
 
 impl ToolPanel {
+    /// The size of a button, which the panel is laid out in.
+    pub fn unit(&self) -> f32 {
+        self.unit
+    }
+
     pub fn contains(&self, p: [f32; 2]) -> bool {
         rect_contains(self.rect, p)
     }
@@ -241,7 +248,6 @@ impl ToolPanel {
 
     pub fn draw(&self, view: &PanelView, ui: &mut Ui) {
         let u = self.unit;
-        ui.floating(self.rect, 0.45 * u, self.px);
         self.draw_preview(view, ui);
         let line = (0.04 * u).max(1.4 * self.px);
         // Thickness: a small dot to a big one.
@@ -280,7 +286,7 @@ impl ToolPanel {
                 if on {
                     ui.panel([x - 0.62 * u, y - 0.58 * u, x + 0.62 * u, y + 0.58 * u], 0.3 * u, ACCENT_WASH);
                 }
-                let icon = geometry::points(shape, [x - 0.36 * u, y + 0.3 * u], [x + 0.36 * u, y - 0.3 * u]);
+                let icon = shape_points(shape, [x - 0.36 * u, y + 0.3 * u], [x + 0.36 * u, y - 0.3 * u]);
                 for w in icon.windows(2) {
                     ui.line(w[0], w[1], line * 1.15, if on { ACCENT } else { INK });
                 }
@@ -334,7 +340,7 @@ impl ToolPanel {
             return;
         }
         let points: Vec<[f32; 2]> = if self.tool == Tool::Geometry {
-            geometry::points(view.shape, [cx - rx * 0.8, cy + ry], [cx + rx * 0.8, cy - ry])
+            shape_points(view.shape, [cx - rx * 0.8, cy + ry], [cx + rx * 0.8, cy - ry])
         } else {
             (0..PREVIEW_POINTS)
                 .map(|i| {
@@ -400,8 +406,9 @@ fn colour_along(channel: Channel, hsv: Hsv, t: f32) -> [u8; 4] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gpu::Panel;
-    use crate::toolbar::{MAX_WIDTH, MIN_WIDTH, PALETTE, TEXT_SIZES, position_in, slider_position};
+    use crate::scene::Panel;
+    use crate::tool::{MAX_WIDTH, MIN_WIDTH, PALETTE, TEXT_SIZES};
+    use crate::toolbar::{position_in, slider_position};
 
     const WINDOWS: [(f32, f32); 5] = [(480.0, 1.0), (800.0, 1.0), (1100.0, 1.5), (1650.0, 1.5), (3840.0, 2.0)];
 

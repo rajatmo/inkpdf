@@ -5,19 +5,10 @@
 //! It is not a Windows message box on purpose: those stay hidden when raised from a pen tap, which
 //! left the app waiting on a window nobody could see.
 
+use crate::requests::Choice;
+
 use super::icons::icons;
 use super::theme::{ACCENT, INK, Ui};
-
-/// What the person can answer.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Choice {
-    /// Write the changes to the file, then carry on.
-    Save,
-    /// Carry on without them.
-    Discard,
-    /// Stay where we were.
-    Cancel,
-}
 
 /// What is highlighted while the prompt is up.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

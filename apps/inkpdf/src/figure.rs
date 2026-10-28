@@ -21,7 +21,25 @@
 //! Pure logic with no window or GPU types, so it is unit-tested.
 
 use crate::geometry::Shape;
-use crate::ink::P;
+use crate::plane::P;
+
+/// What can be done to a point of a shape being edited, from a button or a key (the pen's barrel button and a double
+/// tap do the same with the stylus alone).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NodeAction {
+    /// Take the point away.
+    Remove,
+    /// Put a new point on the longest stretch of the line.
+    Add,
+    /// Turn a corner into a smooth point and a smooth point into a corner.
+    Smooth,
+}
+
+/// The polyline of `shape` for a drag from `a` to `b`: empty when the drag is too small to make anything of, or is not a
+/// finite number.
+pub fn shape_points(shape: Shape, a: P, b: P) -> Vec<P> {
+    Figure::from_shape(shape, a, b).map(|f| f.points()).unwrap_or_default()
+}
 
 /// A handle shorter than this (in points) is no handle: the anchor is a corner on that side.
 const NO_HANDLE: f32 = 1e-3;

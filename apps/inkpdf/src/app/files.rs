@@ -8,8 +8,8 @@ use crate::doc::{Doc, UNTITLED};
 use crate::editor::Request;
 use crate::ink::PageStroke;
 use crate::native;
+use crate::requests::Choice;
 use crate::settings;
-use crate::toolbar::Choice;
 
 use super::{InkStamp, State};
 
@@ -139,7 +139,7 @@ impl State {
         };
         match result {
             Ok(()) => {
-                self.ed.ink.mark_clean();
+                self.ed.document_saved();
                 self.title.clear();
                 self.window.request_redraw();
                 true
@@ -181,7 +181,7 @@ impl State {
         self.ink_built = InkStamp::NEVER;
     }
 
-    /// Delete page t (the document keeps at least one page), and glide to the page that took its place.
+    /// Delete page `at` (the document keeps at least one page), and glide to the page that took its place.
     fn delete_page(&mut self, at: usize) {
         let Some(doc) = &mut self.doc else { return };
         if !doc.delete_page(at) {
@@ -212,8 +212,8 @@ impl State {
     pub(super) fn toggle_fullscreen(&mut self) {
         let on = self.window.fullscreen().is_none();
         self.window.set_fullscreen(on.then_some(Fullscreen::Borderless(None)));
-        self.ed.fullscreen = on;
-        self.ed.redraw = true;
+        self.ed.chrome.fullscreen = on;
+        self.ed.want_redraw();
     }
 
     fn save_settings(&self) {
@@ -224,7 +224,7 @@ impl State {
 
     /// Do what the editor asked for after an input event, in the order it asked.
     pub(super) fn service(&mut self) {
-        while let Some(request) = self.ed.requests.pop() {
+        while let Some(request) = self.ed.requests().pop() {
             match request {
                 Request::Answer(choice) => self.answered(choice),
                 Request::SettingsChanged => self.save_settings(),
@@ -239,7 +239,7 @@ impl State {
                 Request::OpenUrl(url) => native::open_url(&url),
             }
         }
-        if std::mem::take(&mut self.ed.redraw) {
+        if self.ed.take_redraw() {
             self.window.request_redraw();
         }
     }

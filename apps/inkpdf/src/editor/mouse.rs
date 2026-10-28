@@ -25,14 +25,14 @@ pub(super) struct MousePress {
 impl Editor {
     pub(crate) fn mouse_moved(&mut self, pos: [f32; 2]) {
         self.cursor = pos;
-        if self.prompt.is_some() {
+        if self.chrome.prompt.is_some() {
             self.prompt_pointer(Device::Mouse, 0, Phase::Move, pos);
             return;
         }
         self.update_hover(Some(pos));
-        match self.act {
+        match self.chrome.act {
             Act::Slider { dev: Device::Mouse, slider, .. } => self.drag_slider(slider, pos[0]),
-            _ if !self.has_doc => {}
+            _ if !self.ws.has_doc => {}
             // A button held on the page: the gesture follows.
             _ if self.mouse_press.is_some() => {
                 let pen = self.mouse_press.map(|p| p.pen).unwrap_or_default();
@@ -60,17 +60,17 @@ impl Editor {
     pub(crate) fn focus_lost(&mut self) {
         if self.mouse_press.take().is_some() {
             self.tools.end_all(&mut self.ws);
-            self.redraw = true;
+            self.ws.redraw = true;
         }
     }
 
     /// Track which toolbar button the mouse is over, drawing again only when that changes.
     fn update_hover(&mut self, pos: Option<[f32; 2]>) {
         // Only the strip the toolbar can be in needs the (small) layout work.
-        let hover = pos.filter(|p| p[1] < TOOLBAR_STRIP_PX * self.dpr).and_then(|p| self.toolbar().hit(p));
-        if hover != self.hover {
-            self.hover = hover;
-            self.redraw = true;
+        let hover = pos.filter(|p| p[1] < TOOLBAR_STRIP_PX * self.ws.dpr).and_then(|p| self.toolbar().hit(p));
+        if hover != self.chrome.hover {
+            self.chrome.hover = hover;
+            self.ws.redraw = true;
         }
     }
 
@@ -87,7 +87,7 @@ impl Editor {
             return;
         }
         let pressed = state == ElementState::Pressed;
-        if self.prompt.is_some() {
+        if self.chrome.prompt.is_some() {
             if button == MouseButton::Left {
                 self.prompt_pointer(Device::Mouse, 0, if pressed { Phase::Down } else { Phase::Up }, self.cursor);
             }
@@ -98,13 +98,13 @@ impl Editor {
         } else {
             self.mouse_released(button);
         }
-        self.redraw = true;
+        self.ws.redraw = true;
     }
 
     fn mouse_pressed(&mut self, button: MouseButton) {
         let on_page = !self.over_interface(self.cursor);
         // The other buttons only mean something on the page, to a mouse that draws, with nothing else going on.
-        if button != MouseButton::Left && !(self.mouse_draws() && self.has_doc && self.panel.is_none() && on_page) {
+        if button != MouseButton::Left && !(self.mouse_draws() && self.ws.has_doc && self.chrome.panel.is_none() && on_page) {
             return;
         }
         // Another button pressed while one is held on the page changes nothing. (The same button pressed again can
@@ -115,7 +115,7 @@ impl Editor {
             }
             self.mouse_press = None;
         }
-        if !matches!(self.act, Act::Idle) {
+        if !matches!(self.chrome.act, Act::Idle) {
             self.end_act();
         }
         self.tools.end_all(&mut self.ws);
@@ -123,8 +123,10 @@ impl Editor {
         if button == MouseButton::Left && self.press_panel(Device::Mouse, 0, self.cursor) {
             // The tool panel took the press.
         } else if button == MouseButton::Left && bar.contains(self.cursor) {
-            self.act = Act::Toolbar { dev: Device::Mouse, id: 0, item: bar.hit(self.cursor) };
-        } else if self.has_doc && on_page {
+            self.chrome.act = Act::Toolbar { dev: Device::Mouse, id: 0, item: bar.hit(self.cursor) };
+        } else if button == MouseButton::Left && self.press_context(Device::Mouse, 0, self.cursor) {
+            // A button of the bar under the tools.
+        } else if self.ws.has_doc && on_page {
             let pen = Self::stylus_for(button);
             self.mouse_press = Some(MousePress { button, pen });
             self.route_mouse(Phase::Down, self.cursor, pen);
@@ -134,6 +136,7 @@ impl Editor {
     fn mouse_released(&mut self, button: MouseButton) {
         if button == MouseButton::Left && self.act_belongs_to(Device::Mouse, 0) {
             self.release_toolbar(Device::Mouse, 0, Some(self.cursor));
+            self.release_context(Device::Mouse, 0, Some(self.cursor));
             self.end_act();
         } else if let Some(held) = self.mouse_press.filter(|p| p.button == button) {
             self.mouse_press = None;
@@ -143,14 +146,14 @@ impl Editor {
 
     /// The wheel scrolls, up and down and (for a wheel that tilts or a touchpad) sideways.
     pub fn wheel(&mut self, delta: MouseScrollDelta) {
-        if self.prompt.is_some() {
+        if self.chrome.prompt.is_some() {
             return;
         }
         match delta {
-            MouseScrollDelta::LineDelta(x, y) => self.scroll_by_px(-x * WHEEL_NOTCH_PX, y * WHEEL_NOTCH_PX),
+            MouseScrollDelta::LineDelta(x, y) => self.ws.scroll_by_px(-x * WHEEL_NOTCH_PX, y * WHEEL_NOTCH_PX),
             // Precision touchpads already glide: follow them exactly.
-            MouseScrollDelta::PixelDelta(p) => self.pan_px(p.x as f32, p.y as f32),
+            MouseScrollDelta::PixelDelta(p) => self.ws.pan_px(p.x as f32, p.y as f32),
         }
-        self.redraw = true;
+        self.ws.redraw = true;
     }
 }

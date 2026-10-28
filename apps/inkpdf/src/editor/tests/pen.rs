@@ -157,7 +157,7 @@ fn the_barrel_button_draws_a_lasso_that_selects() {
     let inside = add_stroke(&mut ed, &[[150.0, 150.0], [200.0, 170.0], [250.0, 150.0]]);
     let _outside = add_stroke(&mut ed, &[[450.0, 500.0], [500.0, 520.0]]);
     let ring: Vec<[f32; 2]> =
-        [[100.0, 100.0], [300.0, 100.0], [300.0, 250.0], [100.0, 250.0], [100.0, 100.0]].iter().map(|p| on_page(&ed, p[0], p[1])).collect();
+        [[100.0, 250.0], [100.0, 100.0], [300.0, 100.0], [300.0, 250.0], [100.0, 250.0]].iter().map(|p| on_page(&ed, p[0], p[1])).collect();
     pen_stroke(&mut ed, BARREL, &ring);
     assert_eq!(ed.selection, vec![inside]);
     assert_eq!(ed.ink.len(), 2, "a lasso adds no ink");
@@ -189,7 +189,7 @@ fn the_pen_presses_toolbar_buttons_instead_of_drawing() {
     let mut ed = editor();
     let bar = ed.toolbar();
     // The pen picks the colour in its panel and the panel goes away with a press on the page.
-    pen_stroke(&mut ed, TIP, &[bar.centre_of(Item::Tool(Tool::Pen)); 2]);
+    open_settings(&mut ed);
     let red = ed.toolbar().tool_panel(Tool::Pen, ed.view.viewport[0], false).expect("panel").swatch_centre(2);
     pen_stroke(&mut ed, TIP, &[red, red]);
     assert_eq!(ed.pen.colour, 2);

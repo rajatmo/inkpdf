@@ -12,6 +12,22 @@ fn path(ed: &Editor) -> Vec<[f32; 2]> {
 }
 
 #[test]
+fn the_mouse_is_timed_by_the_clock_the_editor_was_given() {
+    // A mouse standing in for the stylus has no timestamps of its own: it takes the time from the editor's clock.
+    let mut ed = lasering();
+    ed.set_clock(|| 5000.0);
+    let p = path(&ed);
+    ed.mouse_moved(p[0]);
+    ed.mouse_button(ElementState::Pressed, MouseButton::Left);
+    for &at in &p[1..] {
+        ed.mouse_moved(at);
+    }
+    ed.mouse_button(ElementState::Released, MouseButton::Left);
+    assert!(ed.laser().pieces(5000.0 + 10.0).count() >= 9, "the trail was stamped 5000");
+    assert_eq!(ed.laser().pieces(5000.0 + crate::laser::FADE_MS + 1.0).count(), 0, "and fades as 5000 ages");
+}
+
+#[test]
 fn the_pen_with_the_laser_leaves_a_trail_and_draws_nothing() {
     let mut ed = lasering();
     let p = path(&ed);
@@ -133,7 +149,7 @@ fn the_pen_draws_again_after_the_laser() {
     let pen_at = ed.toolbar().centre_of(Item::Tool(Tool::Pen));
     pen_stroke(&mut ed, TIP, &[pen_at, pen_at]);
     assert_eq!(ed.tool, Tool::Pen);
-    ed.panel = None;
+    ed.chrome.panel = None;
     let p = path(&ed);
     pen_stroke(&mut ed, TIP, &p);
     assert_eq!(ed.ink.len(), 1);

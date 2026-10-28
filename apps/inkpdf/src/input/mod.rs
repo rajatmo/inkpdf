@@ -7,10 +7,13 @@
 //!   points.
 //! * **Touch**: pans and zooms; a tap follows a link; pulling past the last page adds a page.
 //! * **Mouse**: scrolls. (It also presses the buttons of the toolbars.)
-//! * **Keyboard**: nothing.
+//! * **Keyboard**: types into a text box being edited.
 //!
 //! That is the *tablet* mode. In *desktop* mode (see [`Mode`]) the mouse also draws, as a stylus does,
-//! and the keyboard has a few shortcuts.
+//! and the keyboard has shortcuts and works on the selection.
+//!
+//! What the plain tip does (draw, select or erase) is chosen on screen ([`Intent`]), so a device with no
+//! eraser end, barrel button or right button can still select and erase; those are shortcuts for the same.
 
 mod gestures;
 mod palm;
@@ -127,6 +130,38 @@ pub fn role(pen: &PenButtons) -> Role {
         PenTool::Draw => Role::Draw,
         PenTool::Erase => Role::Erase,
         PenTool::Lasso => Role::Lasso,
+    }
+}
+
+/// What the plain tip of the stylus (or the left mouse button) does, as chosen on screen: the way for a device with
+/// no eraser end, no barrel button and no right button to draw, to select and to erase. The stylus's own buttons
+/// and the mouse's other buttons are shortcuts for the same two things.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Intent {
+    /// Make what the tool makes.
+    #[default]
+    Draw,
+    /// Select what the tool made (a tap on it, or a loop around it), and move it.
+    Select,
+    /// Erase what the tool made.
+    Erase,
+}
+
+impl Intent {
+    pub fn role(self) -> Role {
+        match self {
+            Intent::Draw => Role::Draw,
+            Intent::Select => Role::Lasso,
+            Intent::Erase => Role::Erase,
+        }
+    }
+}
+
+/// What a press does: the pen's own buttons if one is held, else what was chosen on screen.
+pub fn role_with(pen: &PenButtons, intent: Intent) -> Role {
+    match role(pen) {
+        Role::Draw => intent.role(),
+        held => held,
     }
 }
 #[cfg(test)]

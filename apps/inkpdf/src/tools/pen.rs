@@ -1,16 +1,19 @@
 //! The pen tool: the stylus's tip draws, its eraser end erases whole strokes, its barrel button draws a
-//! lasso. With something selected the tip drags the selection when it lands on it, and lets go of it when
-//! it lands elsewhere (that press does nothing else). The mouse scrolls, a finger pans and zooms, the
-//! keyboard does nothing.
+//! lasso (or, with select or erase chosen on screen, the tip does that instead). It works on handwriting:
+//! what it erases, selects and pastes is ink, not shapes or text. With something selected the tip drags the
+//! selection when it lands on it, and lets go of it when it lands elsewhere (that press does nothing else).
+//! The mouse scrolls in the tablet mode, a finger pans and zooms, and at a desk the keyboard works on the
+//! selection (Delete, Esc, the arrows).
 
 use crate::ink::{self, P, Style, dist2};
-use crate::input::{Device, Mode, Phase, Role, Sample, predict, role};
+use crate::input::{Device, Mode, Phase, Sample, predict};
 use crate::smooth::{PenFilter, curve_segments};
 use crate::workspace::Workspace;
 
-use super::gestures::{Eraser, Lasso, Mover};
+use super::gestures::Pick;
 use super::paint::{CURVE_STEP, Painter, polyline};
-use super::{InputPolicy, PageEvent, Tool};
+use super::shortcuts::selection_key;
+use super::{InputPolicy, Key, PageEvent, Tool};
 
 /// Closest together, in device pixels, two points of a live stroke are kept.
 const MIN_POINT_PX: f32 = 0.35;
@@ -152,9 +155,8 @@ enum Gesture {
     #[default]
     None,
     Draw(Draw),
-    Erase(Eraser),
-    Lasso(Lasso),
-    Move(Mover),
+    /// Erasing, selecting, or dragging the selection (see [`Pick`]).
+    Pick(Pick),
     /// A press that only let go of the selection; it does nothing else.
     Swallow(u32),
 }
@@ -169,9 +171,7 @@ impl PenTool {
         match &self.gesture {
             Gesture::None => None,
             Gesture::Draw(d) => Some(d.id),
-            Gesture::Erase(e) => Some(e.id),
-            Gesture::Lasso(l) => Some(l.id),
-            Gesture::Move(m) => Some(m.id),
+            Gesture::Pick(p) => Some(p.id()),
             Gesture::Swallow(id) => Some(*id),
         }
     }
@@ -194,36 +194,27 @@ impl PenTool {
     fn down(&mut self, ws: &mut Workspace, ev: &PageEvent<'_>) {
         let Some(first) = ev.samples.first() else { return };
         let p = ws.to_doc(first.pos);
-        self.gesture = match role(&ev.pen) {
-            Role::Draw if !ws.selection.is_empty() => {
-                // With something selected, the pen drags it; touching elsewhere lets go.
-                if ws.selection_hit(p) {
-                    Gesture::Move(Mover::begin(Device::Pen, ev.id, p))
-                } else {
-                    ws.selection.clear();
-                    Gesture::Swallow(ev.id)
-                }
-            }
-            Role::Draw => Gesture::Draw(Draw::new(ev.id, ws.smoothing)),
-            Role::Erase => Gesture::Erase(Eraser::begin(ev.id)),
-            Role::Lasso => Gesture::Lasso(Lasso::begin(ev.id, p)),
+        let on_selection = ws.selection_hit(p);
+        self.gesture = if let Some(pick) = Pick::begin(ws, ev, p, on_selection) {
+            Gesture::Pick(pick)
+        } else if ws.selection.is_empty() {
+            Gesture::Draw(Draw::new(ev.id, ws.smoothing))
+        } else if on_selection {
+            // With something selected, the pen drags it; touching elsewhere lets go.
+            Gesture::Pick(Pick::grab(Device::Pen, ev.id, p))
+        } else {
+            ws.selection.clear();
+            Gesture::Swallow(ev.id)
         };
-        // (A drag of the selection starts where it was pressed; the others take in the first sample too.)
-        if !matches!(self.gesture, Gesture::Move(_) | Gesture::Swallow(_)) {
+        // (The other gestures took in the first samples as they began.)
+        if matches!(self.gesture, Gesture::Draw(_)) {
             self.moved(ws, ev.samples);
         }
     }
-
     fn moved(&mut self, ws: &mut Workspace, samples: &[Sample]) {
         match &mut self.gesture {
             Gesture::Draw(d) => d.drag(ws, samples),
-            Gesture::Erase(e) => e.drag(ws, samples),
-            Gesture::Lasso(l) => l.drag(ws, samples),
-            Gesture::Move(m) => {
-                if let Some(s) = samples.last() {
-                    m.drag(ws, s.pos);
-                }
-            }
+            Gesture::Pick(p) => p.moved(ws, samples),
             Gesture::None | Gesture::Swallow(_) => {}
         }
         ws.redraw = true;
@@ -232,7 +223,11 @@ impl PenTool {
 
 impl Tool for PenTool {
     fn policy(&self, mode: Mode) -> InputPolicy {
-        InputPolicy::stylus_tool(mode)
+        InputPolicy::editing_tool(mode)
+    }
+
+    fn key(&mut self, ws: &mut Workspace, key: Key<'_>) -> bool {
+        selection_key(ws, key)
     }
 
     fn pointer(&mut self, ws: &mut Workspace, ev: &PageEvent<'_>) {
@@ -262,11 +257,7 @@ impl Tool for PenTool {
         match std::mem::take(&mut self.gesture) {
             Gesture::None | Gesture::Swallow(_) => return,
             Gesture::Draw(d) => d.finish(ws),
-            Gesture::Erase(_) => Eraser::finish(ws),
-            Gesture::Lasso(l) => Lasso::select(ws, &l.poly),
-            Gesture::Move(m) => {
-                m.finish(ws);
-            }
+            Gesture::Pick(p) => p.end(ws, |_, _| false),
         }
         ws.redraw = true;
     }
@@ -279,7 +270,7 @@ impl Tool for PenTool {
 
     fn drag_offset(&self) -> [f32; 2] {
         match &self.gesture {
-            Gesture::Move(m) => m.offset(),
+            Gesture::Pick(p) => p.offset(),
             _ => [0.0; 2],
         }
     }
@@ -287,9 +278,8 @@ impl Tool for PenTool {
     fn paint(&self, ws: &Workspace, out: &mut dyn Painter) {
         match &self.gesture {
             Gesture::Draw(d) => d.paint(ws, out),
-            Gesture::Erase(e) => e.paint(ws, out),
-            Gesture::Lasso(l) => l.paint(ws, out),
-            Gesture::Move(_) | Gesture::Swallow(_) | Gesture::None => {}
+            Gesture::Pick(p) => p.paint(ws, out),
+            Gesture::Swallow(_) | Gesture::None => {}
         }
     }
 }

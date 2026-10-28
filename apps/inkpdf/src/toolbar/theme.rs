@@ -1,7 +1,7 @@
 //! The look of the interface: a light, floating style (white rounded panels with soft shadows,
 //! slate icons, one blue accent), and the small drawing helpers the toolbar and pop-ups share.
 
-use crate::gpu::{Capsule, Panel};
+use crate::scene::{Capsule, Panel};
 
 /// Panels: plain white, so page text never ghosts through them.
 pub(super) const PANEL: [u8; 4] = [255, 255, 255, 255];

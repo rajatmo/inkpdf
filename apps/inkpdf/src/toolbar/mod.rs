@@ -7,6 +7,7 @@
 //! colour, thickness and smoothing are in a panel that opens under the pen button
 //! (see [`PenPanel`]).
 
+mod context_bar;
 mod icons;
 mod prompt;
 mod theme;
@@ -17,22 +18,18 @@ mod tests;
 
 use crate::ink::rect_contains;
 use crate::input::Mode;
+#[cfg(test)]
+use crate::tool::{MAX_WIDTH, MIN_WIDTH};
+use crate::tool::{PALETTE, Tool, width_range};
 
+pub use context_bar::{ContextBar, ContextItem, ContextState};
 use icons::icons;
-pub use prompt::{Choice, PromptLayout, PromptView};
+pub use prompt::{PromptLayout, PromptView};
 pub use theme::Ui;
 use theme::{ACCENT, ACCENT_WASH, HOVER_WASH, INK, INK_DIM, RIM, SEPARATOR};
 #[cfg(test)]
 pub use tool_panel::ToolPanel;
 pub use tool_panel::{Channel, PanelState, PanelView, Slider};
-
-/// The colour slots a fresh install starts with; each can be replaced with any colour.
-pub const PALETTE: [[u8; 4]; 5] = [[28, 30, 36, 255], [32, 96, 224, 255], [224, 52, 52, 255], [38, 160, 84, 255], [244, 148, 28, 255]];
-/// The pen's thickness, in points, until it is changed.
-pub const DEFAULT_WIDTH: f32 = 2.5;
-/// The thinnest and thickest pen, in points.
-pub const MIN_WIDTH: f32 = 0.25;
-pub const MAX_WIDTH: f32 = 24.0;
 
 /// A width in `range` for a position `t` (0 to 1) along the slider. Widths span a decade or two, so
 /// the slider is logarithmic: the same drag makes the same proportional change at any thickness.
@@ -56,62 +53,6 @@ pub fn width_at(t: f32) -> f32 {
 pub fn slider_position(width: f32) -> f32 {
     position_in((MIN_WIDTH, MAX_WIDTH), width)
 }
-
-/// What the pen does on the page.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Tool {
-    /// Draws ink (and its eraser end erases, its barrel button lassos).
-    #[default]
-    Pen,
-    /// Draws shapes (see [crate::geometry]): a drag makes a line, a rectangle, an ellipse or a
-    /// set of axes; a curve is dragged out and then shaped by its handles.
-    Geometry,
-    /// Types text: a tap of the stylus starts a text box (or edits the one tapped), and the keyboard
-    /// types into it.
-    Text,
-    /// Points: a dot that follows the pen, with a trail that fades. Draws nothing.
-    Laser,
-}
-
-impl Tool {
-    /// The name used in the settings file.
-    pub fn name(self) -> &'static str {
-        match self {
-            Tool::Pen => "pen",
-            Tool::Geometry => "geometry",
-            Tool::Text => "text",
-            Tool::Laser => "laser",
-        }
-    }
-
-    pub fn from_name(name: &str) -> Option<Tool> {
-        [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Laser].into_iter().find(|t| t.name() == name)
-    }
-}
-
-/// How a tool that draws ink writes: which colour slot and how thick, in points.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ToolStyle {
-    pub colour: usize,
-    pub width: f32,
-}
-
-impl ToolStyle {
-    pub const PEN: ToolStyle = ToolStyle { colour: 0, width: DEFAULT_WIDTH };
-    /// Shapes start thinner than handwriting, in blue.
-    pub const SHAPES: ToolStyle = ToolStyle { colour: 1, width: 1.5 };
-    /// Text starts at a comfortable reading size (the "width" is its size in points).
-    pub const TEXT: ToolStyle = ToolStyle { colour: 0, width: 18.0 };
-}
-
-/// The smallest and largest `width` a tool's style may have: a pen's line width, or the size of
-/// text in points.
-pub fn width_range(tool: Tool) -> (f32, f32) {
-    if tool == Tool::Text { (TEXT_SIZES.0, TEXT_SIZES.1) } else { (MIN_WIDTH, MAX_WIDTH) }
-}
-
-/// The smallest and largest text, in points.
-pub const TEXT_SIZES: (f32, f32) = (6.0, 144.0);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Item {
@@ -195,7 +136,7 @@ impl Toolbar {
         let (gap, pad, margin) = (10.0 * dpr, 8.0 * dpr, 12.0 * dpr);
         // Shrink to fit narrow windows, never below something still tappable: the left pill (six
         // buttons and two gaps) and half the middle one must fit in half the window.
-        let unit = (44.0 * dpr).min(((viewport[0] / 2.0 - margin - 3.0 * pad - 3.0 * gap) / 8.0).max(20.0 * dpr));
+        let unit = (38.0 * dpr).min(((viewport[0] / 2.0 - margin - 3.0 * pad - 3.0 * gap) / 8.0).max(20.0 * dpr));
         let height = unit + 2.0 * pad;
         let width_of = |slots: &[Option<Item>]| slots.iter().map(|s| if s.is_some() { unit } else { gap }).sum::<f32>() + 2.0 * pad;
         let (left_w, middle_w, right_w) = (width_of(&LEFT), width_of(&MIDDLE), width_of(&RIGHT));
@@ -227,6 +168,12 @@ impl Toolbar {
         self.pills[0][3]
     }
 
+    /// How much room the bar under the tools takes (its gap and its height), which a panel unfolds below.
+    fn context_drop(&self) -> f32 {
+        (context_bar::CONTEXT_GAP + 2.0 * context_bar::CONTEXT_PAD) * self.dpr + self.unit
+    }
+
+    #[cfg(test)]
     fn button(&self, item: Item) -> Option<[f32; 4]> {
         self.items.iter().find(|(i, _)| *i == item).map(|(_, r)| *r)
     }

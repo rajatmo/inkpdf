@@ -9,9 +9,10 @@
 //! (A drag from one point to another still makes a two-node line or curve straight away.)
 
 use crate::figure::Figure;
-use crate::geometry::{Shape, clamp_into};
+use crate::geometry::Shape;
 use crate::ink::{P, Style, dist2};
 use crate::input::Sample;
+use crate::plane::clamp_into;
 use crate::workspace::Workspace;
 
 use super::super::paint::{ACCENT, Painter, fill_square, polyline};

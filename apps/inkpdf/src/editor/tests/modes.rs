@@ -8,7 +8,7 @@ use crate::geometry::Shape;
 fn with(tool: Tool, mode: Mode) -> Editor {
     let mut ed = editor();
     ed.set_tool(tool);
-    ed.panel = None;
+    ed.chrome.panel = None;
     ed.set_mode(mode);
     ed
 }
@@ -166,10 +166,10 @@ fn the_other_buttons_do_nothing_on_the_toolbar_or_with_a_panel_open() {
     mouse_drag(&mut ed, MouseButton::Right, &[laser, laser]);
     mouse_drag(&mut ed, MouseButton::Middle, &[laser, laser]);
     assert_eq!(ed.tool, Tool::Pen, "only the left button presses a button");
-    ed.panel = Some(PanelState::default());
+    ed.chrome.panel = Some(PanelState::default());
     let path = wave(&ed);
     mouse_drag(&mut ed, MouseButton::Right, &path);
-    assert!(ed.panel.is_some(), "a right button does not even put the panel away");
+    assert!(ed.chrome.panel.is_some(), "a right button does not even put the panel away");
 }
 
 #[test]

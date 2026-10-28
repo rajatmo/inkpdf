@@ -1,5 +1,6 @@
 use super::*;
-use crate::toolbar::{Choice, PromptLayout};
+use crate::requests::Choice;
+use crate::toolbar::PromptLayout;
 
 /// The screen position of the middle of a prompt button.
 fn button(ed: &Editor, choice: Choice) -> [f32; 2] {
@@ -11,7 +12,7 @@ fn button(ed: &Editor, choice: Choice) -> [f32; 2] {
 fn asking() -> Editor {
     let mut ed = editor();
     ed.ask_unsaved();
-    assert!(ed.prompt.is_some());
+    assert!(ed.chrome.prompt.is_some());
     ed
 }
 
@@ -24,18 +25,18 @@ fn a_tap_with_the_pen_a_finger_or_the_mouse_answers_and_puts_the_prompt_away() {
         ed.pointer_event(pen(Phase::Down, TIP, &[at]));
         assert!(ed.requests.answer().is_none(), "not until it is let go");
         ed.pointer_event(pen(Phase::Up, TIP, &[at]));
-        assert_eq!((ed.requests.answer(), ed.prompt.is_some()), (Some(choice), false), "pen {choice:?}");
+        assert_eq!((ed.requests.answer(), ed.chrome.prompt.is_some()), (Some(choice), false), "pen {choice:?}");
         // Finger.
         let mut ed = asking();
         let at = button(&ed, choice);
         ed.pointer_event(touch(1, Phase::Down, at, 30.0));
         ed.pointer_event(touch(1, Phase::Up, at, 30.0));
-        assert_eq!((ed.requests.answer(), ed.prompt.is_some()), (Some(choice), false), "finger {choice:?}");
+        assert_eq!((ed.requests.answer(), ed.chrome.prompt.is_some()), (Some(choice), false), "finger {choice:?}");
         // Mouse.
         let mut ed = asking();
         let at = button(&ed, choice);
         mouse_click_at(&mut ed, at);
-        assert_eq!((ed.requests.answer(), ed.prompt.is_some()), (Some(choice), false), "mouse {choice:?}");
+        assert_eq!((ed.requests.answer(), ed.chrome.prompt.is_some()), (Some(choice), false), "mouse {choice:?}");
     }
 }
 
@@ -47,7 +48,7 @@ fn a_press_only_counts_if_it_is_let_go_on_the_same_button() {
     ed.pointer_event(touch(1, Phase::Move, cancel, 30.0));
     ed.pointer_event(touch(1, Phase::Up, cancel, 30.0));
     assert_eq!(ed.requests.answer(), None, "pressed on one, released on another");
-    assert!(ed.prompt.is_some(), "and still asking");
+    assert!(ed.chrome.prompt.is_some(), "and still asking");
     // Pressed off the card, let go on a button.
     ed.pointer_event(touch(1, Phase::Down, [5.0, 5.0], 30.0));
     ed.pointer_event(touch(1, Phase::Up, save, 30.0));
@@ -68,13 +69,13 @@ fn the_button_under_the_pointer_lights_up_and_a_pressed_one_darkens() {
     let mut ed = asking();
     let save = button(&ed, Choice::Save);
     ed.mouse_moved(save);
-    assert_eq!(ed.prompt.expect("prompt").hover, Some(Choice::Save));
+    assert_eq!(ed.chrome.prompt.expect("prompt").hover, Some(Choice::Save));
     ed.mouse_button(ElementState::Pressed, MouseButton::Left);
-    assert_eq!(ed.prompt.expect("prompt").pressed, Some(Choice::Save));
+    assert_eq!(ed.chrome.prompt.expect("prompt").pressed, Some(Choice::Save));
     ed.mouse_moved(button(&ed, Choice::Discard));
-    assert_eq!(ed.prompt.expect("prompt").pressed, None, "dragged off it, so it is no longer pressed");
+    assert_eq!(ed.chrome.prompt.expect("prompt").pressed, None, "dragged off it, so it is no longer pressed");
     ed.mouse_moved([5.0, 5.0]);
-    assert_eq!(ed.prompt.expect("prompt").hover, None);
+    assert_eq!(ed.chrome.prompt.expect("prompt").hover, None);
 }
 
 #[test]
@@ -122,7 +123,7 @@ fn nothing_underneath_hears_anything_while_it_is_up() {
             || ed.requests.delete_page().is_some()
             || ed.requests.has(&Request::Fullscreen))
     );
-    assert!(ed.requests.answer().is_none() && ed.prompt.is_some(), "and the prompt is still waiting");
+    assert!(ed.requests.answer().is_none() && ed.chrome.prompt.is_some(), "and the prompt is still waiting");
 }
 
 #[test]
@@ -131,9 +132,9 @@ fn putting_the_prompt_up_stops_what_was_under_way() {
     let a = on_page(&ed, 100.0, 300.0);
     ed.pointer_event(pen(Phase::Down, TIP, &[a]));
     assert!(ed.tools.pen.is_drawing());
-    ed.panel = Some(crate::toolbar::PanelState::default());
+    ed.chrome.panel = Some(crate::toolbar::PanelState::default());
     ed.ask_unsaved();
-    assert!(ed.is_idle() && ed.panel.is_none());
+    assert!(ed.is_idle() && ed.chrome.panel.is_none());
     // The pen coming up afterwards is the prompt's business, not a stroke's.
     ed.pointer_event(pen(Phase::Up, TIP, &[a]));
     assert_eq!(ed.ink.len(), 0);
@@ -143,5 +144,5 @@ fn putting_the_prompt_up_stops_what_was_under_way() {
 fn loading_a_document_clears_the_prompt() {
     let mut ed = asking();
     ed.load(Layout::new(&[[612.0, 792.0]]), vec![]);
-    assert!(ed.prompt.is_none() && ed.requests.answer().is_none());
+    assert!(ed.chrome.prompt.is_none() && ed.requests.answer().is_none());
 }

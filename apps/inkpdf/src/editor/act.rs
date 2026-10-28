@@ -3,7 +3,7 @@
 //! the tools' own: see [`crate::tools`].)
 
 use crate::input::Device;
-use crate::toolbar::{Item, Slider};
+use crate::toolbar::{ContextItem, Item, Slider};
 
 #[derive(Clone, Debug, Default)]
 pub(crate) enum Act {
@@ -13,6 +13,12 @@ pub(crate) enum Act {
         dev: Device,
         id: u32,
         item: Option<Item>,
+    },
+    /// A press on a button of the bar under the tools (see [`crate::toolbar::ContextBar`]).
+    Context {
+        dev: Device,
+        id: u32,
+        item: Option<ContextItem>,
     },
     /// Dragging one of the sliders in the pen panel.
     Slider {

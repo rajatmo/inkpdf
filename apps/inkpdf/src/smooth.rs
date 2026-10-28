@@ -10,7 +10,7 @@
 
 use std::f32::consts::TAU;
 
-use crate::ink::P;
+use crate::plane::P;
 
 /// How much steadying the pen gets by default, from 0 (none) to 1 (a lot).
 pub const DEFAULT_AMOUNT: f32 = 0.5;

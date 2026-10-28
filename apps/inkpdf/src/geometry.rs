@@ -4,9 +4,6 @@
 //!
 //! Pure logic with no window or GPU types, so it is unit-tested.
 
-use crate::figure::Figure;
-use crate::ink::P;
-
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Shape {
     #[default]
@@ -39,20 +36,11 @@ impl Shape {
     }
 }
 
-/// The polyline of `shape` for a drag from `a` to `b`: empty when the drag is too small to make
-/// anything of, or is not a finite number.
-pub fn points(shape: Shape, a: P, b: P) -> Vec<P> {
-    Figure::from_shape(shape, a, b).map(|f| f.points()).unwrap_or_default()
-}
-
-/// `p` moved into `rect` (`x0, y0, x1, y1`).
-pub fn clamp_into(rect: [f32; 4], p: P) -> P {
-    [p[0].clamp(rect[0].min(rect[2]), rect[0].max(rect[2])), p[1].clamp(rect[1].min(rect[3]), rect[1].max(rect[3]))]
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::figure::shape_points as points;
+    use crate::plane::P;
 
     struct Lcg(u64);
 
@@ -97,13 +85,6 @@ mod tests {
         assert!(b[0] >= 0.0 && b[1] >= 0.0 && b[2] <= 300.0 && b[3] <= 200.0, "{b:?}");
         let c = bounds(&points(Shape::Curve, [0.0, 0.0], [90.0, 0.0]));
         assert!(c[1] < -1.0 && c[3] > 1.0, "{c:?}");
-    }
-
-    #[test]
-    fn a_point_is_pulled_into_a_rectangle_whichever_way_it_is_given() {
-        assert_eq!(clamp_into([0.0, 0.0, 10.0, 20.0], [-5.0, 30.0]), [0.0, 20.0]);
-        assert_eq!(clamp_into([10.0, 20.0, 0.0, 0.0], [5.0, 5.0]), [5.0, 5.0], "a rectangle given the other way round");
-        assert_eq!(clamp_into([0.0, 0.0, 10.0, 10.0], [3.0, 4.0]), [3.0, 4.0]);
     }
 
     #[test]

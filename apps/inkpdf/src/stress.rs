@@ -12,13 +12,17 @@ use winit::event::{ElementState, MouseButton, MouseScrollDelta};
 
 use crate::doc::Doc;
 use crate::editor::{Editor, Request};
+use crate::figure::NodeAction;
 use crate::geometry::Shape;
 use crate::ink::{InkStore, P, PageStroke, Style};
-use crate::input::{Device, PenButtons, Phase, PointerEvent, Sample};
+use crate::input::{Device, Intent, PenButtons, Phase, PointerEvent, Sample};
 use crate::links::{Link, Target};
 use crate::smooth::{PenFilter, curve_through};
 use crate::testutil::sample_pdf;
-use crate::toolbar::{Channel, Item, MAX_WIDTH, MIN_WIDTH, Slider, Tool, Ui};
+use crate::tool::ToolAction;
+use crate::tool::{MAX_WIDTH, MIN_WIDTH, Tool};
+use crate::toolbar::{Channel, ContextItem, Item, Slider, Ui};
+use crate::tools::{Dir, Key};
 use crate::view::{Layout, MAX_ZOOM, MIN_ZOOM};
 
 /// A small, fast, seedable random source (xorshift64*).
@@ -176,7 +180,7 @@ fn gesture(ed: &mut Editor, rng: &mut Rng) -> String {
                 device: Device::Touch,
                 id: 2,
                 phase,
-                samples: vec![Sample { pos: along(i), pressure: 1.0, t_ms: crate::win_pointer::now_ms() }],
+                samples: vec![Sample { pos: along(i), pressure: 1.0, t_ms: crate::clock::now_ms() }],
                 pen: PenButtons::default(),
                 contact_px: 30.0,
             };
@@ -194,7 +198,7 @@ fn gesture(ed: &mut Editor, rng: &mut Rng) -> String {
                 device: Device::Touch,
                 id: 3,
                 phase,
-                samples: vec![Sample { pos: at, pressure: 1.0, t_ms: crate::win_pointer::now_ms() }],
+                samples: vec![Sample { pos: at, pressure: 1.0, t_ms: crate::clock::now_ms() }],
                 pen: PenButtons::default(),
                 contact_px: 30.0,
             };
@@ -209,7 +213,7 @@ fn gesture(ed: &mut Editor, rng: &mut Rng) -> String {
                 device: Device::Touch,
                 id: 4,
                 phase,
-                samples: vec![Sample { pos: [start[0], y], pressure: 1.0, t_ms: crate::win_pointer::now_ms() }],
+                samples: vec![Sample { pos: [start[0], y], pressure: 1.0, t_ms: crate::clock::now_ms() }],
                 pen: PenButtons::default(),
                 contact_px: 30.0,
             };
@@ -364,15 +368,61 @@ fn poke(ed: &mut Editor, rng: &mut Rng, hostile: bool) -> String {
         ed.focus_lost();
         return "focus lost".into();
     }
-    if rng.chance(0.02) {
-        let (letter, shift) = (rng.pick(&["z", "y", "s", "q"]), rng.chance(0.3));
+    if rng.chance(0.03) {
+        let (letter, shift) = (rng.pick(&["z", "y", "s", "q", "a", "c", "x", "v", "d"]), rng.chance(0.3));
         ed.shortcut(letter, shift);
         return format!("shortcut {letter} shift {shift}");
     }
     if rng.chance(0.3) {
         return gesture(ed, rng);
     }
-    match rng.below(32) {
+    match rng.below(36) {
+        32 | 33 => {
+            // A button of the bar under the tools (select, erase, delete, copy, paste, a shape's points, the style).
+            let items = [
+                ContextItem::Intent(Intent::Draw),
+                ContextItem::Intent(Intent::Select),
+                ContextItem::Intent(Intent::Erase),
+                ContextItem::Duplicate,
+                ContextItem::Copy,
+                ContextItem::Paste,
+                ContextItem::Delete,
+                ContextItem::Action(ToolAction::Node(NodeAction::Remove)),
+                ContextItem::Action(ToolAction::Node(NodeAction::Add)),
+                ContextItem::Action(ToolAction::Node(NodeAction::Smooth)),
+                ContextItem::Style,
+            ];
+            if let Some(bar) = ed.context_bar() {
+                let item = rng.pick(&items);
+                let at = bar.centre_of(item);
+                what = format!("tap {item:?} on the bar at {at:?}");
+                ed.pointer_event(pen_at(Phase::Down, at));
+                ed.pointer_event(pen_at(Phase::Up, at));
+            }
+        }
+        34 => {
+            // A key: the arrows, Delete, Home and End, Ctrl and a letter, a letter, with or without Shift.
+            let shift = rng.chance(0.4);
+            let key = match rng.below(9) {
+                0 => Key::Delete,
+                1 => Key::Backspace,
+                2 => Key::Escape,
+                3 => Key::Arrow(rng.pick(&[Dir::Left, Dir::Right, Dir::Up, Dir::Down]), shift),
+                4 => Key::Home(shift),
+                5 => Key::End(shift),
+                6 => Key::Chord(rng.pick(&['a', 'c', 'x', 'v', 'q'])),
+                7 => Key::Text("q é\n"),
+                _ => Key::Text("word "),
+            };
+            what = format!("key {key:?}");
+            ed.press(key);
+        }
+        35 => {
+            // Words arrive on the system clipboard from another program.
+            let words = rng.pick(&["from elsewhere", "two\nlines", "tab\there", "   ", ""]);
+            what = format!("clipboard words {words:?}");
+            ed.text_clipboard.set(words);
+        }
         29 | 30 => what = anchor_poke(ed, rng),
         31 => what = text_poke(ed, rng),
         26 => {
@@ -399,8 +449,8 @@ fn poke(ed: &mut Editor, rng: &mut Rng, hostile: bool) -> String {
         }
         27 | 28 => {
             // Something in the pen panel, when it is open: a slider dragged or a colour tapped.
-            let editing = ed.panel.is_some_and(|s| s.editing.is_some());
-            if let Some(p) = ed.toolbar().tool_panel(ed.tool, ed.view.viewport[0], editing).filter(|_| ed.panel.is_some()) {
+            let editing = ed.chrome.panel.is_some_and(|s| s.editing.is_some());
+            if let Some(p) = ed.toolbar().tool_panel(ed.tool, ed.view.viewport[0], editing).filter(|_| ed.chrome.panel.is_some()) {
                 let sliders = [
                     Slider::Width,
                     Slider::Smoothing,
@@ -520,7 +570,7 @@ fn poke(ed: &mut Editor, rng: &mut Rng, hostile: bool) -> String {
             }
             ed.requests.clear_urls();
         }
-        22 => ed.fullscreen = rng.chance(0.5),
+        22 => ed.chrome.fullscreen = rng.chance(0.5),
         24 if rng.chance(0.2) => {
             what = "the shell asks about unsaved work".into();
             ed.ask_unsaved();
@@ -529,9 +579,9 @@ fn poke(ed: &mut Editor, rng: &mut Rng, hostile: bool) -> String {
             // The shell acting on an answer, or the person dismissing the prompt another way.
             if let Some(choice) = ed.requests.take_answer() {
                 what = format!("the shell takes the answer {choice:?}");
-            } else if ed.prompt.is_some() && rng.chance(0.4) {
+            } else if ed.chrome.prompt.is_some() && rng.chance(0.4) {
                 what = "the shell drops the prompt".into();
-                ed.prompt = None;
+                ed.chrome.prompt = None;
             }
         }
         23 => {
@@ -567,7 +617,7 @@ fn check_view(ed: &Editor, what: &str, event: &str) {
         ed.selection.iter().all(|id| ed.ink.get(*id).is_some()),
         "{what}: after {event}: a selected stroke does not exist ({:?}, act {:?})",
         ed.selection,
-        ed.act
+        ed.chrome.act
     );
 }
 
@@ -662,6 +712,13 @@ fn check_editor(ed: &Editor, what: &str) {
             "{what}: a bad text edit {edit:?}"
         );
         assert!(edit.target.is_none_or(|id| ed.ink.get(id).is_some_and(|s| s.text.is_some())), "{what}: editing a box that does not exist");
+        let chars = edit.text.chars().count();
+        assert!(
+            edit.caret <= chars && edit.anchor.is_none_or(|a| a <= chars),
+            "{what}: the caret {} or selection {:?} is outside {chars} characters",
+            edit.caret,
+            edit.anchor
+        );
         assert!((edit.page as usize) < ed.layout.len(), "{what}: editing on page {} of {}", edit.page, ed.layout.len());
         // Typed text stays within its page's right edge (a space may hang over it).
         if let Some(page) = ed.layout.page(edit.page as usize).filter(|p| p.w >= 100.0 * edit.size.max(1.0) / 20.0) {
@@ -686,14 +743,12 @@ fn check_editor(ed: &Editor, what: &str) {
     }
     let text = ed.text_style;
     assert!(
-        text.width.is_finite()
-            && (crate::toolbar::TEXT_SIZES.0..=crate::toolbar::TEXT_SIZES.1).contains(&text.width)
-            && text.colour < ed.palette.len(),
+        text.width.is_finite() && (crate::tool::TEXT_SIZES.0..=crate::tool::TEXT_SIZES.1).contains(&text.width) && text.colour < ed.palette.len(),
         "{what}: text style {text:?}"
     );
     assert!((0.0..=1.0).contains(&ed.smoothing), "{what}: smoothing {}", ed.smoothing);
-    assert!(ed.colour_hsv.iter().all(|c| c.is_finite()), "{what}: hsv {:?}", ed.colour_hsv);
-    assert!(ed.tool != crate::toolbar::Tool::Laser || ed.panel.is_none(), "{what}: a panel is open with the laser chosen");
+    assert!(ed.chrome.colour_hsv.iter().all(|c| c.is_finite()), "{what}: hsv {:?}", ed.chrome.colour_hsv);
+    assert!(ed.tool != crate::tool::Tool::Laser || ed.chrome.panel.is_none(), "{what}: a panel is open with the laser chosen");
     for s in ed.ink.strokes() {
         if let Some(figure) = &s.figure {
             let drawn = figure.points();
@@ -734,13 +789,13 @@ fn check_editor(ed: &Editor, what: &str) {
         ed.laser().pieces(1.0e6).all(|(a, b, life)| a.iter().chain(&b).all(|c| c.is_finite()) && (0.0..=1.0).contains(&life)),
         "{what}: a bad laser trail"
     );
-    assert!(!(ed.prompt.is_some() && ed.requests.answer().is_some()), "{what}: a question and its answer at once");
+    assert!(!(ed.chrome.prompt.is_some() && ed.requests.answer().is_some()), "{what}: a question and its answer at once");
     assert!(ed.pull.is_finite() && ed.pull >= 0.0 && (0.0..=1.0).contains(&ed.pull_progress()), "{what}: pull {}", ed.pull);
     // What the shell draws from it must not blow up either.
     let mut ui = Ui::default();
     ed.toolbar().draw(&ed.toolbar_state(), &mut ui);
     if let (Some(view), Some(p)) =
-        (ed.panel_view(), ed.toolbar().tool_panel(ed.tool, ed.view.viewport[0], ed.panel.is_some_and(|s| s.editing.is_some())))
+        (ed.panel_view(), ed.toolbar().tool_panel(ed.tool, ed.view.viewport[0], ed.chrome.panel.is_some_and(|s| s.editing.is_some())))
     {
         p.draw(&view, &mut ui);
     }
@@ -1184,7 +1239,7 @@ fn stress_while_the_prompt_is_up_nothing_underneath_changes_whatever_arrives() {
     }
     let (mut blocked, mut answered) = (0, 0);
     for i in 0..(60_000 * scale()) {
-        if ed.prompt.is_none() {
+        if ed.chrome.prompt.is_none() {
             // Leave nothing pending from before, so any flag that appears came from the events.
             ed.requests.take(&Request::Save);
             ed.requests.take(&Request::Close);
@@ -1202,7 +1257,7 @@ fn stress_while_the_prompt_is_up_nothing_underneath_changes_whatever_arrives() {
         let event = if rng.chance(0.3) { gesture(&mut ed, &mut rng) } else { poke(&mut ed, &mut rng, true) };
         // Events that replace the whole document or stand in for the shell are not the person's input.
         let shell_stepped_in = event.starts_with("load") || event.starts_with("close") || event.starts_with("add a page") || event.contains("shell");
-        if ed.prompt.is_some() && !shell_stepped_in {
+        if ed.chrome.prompt.is_some() && !shell_stepped_in {
             blocked += 1;
             assert_eq!((ed.ink.revision(), ed.ink.len()), (revision, strokes), "event {i} ({event}) changed the ink under the prompt");
             assert!(
@@ -1252,8 +1307,10 @@ fn stress_shapes_drawn_by_the_pen_stay_on_their_page_undo_redo_exactly_and_survi
         if ed.tool != Tool::Geometry {
             use_tool(&mut ed, Tool::Geometry);
         }
+        // (Nor is the bar under the tools to leave the tip choosing to select or erase.)
+        ed.intent = crate::input::Intent::Draw;
         ed.shape = rng.pick(&crate::geometry::SHAPES);
-        ed.shape_style = crate::toolbar::ToolStyle { colour: rng.below(5), width: rng.range(MIN_WIDTH, MAX_WIDTH) };
+        ed.shape_style = crate::tool::ToolStyle { colour: rng.below(5), width: rng.range(MIN_WIDTH, MAX_WIDTH) };
         // Anywhere in the window, off the page, or far beyond it.
         let spot = |rng: &mut Rng| {
             if rng.chance(0.1) { [rng.coord(size[0]), rng.coord(size[1])] } else { [rng.range(0.0, size[0]), rng.range(0.0, size[1])] }
@@ -1398,7 +1455,7 @@ fn stress_settings_text_of_any_kind_never_stops_the_app_and_real_settings_come_b
         }
         let t = s.text_style;
         assert!(
-            t.colour < s.palette.len() && t.width.is_finite() && (crate::toolbar::TEXT_SIZES.0..=crate::toolbar::TEXT_SIZES.1).contains(&t.width),
+            t.colour < s.palette.len() && t.width.is_finite() && (crate::tool::TEXT_SIZES.0..=crate::tool::TEXT_SIZES.1).contains(&t.width),
             "{text:?} gave {t:?}"
         );
         assert!((0.0..=1.0).contains(&s.smoothing), "{text:?}");
@@ -1416,11 +1473,11 @@ fn stress_settings_text_of_any_kind_never_stops_the_app_and_real_settings_come_b
         let mut s = crate::settings::Settings {
             tool: rng.pick(&[Tool::Pen, Tool::Geometry, Tool::Text, Tool::Laser]),
             shape: rng.pick(&crate::geometry::SHAPES),
-            pen: crate::toolbar::ToolStyle { colour: rng.below(5), width: hundredths(rng.range(MIN_WIDTH, MAX_WIDTH)) },
-            shape_style: crate::toolbar::ToolStyle { colour: rng.below(5), width: hundredths(rng.range(MIN_WIDTH, MAX_WIDTH)) },
-            text_style: crate::toolbar::ToolStyle {
+            pen: crate::tool::ToolStyle { colour: rng.below(5), width: hundredths(rng.range(MIN_WIDTH, MAX_WIDTH)) },
+            shape_style: crate::tool::ToolStyle { colour: rng.below(5), width: hundredths(rng.range(MIN_WIDTH, MAX_WIDTH)) },
+            text_style: crate::tool::ToolStyle {
                 colour: rng.below(5),
-                width: hundredths(rng.range(crate::toolbar::TEXT_SIZES.0, crate::toolbar::TEXT_SIZES.1)),
+                width: hundredths(rng.range(crate::tool::TEXT_SIZES.0, crate::tool::TEXT_SIZES.1)),
             },
             smoothing: hundredths(rng.unit()),
             ..crate::settings::Settings::default()
@@ -1554,10 +1611,15 @@ fn mouse_drag(ed: &mut Editor, a: [f32; 2], b: [f32; 2], steps: usize) {
 
 /// Switch tools the way the toolbar does: typing ends, and the selection is let go.
 fn use_tool(ed: &mut Editor, tool: Tool) {
-    ed.finish_text();
+    // (As the toolbar does it: what the old tool had pending, typing or a polyline begun by taps, becomes part of the
+    // document before the tool changes.)
+    ed.settle();
     ed.selection.clear();
-    ed.panel = None;
+    ed.chrome.panel = None;
     ed.tool = tool;
+    // (A random press can land on the bar under the tools and choose to select or erase; choosing a tool starts
+    // with the tip drawing again.)
+    ed.intent = crate::input::Intent::Draw;
 }
 
 /// The stylus's other ends: the eraser end or the barrel button, dragged along `path`.

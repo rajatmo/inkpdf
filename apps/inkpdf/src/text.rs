@@ -13,7 +13,7 @@ use std::sync::{LazyLock, Mutex};
 use skrifa::outline::{DrawSettings, OutlinePen};
 use skrifa::prelude::*;
 
-use crate::ink::P;
+use crate::plane::P;
 
 /// How tall a line is, as a multiple of the font size.
 pub const LINE_HEIGHT: f32 = 1.25;
@@ -208,12 +208,112 @@ pub fn measure(text: &str, size: f32) -> [f32; 2] {
     [widest * size, lines(text).count() as f32 * size * LINE_HEIGHT]
 }
 
-/// Where the caret is at the end of `text`, from the box's top-left: along the last line, and the
-/// top of that line.
-pub fn caret(text: &str, size: f32) -> P {
-    let n = lines(text).count();
-    let last = lines(text).last().map_or(0.0, line_width_em);
-    [last * size.max(0.0), (n.saturating_sub(1)) as f32 * size.max(0.0) * LINE_HEIGHT]
+/// The line and the place in it (both counted from 0, in characters) that character `index` is at.
+fn locate(text: &str, index: usize) -> (usize, usize) {
+    let (mut row, mut col) = (0, 0);
+    for c in text.chars().take(index) {
+        if c == '\n' {
+            row += 1;
+            col = 0;
+        } else {
+            col += 1;
+        }
+    }
+    (row, col)
+}
+
+/// Where the caret is when it is before character `index` of `text` (counted in characters; the end of the text
+/// if `index` is past it), from the box's top-left: along its line, and the top of that line.
+pub fn caret_at(text: &str, size: f32, index: usize) -> P {
+    let size = size.max(0.0);
+    let (row, col) = locate(text, index);
+    let line = lines(text).nth(row).unwrap_or("");
+    [line.chars().take(col).map(advance).sum::<f32>() * size, row as f32 * size * LINE_HEIGHT]
+}
+
+/// The characters before the start of line `row` of `text`.
+fn line_start(text: &str, row: usize) -> usize {
+    lines(text).take(row).map(|l| l.chars().count() + 1).sum()
+}
+
+/// Which character a point at `at` (from the box's top-left) is nearest to the front of, as a position for the
+/// caret: the line it is on (above the first or below the last, those), and the gap between letters it is nearest.
+pub fn index_at(text: &str, size: f32, at: P) -> usize {
+    let size = size.max(0.01);
+    let row = ((at[1] / (size * LINE_HEIGHT)).floor().max(0.0) as usize).min(lines(text).count().saturating_sub(1));
+    let line = lines(text).nth(row).unwrap_or("");
+    let target = at[0] / size;
+    let (mut x, mut col) = (0.0, 0);
+    for c in line.chars() {
+        let w = advance(c);
+        if x + w / 2.0 > target {
+            break;
+        }
+        x += w;
+        col += 1;
+    }
+    line_start(text, row) + col
+}
+
+/// The first and last position of the line that has the caret at `index`.
+pub fn line_range(text: &str, index: usize) -> (usize, usize) {
+    let (row, _) = locate(text, index);
+    let start = line_start(text, row);
+    (start, start + lines(text).nth(row).map_or(0, |l| l.chars().count()))
+}
+
+/// The position after moving the caret from `index` up or down a line, keeping to `goal_x` (points from the box's
+/// left) as far as the other line goes. From the first line up it goes to the start; from the last line down, to
+/// the end.
+pub fn vertical(text: &str, size: f32, index: usize, down: bool, goal_x: f32) -> usize {
+    let (row, _) = locate(text, index);
+    let last = lines(text).count().saturating_sub(1);
+    match (down, row) {
+        (false, 0) => 0,
+        (true, r) if r >= last => text.chars().count(),
+        _ => {
+            let to = if down { row + 1 } else { row - 1 };
+            index_at(text, size, [goal_x, (to as f32 + 0.5) * size.max(0.01) * LINE_HEIGHT])
+        }
+    }
+}
+
+/// Where the caret goes after `new` was made from `old` by [`wrap`] (which only breaks lines, so the characters
+/// are the same with some `\n` put in): the same place among the characters.
+pub fn follow_wrap(old: &str, new: &str, index: usize) -> usize {
+    let (old, new): (Vec<char>, Vec<char>) = (old.chars().collect(), new.chars().collect());
+    let (mut i, mut j) = (0, 0);
+    while i < index.min(old.len()) && j < new.len() {
+        if new[j] == old[i] {
+            i += 1;
+            j += 1;
+        } else if new[j] == '\n' {
+            j += 1;
+        } else {
+            break;
+        }
+    }
+    j
+}
+
+/// The rectangles, `[x0, y0, x1, y1]` from the box's top-left, that cover characters `from` up to `to`: one for
+/// each line they are on (a line break in them adds a little at the end of its line).
+pub fn selection_rects(text: &str, size: f32, from: usize, to: usize) -> Vec<[f32; 4]> {
+    let size = size.max(0.0);
+    let mut out = Vec::new();
+    for (row, line) in lines(text).enumerate() {
+        let (start, len) = (line_start(text, row), line.chars().count());
+        let (lo, hi) = (from.max(start), to.min(start + len));
+        let breaks = from <= start + len && to > start + len && row + 1 < lines(text).count();
+        if lo >= hi && !breaks {
+            continue;
+        }
+        let along = |n: usize| line.chars().take(n).map(advance).sum::<f32>() * size;
+        let x0 = along(lo.saturating_sub(start).min(len));
+        let x1 = along(hi.saturating_sub(start).min(len)) + if breaks { 0.3 * size } else { 0.0 };
+        out.push([x0, row as f32 * size * LINE_HEIGHT, x1.max(x0), (row as f32 + 1.0) * size * LINE_HEIGHT]);
+    }
+    out
 }
 
 /// The outline of the box holding `text` at `size`, with its top-left corner at `top_left`: the corners
@@ -222,6 +322,25 @@ pub fn outline(top_left: P, text: &str, size: f32) -> Vec<P> {
     let [w, h] = measure(text, size);
     let [x, y] = top_left;
     vec![[x, y], [x + w, y], [x + w, y + h], [x, y + h], [x, y]]
+}
+
+/// A text box laid out to sit inside the page `rect` (`[x0, y0, x1, y1]`, or no page to go by): its lines
+/// broken where they would run off the right edge (a box too near the edge for that to leave a readable
+/// width is moved left), and the whole box moved just far enough to lie inside. Returns the text as broken
+/// and the box's outline.
+pub fn fit_box(rect: Option<[f32; 4]>, top_left: P, text: &str, size: f32) -> (String, Vec<P>) {
+    let Some(rect) = rect else { return (text.to_string(), outline(top_left, text, size)) };
+    let page_width = rect[2] - rect[0];
+    let least = (0.35 * page_width).min(14.0 * size);
+    let left = top_left[0].min(rect[2] - least).max(rect[0]);
+    let wrapped = wrap(text, size, rect[2] - left);
+    let mut corners = outline([left, top_left[1]], &wrapped, size);
+    if let (Some(first), Some(far)) = (corners.first().copied(), corners.get(2).copied()) {
+        let dx = (rect[2] - far[0]).min(0.0).max(rect[0] - first[0]);
+        let dy = (rect[3] - far[1]).min(0.0).max(rect[1] - first[1]);
+        corners.iter_mut().for_each(|p| *p = [p[0] + dx, p[1] + dy]);
+    }
+    (wrapped, corners)
 }
 
 /// A bitmap of text: premultiplied RGBA, [`PAD`] pixels of margin on every side.
@@ -370,6 +489,80 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_caret_is_where_the_characters_before_it_end_and_a_press_finds_it_again() {
+        let text = "Hello\nwide world";
+        let size = 20.0;
+        // At the front, in the middle of a line, at the end of one, on the next line.
+        assert_eq!(caret_at(text, size, 0), [0.0, 0.0]);
+        let (a, b) = (caret_at(text, size, 2), caret_at(text, size, 5));
+        assert!(a[0] > 0.0 && b[0] > a[0] && a[1] == 0.0 && b[1] == 0.0);
+        assert_eq!(caret_at(text, size, 6), [0.0, size * LINE_HEIGHT], "just after the line break: the start of the next line");
+        let end = caret_at(text, size, 1000);
+        assert_eq!(end, caret_at(text, size, text.chars().count()), "past the end is the end");
+        assert_eq!(end[1], size * LINE_HEIGHT, "on the last line");
+        assert!((end[0] - "wide world".chars().map(advance).sum::<f32>() * size).abs() < 1e-3);
+        // A press at a caret's place finds the same index, nearer to either side of a letter picks that side.
+        for index in 0..=text.chars().count() {
+            let at = caret_at(text, size, index);
+            assert_eq!(index_at(text, size, [at[0], at[1] + 3.0]), index, "index {index}");
+        }
+        // Above the box is the first line, below it the last, far right the end of the line.
+        assert_eq!(index_at(text, size, [0.0, -50.0]), 0);
+        assert_eq!(index_at(text, size, [1.0e6, 1.0e6]), text.chars().count());
+        assert_eq!(index_at(text, size, [1.0e6, 3.0]), 5);
+    }
+
+    #[test]
+    fn moving_up_and_down_keeps_to_the_column_and_stops_at_the_ends() {
+        let text = "abcdef\nab\nabcdef";
+        let size = 20.0;
+        let x = caret_at(text, size, 5)[0];
+        // Down from the fifth place of the first line: the short line's end, then the fifth place again.
+        let short = vertical(text, size, 5, true, x);
+        assert_eq!(short, 9, "the short line ends sooner");
+        let third = vertical(text, size, short, true, x);
+        assert_eq!(third, 10 + 5);
+        // Past the last line, the end; before the first, the start.
+        assert_eq!(vertical(text, size, third, true, x), text.chars().count());
+        assert_eq!(vertical(text, size, 2, false, x), 0);
+        assert_eq!(vertical(text, size, third, false, x), 7 + 2, "back up to the short line's end");
+        assert_eq!(line_range(text, 8), (7, 9));
+        assert_eq!(line_range(text, 0), (0, 6));
+        assert_eq!(line_range(text, 1000), (10, 16));
+    }
+
+    #[test]
+    fn a_wrap_that_breaks_lines_keeps_the_caret_among_the_same_characters() {
+        let old = "aaa bbb ccc";
+        let new = "aaa \nbbb \nccc";
+        assert_eq!(follow_wrap(old, new, 0), 0);
+        assert_eq!(follow_wrap(old, new, 4), 4, "before the first break there is nothing to skip");
+        assert_eq!(follow_wrap(old, new, 5), 6, "one past the first break");
+        assert_eq!(follow_wrap(old, new, 11), 13);
+        assert_eq!(follow_wrap(old, old, 7), 7, "nothing broken, nothing moves");
+        assert_eq!(follow_wrap("", "", 3), 0);
+    }
+
+    #[test]
+    fn a_selection_is_a_rectangle_for_every_line_it_touches() {
+        let text = "abc\ndef\nghi";
+        let size = 10.0;
+        let lh = size * LINE_HEIGHT;
+        // Inside one line.
+        let one = selection_rects(text, size, 1, 3);
+        assert_eq!(one.len(), 1);
+        assert!(one[0][0] > 0.0 && one[0][2] > one[0][0] && one[0][1] == 0.0 && one[0][3] == lh);
+        // Across the whole text: three lines, the first two a little longer for their breaks.
+        let all = selection_rects(text, size, 0, text.chars().count());
+        assert_eq!(all.len(), 3);
+        let width = |line: &str| line.chars().map(advance).sum::<f32>() * size;
+        assert!((all[0][2] - width("abc") - 0.3 * size).abs() < 0.01);
+        assert!((all[2][2] - width("ghi")).abs() < 0.01, "the last line has no break");
+        // Nothing selected, nothing to draw.
+        assert!(selection_rects(text, size, 2, 2).is_empty());
+    }
+
+    #[test]
     fn there_is_a_font_on_this_machine() {
         assert!(available(), "no system font was found in the Windows fonts folder");
     }
@@ -452,12 +645,13 @@ mod tests {
     }
 
     #[test]
-    fn the_caret_is_at_the_end_of_the_last_line() {
-        let [x, y] = caret("ab\ncde", 20.0);
+    fn the_caret_past_the_last_character_is_at_the_end_of_the_last_line() {
+        let end = |text: &str, size: f32| caret_at(text, size, text.chars().count());
+        let [x, y] = end("ab\ncde", 20.0);
         assert!((x - measure("cde", 20.0)[0]).abs() < 1e-3 && (y - 20.0 * LINE_HEIGHT).abs() < 1e-3);
-        assert_eq!(caret("", 20.0), [0.0, 0.0]);
-        assert_eq!(caret("abc", 10.0)[1], 0.0);
-        assert!(caret("abc\n", 10.0)[0] == 0.0 && caret("abc\n", 10.0)[1] > 0.0, "a new empty line");
+        assert_eq!(end("", 20.0), [0.0, 0.0]);
+        assert_eq!(end("abc", 10.0)[1], 0.0);
+        assert!(end("abc\n", 10.0)[0] == 0.0 && end("abc\n", 10.0)[1] > 0.0, "a new empty line");
     }
 
     #[test]

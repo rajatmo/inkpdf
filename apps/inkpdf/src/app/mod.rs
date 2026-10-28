@@ -35,6 +35,7 @@ use crate::input::Mode;
 use crate::posture;
 use crate::settings;
 use crate::tiles::Key;
+use crate::tools::{Dir, Key as ToolKey};
 use crate::win_pointer;
 use bench::Bench;
 use ink_layer::{InkStamp, UiStamp};
@@ -163,9 +164,13 @@ impl State {
             modifiers: ModifiersState::empty(),
         };
         state.ed.apply_settings(&settings::load());
+        // Text copied from a box can be pasted anywhere, and text copied anywhere into a box.
+        if let Some(clipboard) = crate::native::SystemClipboard::new(&state.window) {
+            state.ed.set_text_clipboard(Box::new(clipboard));
+        }
         state.set_mode(opts.mode.unwrap_or_else(posture::detect));
         if let Some(smoothing) = opts.smoothing {
-            state.ed.smoothing = smoothing.clamp(0.0, 1.0);
+            state.ed.set_smoothing(smoothing);
         }
         if let Some(path) = opts.path {
             state.open(path);
@@ -200,12 +205,12 @@ impl State {
             WindowEvent::Resized(size) => {
                 self.gpu.resize(size.width, size.height);
                 self.ed.set_viewport([size.width as f32, size.height as f32]);
-                self.ed.fullscreen = self.window.fullscreen().is_some();
+                self.ed.chrome.fullscreen = self.window.fullscreen().is_some();
             }
             WindowEvent::CursorLeft { .. } => self.ed.mouse_left(),
             WindowEvent::Focused(false) => self.ed.focus_lost(),
             WindowEvent::ModifiersChanged(m) => self.modifiers = m.state(),
-            WindowEvent::ScaleFactorChanged { scale_factor, .. } => self.ed.dpr = scale_factor as f32,
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => self.ed.set_dpr(scale_factor as f32),
             WindowEvent::RedrawRequested => self.redraw(),
             WindowEvent::DroppedFile(path) => self.open(path),
             WindowEvent::CursorMoved { position, .. } => self.ed.mouse_moved([position.x as f32, position.y as f32]),
@@ -238,19 +243,27 @@ impl State {
             }
             return;
         }
-        if !self.ed.is_typing() {
-            return;
-        }
-        match &event.logical_key {
-            Typed::Named(NamedKey::Backspace) => self.ed.backspace(),
-            Typed::Named(NamedKey::Enter) => self.ed.type_text("\n"),
-            Typed::Named(NamedKey::Escape) => self.ed.escape(),
-            _ => {
-                if let Some(text) = &event.text {
-                    self.ed.type_text(text);
-                }
-            }
-        }
+        let shift = self.modifiers.shift_key();
+        // The tool in use says which of these it hears (see `InputPolicy`): a text box being typed into takes them
+        // all; with something selected, Delete, Escape and the arrows work on that.
+        let key = match &event.logical_key {
+            Typed::Named(NamedKey::Backspace) => ToolKey::Backspace,
+            Typed::Named(NamedKey::Delete) => ToolKey::Delete,
+            Typed::Named(NamedKey::Escape) => ToolKey::Escape,
+            Typed::Named(NamedKey::ArrowLeft) => ToolKey::Arrow(Dir::Left, shift),
+            Typed::Named(NamedKey::ArrowRight) => ToolKey::Arrow(Dir::Right, shift),
+            Typed::Named(NamedKey::ArrowUp) => ToolKey::Arrow(Dir::Up, shift),
+            Typed::Named(NamedKey::ArrowDown) => ToolKey::Arrow(Dir::Down, shift),
+            Typed::Named(NamedKey::Home) => ToolKey::Home(shift),
+            Typed::Named(NamedKey::End) => ToolKey::End(shift),
+            Typed::Named(NamedKey::Enter) if self.ed.is_typing() => ToolKey::Text("\n"),
+            _ if self.ed.is_typing() => match &event.text {
+                Some(text) => ToolKey::Text(text),
+                None => return,
+            },
+            _ => return,
+        };
+        self.ed.press(key);
     }
 
     pub fn about_to_wait(&mut self, el: &ActiveEventLoop) {

@@ -32,9 +32,10 @@ fn each_tools_policy_is_the_device_rule_of_the_design_in_each_mode() {
     // (stylus, mouse, keyboard). The finger pans and zooms and the wheel scrolls with every tool in every mode.
     // At a desk the mouse draws as a stylus does (it places text, as itself, with the text tool) and the stylus
     // does nothing in the text tool; as a tablet the mouse only scrolls and the stylus places text.
+    // The keyboard works on the selection (delete, let go, nudge) with the tools that make items, at a desk only.
     let desktop = [
-        (Tool::Pen, (true, AsStylus, false)),
-        (Tool::Geometry, (true, AsStylus, false)),
+        (Tool::Pen, (true, AsStylus, true)),
+        (Tool::Geometry, (true, AsStylus, true)),
         (Tool::Text, (false, Itself, true)),
         (Tool::Laser, (true, AsStylus, false)),
     ];

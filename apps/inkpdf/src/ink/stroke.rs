@@ -3,7 +3,7 @@
 use crate::figure::Figure;
 
 use super::P;
-use super::geometry::{dist2, dist2_point_segment, dist2_segments, point_in_polygon};
+use crate::plane::{dist2, dist2_point_segment, dist2_segments, point_in_polygon};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Style {
@@ -19,6 +19,14 @@ pub struct Style {
 pub struct TextBlock {
     pub text: String,
     pub size: f32,
+}
+
+/// What to change about strokes that already exist: their colour, and their thickness (a text box's size).
+/// A part left `None` stays as it is on every stroke.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Restyle {
+    pub rgba: Option<[u8; 4]>,
+    pub width: Option<f32>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -54,6 +62,15 @@ impl Stroke {
 
     pub fn bbox(&self) -> [f32; 4] {
         self.bbox
+    }
+
+    /// A copy moved by `(dx, dy)` onto `page`, still with this stroke's id (the store gives a copy that it
+    /// adds an id of its own).
+    pub fn moved(&self, dx: f32, dy: f32, page: u32) -> Stroke {
+        let mut copy = self.clone();
+        copy.translate(dx, dy);
+        copy.page = page;
+        copy
     }
 
     pub(super) fn translate(&mut self, dx: f32, dy: f32) {

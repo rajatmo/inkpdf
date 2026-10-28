@@ -1,5 +1,6 @@
 use super::*;
-use crate::geometry::{self, SHAPES, Shape};
+use crate::figure::shape_points;
+use crate::geometry::{SHAPES, Shape};
 
 /// An editor with the shape tool chosen, making `shape`.
 fn shaping(shape: Shape) -> Editor {
@@ -41,7 +42,7 @@ fn a_drag_makes_each_simple_shape_as_one_stroke_in_the_tools_colour_and_thicknes
         drag(&mut ed, [100.0, 200.0], [300.0, 320.0]);
         assert_eq!(ed.ink.len(), 1, "{shape:?}: exactly one stroke");
         let stroke = &ed.ink.strokes()[0];
-        let want = geometry::points(shape, doc(100.0, 200.0), doc(300.0, 320.0));
+        let want = shape_points(shape, doc(100.0, 200.0), doc(300.0, 320.0));
         assert_eq!(stroke.pts.len(), want.len(), "{shape:?}");
         assert!(stroke.pts.iter().zip(&want).all(|(a, b)| near(*a, *b)), "{shape:?} came out as dragged");
         let (rgba, width) = ed.current_style();
@@ -157,7 +158,8 @@ fn the_shape_buttons_open_the_shape_panel_and_choose_the_shape_which_is_remember
     let mut ed = editor();
     let button = ed.toolbar().centre_of(Item::Tool(Tool::Geometry));
     pen_stroke(&mut ed, TIP, &[button, button]);
-    assert_eq!((ed.tool, ed.panel.is_some()), (Tool::Geometry, true));
+    open_settings(&mut ed);
+    assert_eq!((ed.tool, ed.chrome.panel.is_some()), (Tool::Geometry, true));
     assert!(ed.requests.has(&Request::SettingsChanged), "the tool choice is saved");
     let mut previous = ed.shape;
     for shape in SHAPES {
@@ -165,7 +167,7 @@ fn the_shape_buttons_open_the_shape_panel_and_choose_the_shape_which_is_remember
         let at = ed.toolbar().tool_panel(Tool::Geometry, ed.view.viewport[0], false).expect("panel").shape_centre(shape);
         pen_stroke(&mut ed, TIP, &[at, at]);
         assert_eq!(ed.shape, shape);
-        assert!(ed.panel.is_some(), "the panel stays open");
+        assert!(ed.chrome.panel.is_some(), "the panel stays open");
         assert_eq!(ed.settings().shape, shape);
         assert_eq!(ed.requests.has(&Request::SettingsChanged), shape != previous, "a new shape is saved, the same one is not");
         previous = shape;
@@ -178,6 +180,7 @@ fn the_shape_panels_colours_and_thickness_belong_to_the_shape_tool() {
     let mut ed = editor();
     let button = ed.toolbar().centre_of(Item::Tool(Tool::Geometry));
     pen_stroke(&mut ed, TIP, &[button, button]);
+    open_settings(&mut ed);
     let panel = ed.toolbar().tool_panel(Tool::Geometry, ed.view.viewport[0], false).expect("panel");
     let green = panel.swatch_centre(3);
     pen_stroke(&mut ed, TIP, &[green, green]);
@@ -185,7 +188,7 @@ fn the_shape_panels_colours_and_thickness_belong_to_the_shape_tool() {
     // Thickness: drag the slider to the thick end.
     let (a, b) = (panel.point_on(Slider::Width, 0.2), panel.point_on(Slider::Width, 1.0));
     pen_stroke(&mut ed, TIP, &[a, b]);
-    assert!((ed.shape_style.width - crate::toolbar::MAX_WIDTH).abs() < 0.01);
+    assert!((ed.shape_style.width - crate::tool::MAX_WIDTH).abs() < 0.01);
     assert_eq!(ed.pen.width, ToolStyle::PEN.width, "the pen is as it was");
     // No smoothing slider here.
     assert_eq!(panel.slider_at(panel.point_on(Slider::Smoothing, 0.5)), None);
@@ -195,7 +198,7 @@ fn the_shape_panels_colours_and_thickness_belong_to_the_shape_tool() {
     ed.shape = Shape::Line;
     drag(&mut ed, [20.0, 650.0], [60.0, 700.0]);
     let s = &ed.ink.strokes()[0];
-    assert_eq!((s.style.rgba, s.style.width.round()), (ed.palette[3], crate::toolbar::MAX_WIDTH.round()));
+    assert_eq!((s.style.rgba, s.style.width.round()), (ed.palette[3], crate::tool::MAX_WIDTH.round()));
 }
 
 #[test]
@@ -203,11 +206,12 @@ fn a_press_on_the_shape_panel_that_is_not_a_control_draws_no_shape() {
     let mut ed = editor();
     let button = ed.toolbar().centre_of(Item::Tool(Tool::Geometry));
     pen_stroke(&mut ed, TIP, &[button, button]);
+    open_settings(&mut ed);
     let p = ed.toolbar().tool_panel(Tool::Geometry, ed.view.viewport[0], false).expect("panel");
     let blank = [(p.rect[0] + p.rect[2]) / 2.0, p.rect[1] + 20.0];
     pen_stroke(&mut ed, TIP, &[blank, [blank[0] + 30.0, blank[1] + 10.0]]);
     assert_eq!(ed.ink.len(), 0);
-    assert!(ed.panel.is_some());
+    assert!(ed.chrome.panel.is_some());
 }
 
 #[test]
@@ -224,7 +228,7 @@ fn the_tool_and_every_setting_come_back_in_the_next_session() {
     next.apply_settings(&saved);
     assert_eq!((next.tool, next.shape, next.shape_style, next.pen, next.smoothing), (Tool::Geometry, Shape::Axes2d, ed.shape_style, ed.pen, 0.2));
     assert_eq!(next.palette, ed.palette);
-    assert!(next.panel.is_none(), "it starts with the panel closed");
+    assert!(next.chrome.panel.is_none(), "it starts with the panel closed");
 }
 
 #[test]
@@ -237,8 +241,7 @@ fn choosing_a_tool_a_colour_or_a_thickness_asks_for_the_settings_to_be_saved() {
     assert!(ed.requests.has(&Request::SettingsChanged));
     ed.requests.take(&Request::SettingsChanged);
     ed.set_tool(Tool::Pen);
-    let button = ed.toolbar().centre_of(Item::Tool(Tool::Pen));
-    pen_stroke(&mut ed, TIP, &[button, button]);
+    open_settings(&mut ed);
     ed.requests.take(&Request::SettingsChanged);
     let blue = ed.toolbar().tool_panel(Tool::Pen, ed.view.viewport[0], false).expect("panel").swatch_centre(1);
     pen_stroke(&mut ed, TIP, &[blue, blue]);

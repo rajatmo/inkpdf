@@ -1,0 +1,14 @@
+\documentclass[tikz,border=0pt]{standalone}
+\input{style}
+\begin{document}
+\begin{tikzpicture}
+  \iconbox
+  % Put a point on the line: a line through three points, and a plus above the middle one.
+  \draw (-0.85,-0.55) -- (-0.05,0.0) -- (0.85,-0.55);
+  \draw (-0.85,-0.55) circle (0.1);
+  \draw (0.85,-0.55) circle (0.1);
+  \draw (-0.05,0.0) circle (0.14);
+  \draw (-0.35,0.62) -- (0.25,0.62);
+  \draw (-0.05,0.32) -- (-0.05,0.92);
+\end{tikzpicture}
+\end{document}

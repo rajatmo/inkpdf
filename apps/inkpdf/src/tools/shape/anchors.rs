@@ -19,10 +19,11 @@
 //! Each edit is one undo step, made when the pen lifts; while it is down the shape follows the pen without
 //! touching the stored ink.
 
+use crate::figure::NodeAction;
 use crate::figure::{Control, Figure};
-use crate::geometry::clamp_into;
 use crate::ink::{P, dist2};
 use crate::input::Sample;
+use crate::plane::clamp_into;
 use crate::workspace::Workspace;
 
 use super::super::paint::{ACCENT, Painter, dashed, fill_square, polyline};
@@ -35,6 +36,22 @@ const CONTROL_PX: f32 = 14.0;
 const PATH_PX: f32 = 8.0;
 /// Two presses this close in time (milliseconds) are a double tap.
 const DOUBLE_TAP_MS: f64 = 450.0;
+
+/// The stretch of `figure` to put a new point on: the one after the point pressed last, if it has one, else the
+/// longest.
+fn segment_to_split(figure: &Figure, selected: Option<usize>) -> usize {
+    let n = figure.anchor_count();
+    let closed = matches!(figure, Figure::Poly { closed: true, .. } | Figure::Path { closed: true, .. });
+    let segments = if closed { n } else { n.saturating_sub(1) };
+    if let Some(i) = selected.filter(|&i| i < segments) {
+        return i;
+    }
+    let length = |s: usize| match (figure.anchor_pos(s), figure.anchor_pos((s + 1) % n.max(1))) {
+        (Some(a), Some(b)) => dist2(a, b),
+        _ => 0.0,
+    };
+    (0..segments).max_by(|&a, &b| length(a).total_cmp(&length(b))).unwrap_or(0)
+}
 
 /// What a press landed on, for telling a double tap.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -68,6 +85,33 @@ impl ShapeTool {
     pub fn selected_anchor(&self, ws: &Workspace) -> Option<usize> {
         let (id, figure) = self.editing(ws)?;
         self.anchor.filter(|&(s, i)| s == id && i < figure.anchor_count()).map(|(_, i)| i)
+    }
+
+    /// Whether the shape being edited has points that can be added, taken away or smoothed (a run of lines or
+    /// a spline; a rectangle's corners and an ellipse's are fixed in number).
+    pub fn has_nodes(&self, ws: &Workspace) -> bool {
+        self.editing(ws).is_some_and(|(_, f)| matches!(f, Figure::Poly { .. } | Figure::Path { .. }))
+    }
+
+    /// Take away, add or smooth a point of the shape being edited: the one pressed last, or (to add one) the
+    /// longest stretch after it. As one undo step, like the stylus's own way of doing it. `true` if it did.
+    pub fn node_action(&mut self, ws: &mut Workspace, action: NodeAction) -> bool {
+        let Some((stroke, figure)) = self.editing(ws).map(|(s, f)| (s, f.clone())) else { return false };
+        let selected = self.selected_anchor(ws);
+        let mut changed = figure;
+        let anchor = match action {
+            NodeAction::Remove => selected.filter(|&i| changed.remove_anchor(i)).map(|_| None),
+            NodeAction::Smooth => selected.filter(|&i| changed.toggle_smooth(i) || changed.toggle_closed(i)).map(Some),
+            NodeAction::Add => {
+                let segment = segment_to_split(&changed, selected);
+                changed.insert_anchor(segment, 0.5).map(Some)
+            }
+        };
+        let Some(anchor) = anchor.filter(|_| changed.valid()) else { return false };
+        ws.ink.reshape(stroke, changed);
+        self.anchor = anchor.map(|i| (stroke, i));
+        ws.redraw = true;
+        true
     }
 
     /// A press at `pos` (screen) at time `t_ms`: if it is on an anchor or handle of the selected shape, take

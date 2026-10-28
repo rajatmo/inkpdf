@@ -31,6 +31,20 @@ enum Cmd {
         before: Box<Stroke>,
         after: Box<Stroke>,
     },
+    /// Several strokes restyled at once (a new colour, thickness or text size): each before and after.
+    Restyle {
+        before: Vec<Stroke>,
+        after: Vec<Stroke>,
+    },
+}
+
+/// A stroke that is to become something else, keeping its id and its page (see [`InkStore::replace_many`]).
+pub struct Replacement {
+    pub id: u64,
+    pub style: Style,
+    pub pts: Vec<P>,
+    pub figure: Option<Figure>,
+    pub text: Option<TextBlock>,
 }
 
 #[derive(Default)]
@@ -216,6 +230,7 @@ impl InkStore {
                     shift(before, at, dy);
                     shift(after, at, dy);
                 }
+                Cmd::Restyle { before, after } => before.iter_mut().chain(after.iter_mut()).for_each(|s| shift(s, at, dy)),
             }
         }
         self.dirty = self.dirty.iter().map(|&p| if p >= at { p + 1 } else { p }).collect();
@@ -302,6 +317,66 @@ impl InkStore {
         true
     }
 
+    /// Add copies of strokes (a paste, a duplicate) as one undo step, each with an id of its own, at the end of
+    /// the drawing order and on the page it says. Returns the new ids.
+    pub fn add_copies(&mut self, copies: Vec<Stroke>) -> Vec<u64> {
+        let mut added: Vec<Stroke> = Vec::new();
+        for s in copies {
+            let Some(pts) = sanitize(s.pts) else { continue };
+            let id = self.take_id();
+            added.push(Stroke::new(id, s.page, s.style, pts, s.figure, s.text));
+        }
+        if added.is_empty() {
+            return Vec::new();
+        }
+        for s in &added {
+            self.dirty.insert(s.page);
+            self.strokes.push(s.clone());
+        }
+        let ids = added.iter().map(|s| s.id).collect();
+        self.record(Cmd::Add(added));
+        ids
+    }
+
+    /// Change several strokes at once (a new colour, thickness or text size) as one undo step. Strokes that would
+    /// not change are left out; `false` if none would. With `coalesce`, a change to strokes that the last step
+    /// already changed this way (a slider being dragged) is added to that step rather than being one of its own.
+    pub fn replace_many(&mut self, items: Vec<Replacement>, coalesce: bool) -> bool {
+        let (mut before, mut after) = (Vec::new(), Vec::new());
+        for it in items {
+            let Some(pts) = sanitize(it.pts) else { continue };
+            let Some(old) = self.strokes.iter().find(|s| s.id == it.id) else { continue };
+            if old.pts == pts && old.style == it.style && old.text == it.text {
+                continue;
+            }
+            after.push(Stroke::new(it.id, old.page, it.style, pts, it.figure, it.text));
+            before.push(old.clone());
+        }
+        if after.is_empty() {
+            return false;
+        }
+        let continues =
+            coalesce && matches!(self.undo.last(), Some(Cmd::Restyle { after: last, .. }) if after.iter().all(|s| last.iter().any(|l| l.id == s.id)));
+        if continues {
+            if let Some(Cmd::Restyle { after: last, .. }) = self.undo.last_mut() {
+                for s in &after {
+                    if let Some(slot) = last.iter_mut().find(|l| l.id == s.id) {
+                        *slot = s.clone();
+                    }
+                }
+            }
+            after.iter().for_each(|s| self.replace(s));
+            self.redo.clear();
+            self.revision += 1;
+            self.structural = self.revision;
+            return true;
+        }
+        let cmd = Cmd::Restyle { before, after };
+        self.apply(&cmd);
+        self.record(cmd);
+        true
+    }
+
     fn replace(&mut self, with: &Stroke) {
         if let Some(slot) = self.strokes.iter_mut().find(|s| s.id == with.id) {
             *slot = with.clone();
@@ -312,6 +387,7 @@ impl InkStore {
     fn apply(&mut self, cmd: &Cmd) {
         match cmd {
             Cmd::Reshape { after, .. } => self.replace(after),
+            Cmd::Restyle { after, .. } => after.iter().for_each(|s| self.replace(s)),
             Cmd::Add(strokes) => {
                 for s in strokes {
                     self.dirty.insert(s.page);
@@ -343,6 +419,7 @@ impl InkStore {
     fn revert(&mut self, cmd: &Cmd) {
         match cmd {
             Cmd::Reshape { before, .. } => self.replace(before),
+            Cmd::Restyle { before, .. } => before.iter().for_each(|s| self.replace(s)),
             Cmd::Add(strokes) => {
                 let ids: HashSet<u64> = strokes.iter().map(|s| s.id).collect();
                 for s in strokes {
@@ -394,6 +471,7 @@ impl InkStore {
     // ── queries ─────────────────────────────────────────────────────────────────────────────
 
     /// The topmost stroke within `radius` of `p`.
+    #[cfg(test)]
     pub fn hit_test(&self, p: P, radius: f32) -> Option<u64> {
         self.strokes.iter().rev().find(|s| s.touches_circle(p, radius)).map(|s| s.id)
     }
@@ -486,6 +564,60 @@ mod tests {
         assert_eq!(got, vec![inside, half]);
         // Fewer than three polygon points selects nothing.
         assert!(store.in_polygon(&poly[..2]).is_empty());
+    }
+
+    fn thicker(store: &InkStore, id: u64, width: f32) -> Replacement {
+        let s = store.get(id).expect("stroke");
+        Replacement { id, style: Style { width, ..s.style }, pts: s.pts.clone(), figure: None, text: None }
+    }
+
+    #[test]
+    fn a_run_of_restyles_is_one_undo_step_and_a_separate_one_is_its_own() {
+        let mut store = InkStore::new();
+        let (a, b) = (store.add(0, BLACK, line(0.0)).expect("a"), store.add(0, BLACK, line(30.0)).expect("b"));
+        let width = |store: &InkStore, id| store.get(id).map(|s| s.style.width);
+        // A drag: the first change is a step, the rest join it, whatever width they reach.
+        for (i, w) in [3.0, 4.0, 5.0, 6.0].into_iter().enumerate() {
+            let items = vec![thicker(&store, a, w), thicker(&store, b, w)];
+            assert!(store.replace_many(items, i > 0));
+        }
+        assert_eq!((width(&store, a), width(&store, b)), (Some(6.0), Some(6.0)));
+        assert!(store.undo());
+        assert_eq!((width(&store, a), width(&store, b)), (Some(2.0), Some(2.0)), "one undo for the whole drag");
+        assert!(store.redo());
+        assert_eq!(width(&store, a), Some(6.0), "and redo does it all again");
+        // Not continuing: a change of its own, which undo takes back alone.
+        let items = vec![thicker(&store, a, 9.0), thicker(&store, b, 9.0)];
+        assert!(store.replace_many(items, false));
+        assert!(store.undo());
+        assert_eq!(width(&store, a), Some(6.0));
+        // Nothing changes: no step.
+        let items = vec![thicker(&store, a, 6.0)];
+        assert!(!store.replace_many(items, false));
+        // Another stroke than the last step changed is not part of it.
+        let items = vec![thicker(&store, a, 7.0)];
+        assert!(store.replace_many(items, true));
+        let c = store.add(0, BLACK, line(60.0)).expect("c");
+        let items = vec![thicker(&store, c, 8.0)];
+        assert!(store.replace_many(items, true));
+        assert!(store.undo());
+        assert_eq!((width(&store, c), width(&store, a)), (Some(2.0), Some(7.0)));
+    }
+
+    #[test]
+    fn copies_are_added_as_one_step_with_ids_of_their_own() {
+        let mut store = InkStore::new();
+        let a = store.add(0, BLACK, line(0.0)).expect("a");
+        let copy = store.get(a).expect("a").moved(5.0, 7.0, 1);
+        let ids = store.add_copies(vec![copy.clone(), copy]);
+        assert_eq!(ids.len(), 2);
+        assert!(!ids.contains(&a) && ids[0] != ids[1]);
+        assert_eq!(store.get(ids[0]).map(|s| (s.page, s.pts[0])), Some((1, [5.0, 7.0])));
+        assert!(store.undo());
+        assert_eq!(store.len(), 1, "both copies at once");
+        assert!(store.redo());
+        assert_eq!(store.len(), 3);
+        assert!(store.add_copies(Vec::new()).is_empty());
     }
 
     #[test]

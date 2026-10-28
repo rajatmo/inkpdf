@@ -1,14 +1,18 @@
-//! Native Windows pieces: error boxes and opening web addresses.
+//! Native Windows pieces: error boxes, opening web addresses, and the text clipboard.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use windows_sys::Win32::Foundation::HWND;
+use windows_sys::Win32::Foundation::{GlobalFree, HWND};
 use windows_sys::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
+use windows_sys::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, GetClipboardData, OpenClipboard, SetClipboardData};
+use windows_sys::Win32::System::Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock};
 use windows_sys::Win32::UI::Shell::ShellExecuteW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MessageBoxW, SW_SHOWNORMAL};
 use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use winit::window::Window;
+
+use crate::clipboard::TextClipboard;
 
 fn hwnd_of(window: &Window) -> Option<HWND> {
     match window.window_handle().ok()?.as_raw() {
@@ -53,6 +57,78 @@ pub fn open_url(url: &str) {
     // SAFETY: both strings are NUL-terminated and live across the call; no owner window or
     // working directory is passed.
     unsafe { ShellExecuteW(std::ptr::null_mut(), verb.as_ptr(), target.as_ptr(), std::ptr::null(), std::ptr::null(), SW_SHOWNORMAL) };
+}
+
+/// The clipboard format for text in UTF-16 (`CF_UNICODETEXT`).
+const CF_UNICODETEXT: u32 = 13;
+
+/// The Windows clipboard, for the text of text boxes: copy in InkPDF, paste in any program, and the other way.
+/// (The window owns it: Windows refuses to put anything on the clipboard for a program with no window of its own.)
+pub struct SystemClipboard {
+    owner: HWND,
+}
+
+impl SystemClipboard {
+    /// The clipboard as `window` uses it.
+    pub fn new(window: &Window) -> Option<Self> {
+        Some(Self { owner: hwnd_of(window)? })
+    }
+}
+
+impl TextClipboard for SystemClipboard {
+    fn get(&mut self) -> Option<String> {
+        // SAFETY: the clipboard is opened for the duration and closed again on every path; the handle Windows gives
+        // is locked while read, and read only as far as the size of the block it names, stopping at the first NUL.
+        unsafe {
+            if OpenClipboard(self.owner) == 0 {
+                return None;
+            }
+            let handle = GetClipboardData(CF_UNICODETEXT);
+            let text = if handle.is_null() {
+                None
+            } else {
+                let units = GlobalLock(handle).cast::<u16>().cast_const();
+                if units.is_null() {
+                    None
+                } else {
+                    let all = std::slice::from_raw_parts(units, GlobalSize(handle) / 2);
+                    let end = all.iter().position(|&u| u == 0).unwrap_or(all.len());
+                    let text = String::from_utf16_lossy(&all[..end]);
+                    GlobalUnlock(handle);
+                    Some(text)
+                }
+            };
+            CloseClipboard();
+            text
+        }
+    }
+
+    fn set(&mut self, text: &str) {
+        let units = wide(text);
+        // SAFETY: the clipboard is opened for the duration and closed again on every path; the block is allocated
+        // for exactly the text and its NUL, filled while locked, and given to Windows (which owns it from then on)
+        // or freed if Windows would not take it.
+        unsafe {
+            if OpenClipboard(self.owner) == 0 {
+                return;
+            }
+            EmptyClipboard();
+            let block = GlobalAlloc(GMEM_MOVEABLE, units.len() * 2);
+            if !block.is_null() {
+                let dst = GlobalLock(block).cast::<u16>();
+                if dst.is_null() {
+                    GlobalFree(block);
+                } else {
+                    std::ptr::copy_nonoverlapping(units.as_ptr(), dst, units.len());
+                    GlobalUnlock(block);
+                    if SetClipboardData(CF_UNICODETEXT, block).is_null() {
+                        GlobalFree(block);
+                    }
+                }
+            }
+            CloseClipboard();
+        }
+    }
 }
 
 /// Tell the user something went wrong.

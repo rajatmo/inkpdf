@@ -5,10 +5,10 @@ use std::collections::HashSet;
 use std::ops::Range;
 
 use crate::editor::Editor;
-use crate::gpu::Capsule;
 use crate::ink::{InkStore, P, Stroke};
+use crate::scene::Capsule;
 use crate::smooth::curve_through;
-use crate::toolbar::{self, PanelView, PromptLayout, PromptView, Ui};
+use crate::toolbar::{self, ContextState, PanelView, PromptLayout, PromptView, Ui};
 use crate::tools::Painter;
 use crate::tools::paint::CURVE_STEP;
 
@@ -88,6 +88,8 @@ pub(super) struct UiStamp {
     dpr: u32,
     panel: Option<PanelView>,
     prompt: Option<PromptView>,
+    /// The bar under the tools.
+    context: Option<ContextState>,
 }
 
 /// Line work drawn over the committed ink.
@@ -178,20 +180,25 @@ impl State {
         let ed = &self.ed;
         let state = ed.toolbar_state();
         let [w, h] = ed.view.viewport.map(f32::to_bits);
-        let stamp = UiStamp { state, viewport: [w, h], dpr: ed.dpr.to_bits(), panel: ed.panel_view(), prompt: ed.prompt };
+        let stamp =
+            UiStamp { state, viewport: [w, h], dpr: ed.dpr.to_bits(), panel: ed.panel_view(), prompt: ed.chrome.prompt, context: ed.context_view() };
         if self.ui_built.as_ref() == Some(&stamp) {
             return;
         }
         let mut ui = Ui::default();
         // The prompt takes over the window: the toolbars step out of the way.
-        if let Some(view) = ed.prompt {
+        if let Some(view) = ed.chrome.prompt {
             PromptLayout::new(ed.view.viewport, ed.dpr).draw(view, &mut ui);
         } else {
             let bar = ed.toolbar();
             bar.draw(&state, &mut ui);
-            if let (Some(view), Some(panel)) =
-                (&stamp.panel, bar.tool_panel(ed.tool, ed.view.viewport[0], ed.panel.is_some_and(|p| p.editing.is_some())))
-            {
+            let panel = bar.tool_panel(ed.tool, ed.view.viewport[0], ed.chrome.panel.is_some_and(|p| p.editing.is_some()));
+            let unfolded = stamp.panel.as_ref().zip(panel.as_ref());
+            // The bar under the tools; with the panel unfolded they are one card, drawn before the panel's contents.
+            if let (Some(context), Some(view)) = (ed.context_bar(), &stamp.context) {
+                context.draw(view, unfolded.and_then(|(_, p)| ed.drawer().map(|d| d[3].max(p.rect[3]))), &mut ui);
+            }
+            if let Some((view, panel)) = unfolded {
                 panel.draw(view, &mut ui);
             }
         }

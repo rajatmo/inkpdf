@@ -5,23 +5,30 @@
 //!
 //! A shape lies on the page the drag began on and is kept inside it. Its ends snap to the anchor points of
 //! other shapes. It is one ordinary stroke (see [`crate::figure`]), so it is erased, selected, moved,
-//! undone and saved like handwriting. The stylus does all of it; the mouse scrolls, a finger pans and
-//! zooms, the keyboard does nothing.
+//! undone and saved like handwriting. The stylus does all of it (the tip, with select or erase chosen on
+//! screen, selects and erases as the barrel button and eraser end do); the mouse scrolls in the tablet mode, a
+//! finger pans and zooms, and at a desk the keyboard works on the selection (Delete, Esc, the arrows,
+//! Backspace on a point). Like the other tools it works only on what it made: shapes.
 
 mod anchors;
 mod draft;
 
-use crate::figure::{Control, Figure};
-use crate::geometry::{self, Shape, clamp_into};
+use crate::figure::{Control, Figure, NodeAction, shape_points};
+use crate::geometry::Shape;
 use crate::ink::{P, Style, dist2};
-use crate::input::{Device, Mode, Phase, Role, Sample, role};
+use crate::input::{Device, Mode, Phase, Role, Sample};
+use crate::plane::clamp_into;
 use crate::workspace::Workspace;
 
-use super::gestures::{Eraser, Lasso, Mover};
+use super::gestures::Pick;
 use super::paint::{Painter, polyline};
-use super::{InputPolicy, PageEvent, TAP_SELECT_PX, Tool};
+use super::shortcuts::selection_key;
+use super::{InputPolicy, Key, PageEvent, TAP_SELECT_PX, Tool, ToolAction};
 
 pub use draft::Draft;
+
+/// What a shape with points to edit offers the bar.
+const NODE_ACTIONS: [ToolAction; 3] = [ToolAction::Node(NodeAction::Remove), ToolAction::Node(NodeAction::Add), ToolAction::Node(NodeAction::Smooth)];
 
 /// A drag shorter than this, in logical pixels, makes no shape: it was a tap.
 const MIN_DRAG_PX: f32 = 4.0;
@@ -33,33 +40,15 @@ enum Gesture {
     #[default]
     None,
     /// A shape being dragged out from `start` to `end` (both inside `page`).
-    Drag {
-        id: u32,
-        page: u32,
-        shape: Shape,
-        start: P,
-        end: P,
-    },
+    Drag { id: u32, page: u32, shape: Shape, start: P, end: P },
     /// An anchor or handle of the selected shape being moved; `figure` is the shape as it is being reshaped
     /// (the stored one is replaced when the pen lifts), `independent` breaks a handle off from its partner.
-    Control {
-        id: u32,
-        stroke: u64,
-        control: Control,
-        figure: Figure,
-        independent: bool,
-    },
+    Control { id: u32, stroke: u64, control: Control, figure: Figure, independent: bool },
     /// The pen is down while a stroke is being drawn by taps: it is at `last` now (a tap if it has not
     /// moved from `down`), at time `t_ms`.
-    DraftTap {
-        id: u32,
-        down: P,
-        last: P,
-        t_ms: f64,
-    },
-    Erase(Eraser),
-    Lasso(Lasso),
-    Move(Mover),
+    DraftTap { id: u32, down: P, last: P, t_ms: f64 },
+    /// Erasing, selecting, or dragging the selection (see [`Pick`]).
+    Pick(Pick),
     /// A press that did its work at once (an anchor taken away, a selection let go of); nothing follows.
     Swallow(u32),
 }
@@ -83,9 +72,7 @@ impl ShapeTool {
         match &self.gesture {
             Gesture::None => None,
             Gesture::Drag { id, .. } | Gesture::Control { id, .. } | Gesture::DraftTap { id, .. } | Gesture::Swallow(id) => Some(*id),
-            Gesture::Erase(e) => Some(e.id),
-            Gesture::Lasso(l) => Some(l.id),
-            Gesture::Move(m) => Some(m.id),
+            Gesture::Pick(p) => Some(p.id()),
         }
     }
 
@@ -115,7 +102,7 @@ impl ShapeTool {
     fn down(&mut self, ws: &mut Workspace, ev: &PageEvent<'_>) {
         let Some(first) = ev.samples.first() else { return };
         let p = ws.to_doc(first.pos);
-        let what = role(&ev.pen);
+        let what = ws.role(&ev.pen);
         // The eraser end and the barrel button end a stroke being drawn by taps.
         if what != Role::Draw {
             self.finish_draft(ws);
@@ -125,30 +112,21 @@ impl ShapeTool {
         if what != Role::Erase && self.control_down(ws, ev.id, first.pos, first.t_ms, ev.pen.barrel) {
             return;
         }
-        match what {
-            Role::Draw => {
-                if !ws.selection.is_empty() {
-                    // Something selected: the pen drags it by its outline; touching elsewhere lets go and
-                    // starts a new shape.
-                    if self.on_selected_outline(ws, p) {
-                        self.gesture = Gesture::Move(Mover::begin(Device::Pen, ev.id, p));
-                        return;
-                    }
-                    ws.selection.clear();
-                }
-                self.shape_down(ws, ev.id, ev.samples);
-            }
-            Role::Erase => {
-                self.gesture = Gesture::Erase(Eraser::begin(ev.id));
-                self.moved(ws, ev.samples);
-            }
-            Role::Lasso => {
-                self.gesture = Gesture::Lasso(Lasso::begin(ev.id, p));
-                self.moved(ws, ev.samples);
-            }
+        let on_outline = self.on_selected_outline(ws, p);
+        if let Some(pick) = Pick::begin(ws, ev, p, on_outline) {
+            self.gesture = Gesture::Pick(pick);
+            return;
         }
+        if !ws.selection.is_empty() {
+            // Something selected: the pen drags it by its outline; touching elsewhere lets go and starts a new shape.
+            if on_outline {
+                self.gesture = Gesture::Pick(Pick::grab(Device::Pen, ev.id, p));
+                return;
+            }
+            ws.selection.clear();
+        }
+        self.shape_down(ws, ev.id, ev.samples);
     }
-
     /// The pen pressed with the shape tool, and nothing selected.
     fn shape_down(&mut self, ws: &mut Workspace, id: u32, samples: &[Sample]) {
         let Some(first) = samples.first() else { return };
@@ -170,13 +148,7 @@ impl ShapeTool {
 
     fn moved(&mut self, ws: &mut Workspace, samples: &[Sample]) {
         match &mut self.gesture {
-            Gesture::Erase(e) => e.drag(ws, samples),
-            Gesture::Lasso(l) => l.drag(ws, samples),
-            Gesture::Move(m) => {
-                if let Some(s) = samples.last() {
-                    m.drag(ws, s.pos);
-                }
-            }
+            Gesture::Pick(p) => p.moved(ws, samples),
             Gesture::Drag { .. } => self.drag_shape(ws, samples),
             Gesture::Control { .. } => self.drag_control(ws, samples),
             Gesture::DraftTap { .. } => self.drag_draft(ws, samples),
@@ -203,7 +175,7 @@ impl ShapeTool {
         self.snap = None;
         if dist2(start, end).sqrt() * ws.view.zoom < MIN_DRAG_PX * ws.dpr {
             let radius = TAP_SELECT_PX * ws.dpr / ws.view.zoom;
-            let hit = ws.ink.hit_test(start, radius);
+            let hit = ws.hit_own(start, radius);
             // With the line or curve tool a tap that is not on a shape (or is on the end of one, to join it)
             // starts a polyline or spline drawn by taps; otherwise it selects what it is on.
             if matches!(shape, Shape::Line | Shape::Curve) && (hit.is_none() || on_anchor(ws, start)) {
@@ -225,7 +197,7 @@ impl ShapeTool {
     /// Whether `p` is on the outline of a selected stroke.
     fn on_selected_outline(&self, ws: &Workspace, p: P) -> bool {
         let radius = TAP_SELECT_PX * ws.dpr / ws.view.zoom;
-        ws.ink.hit_test(p, radius).is_some_and(|id| ws.selection.contains(&id))
+        ws.hit_own(p, radius).is_some_and(|id| ws.selection.contains(&id))
     }
 
     /// `p`, or the nearest anchor of another shape if one is close enough (and the marker for it).
@@ -257,7 +229,16 @@ fn on_anchor(ws: &Workspace, p: P) -> bool {
 
 impl Tool for ShapeTool {
     fn policy(&self, mode: Mode) -> InputPolicy {
-        InputPolicy::stylus_tool(mode)
+        InputPolicy::editing_tool(mode)
+    }
+
+    /// Delete takes the selected shape away; Backspace takes away the point of it that was pressed last (and, with
+    /// no point pressed, or none that can go, the shape).
+    fn key(&mut self, ws: &mut Workspace, key: Key<'_>) -> bool {
+        if key == Key::Backspace && self.node_action(ws, NodeAction::Remove) {
+            return true;
+        }
+        selection_key(ws, key)
     }
 
     fn pointer(&mut self, ws: &mut Workspace, ev: &PageEvent<'_>) {
@@ -291,16 +272,8 @@ impl Tool for ShapeTool {
             Gesture::Drag { page, shape, start, end, .. } => self.finish_shape(ws, page, shape, start, end),
             Gesture::Control { stroke, figure, control, .. } => self.finish_control(ws, stroke, figure, control),
             Gesture::DraftTap { down, last, t_ms, .. } => self.draft_tap(ws, down, last, t_ms),
-            Gesture::Erase(_) => Eraser::finish(ws),
-            Gesture::Lasso(l) => {
-                // (A tap of the barrel button on empty page may be adding a node to a line.)
-                if !self.lasso_tap(ws, &l.poly) {
-                    Lasso::select(ws, &l.poly);
-                }
-            }
-            Gesture::Move(m) => {
-                m.finish(ws);
-            }
+            // (A tap of the barrel button on empty page may be adding a node to a line.)
+            Gesture::Pick(p) => p.end(ws, |ws, l| l.barrel && self.lasso_tap(ws, &l.poly)),
         }
         ws.redraw = true;
     }
@@ -316,6 +289,25 @@ impl Tool for ShapeTool {
         self.snap = None;
     }
 
+    /// A shape that has points to edit (a run of lines, a spline) offers to add one, take one away and smooth one.
+    fn actions(&self, ws: &Workspace) -> &'static [ToolAction] {
+        if self.has_nodes(ws) { &NODE_ACTIONS } else { &[] }
+    }
+
+    /// A point is added anywhere, but taken away or smoothed only if one was pressed last.
+    fn action_enabled(&self, ws: &Workspace, action: ToolAction) -> bool {
+        match action {
+            ToolAction::Node(NodeAction::Add) => true,
+            ToolAction::Node(_) => self.selected_anchor(ws).is_some(),
+        }
+    }
+
+    fn act(&mut self, ws: &mut Workspace, action: ToolAction) -> bool {
+        match action {
+            ToolAction::Node(node) => self.node_action(ws, node),
+        }
+    }
+
     fn undo(&mut self, ws: &mut Workspace) -> bool {
         self.undo_draft(ws)
     }
@@ -327,7 +319,7 @@ impl Tool for ShapeTool {
 
     fn drag_offset(&self) -> [f32; 2] {
         match &self.gesture {
-            Gesture::Move(m) => m.offset(),
+            Gesture::Pick(p) => p.offset(),
             _ => [0.0; 2],
         }
     }
@@ -338,10 +330,9 @@ impl Tool for ShapeTool {
             Gesture::Drag { shape, start, end, .. } => {
                 // Exactly what will be stored, drawn the way it will be drawn.
                 let (rgba, width) = ws.current_style();
-                polyline(out, &geometry::points(*shape, *start, *end), width, rgba);
+                polyline(out, &shape_points(*shape, *start, *end), width, rgba);
             }
-            Gesture::Lasso(l) => l.paint(ws, out),
-            Gesture::Erase(e) => e.paint(ws, out),
+            Gesture::Pick(p) => p.paint(ws, out),
             _ => {}
         }
         self.paint_anchors(ws, out);

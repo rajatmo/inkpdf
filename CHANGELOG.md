@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.6.0
+
+Input methods: with a tool chosen, every item it made can now be created, selected, moved, restyled, duplicated,
+copied, pasted, erased and deleted, and each undone, with only the devices the mode guarantees (the left mouse
+button and the keyboard at a desk; the tip of the stylus as a tablet). Before, selecting and erasing needed the
+stylus's barrel button or eraser end or the mouse's right or middle button, and there was no way to delete a
+selection, restyle what was drawn, or copy anything.
+
+- A bar under the tools: draw / select / erase (what the plain tip or left button does), duplicate, copy, paste,
+  delete, add / remove / smooth a point of a shape, and the colour and thickness. The barrel button, eraser end and
+  right and middle buttons are shortcuts for the same intents.
+- The settings are in the bar: the five colours are buttons in it (one tap colours the tool and what is selected; the
+  one in use opens its editor), and a settings button unfolds the panel from the bar as one card. Tapping a tool's
+  button now only chooses the tool (it used to open the panel). On a window too narrow for five colours they are one dot.
+- The bar sits just under the tools, not at the bottom of the window (where a resting palm lands), and the panel
+  opens under it. All capsules (the toolbar's and the bar) are a little smaller: buttons 38 instead of 44 units.
+- With select chosen a tap selects the item under it and a loop selects what it encloses. A tool now selects, erases
+  and pastes only what it made (pen: handwriting; shape tool: shapes; text tool: text boxes).
+- The colour and thickness (or text size) chosen in the panel change what is selected, as one undo step per drag.
+- Desktop keyboard: Ctrl+A, C, X, V, D, Delete, Esc, the arrows (Shift: further; an item on its page stays on it); with the shape tool Backspace
+  takes away the point last pressed.
+- A real text editor: a caret that goes where it is pressed and that the arrows, Home and End move (Shift and a
+  drag select), typing in the middle of the text, Delete, and Ctrl+A, C, X, V with the Windows clipboard. Copying a
+  text box puts its words on the clipboard; words copied anywhere paste into the text tool as a new box.
+- Inside: the module graph is now checked against a layer table with no exceptions and no cycles (`architecture.rs`); the
+  tools share one erase / select / drag piece and can offer their own buttons to the bar; the editor's window controls are a
+  `Chrome` of their own and the shell can no longer edit the document by reaching into a field. No change in behaviour.
+- The capability matrix (`editor/tests/capability.rs`) states the promise per tool and mode and runs it with only the
+  guaranteed devices; the hostile-event storms now also press the bar's buttons, keys and shortcuts.
+
 ## 0.5.0
 
 - A mode button on the left of full screen: it shows the mode in use (a monitor for desktop, a tablet in the accent

@@ -52,16 +52,38 @@ Each kind of input does one thing, and what the stylus does depends on the tool:
               selects and moves text: click empty page to start a text box, click a box to edit it,
               drag a box to move it.
             Tablet mode: it only scrolls.
-  KEYBOARD  types into the text box being edited (Enter starts a line, Backspace takes a character
-            away, Esc finishes; lines wrap at the page's right edge). Undo takes back what you have
-            typed first. In the desktop mode Ctrl+Z undoes, Ctrl+Y or Ctrl+Shift+Z redoes, Ctrl+S saves;
-            nothing else is heard.
+  KEYBOARD  types into the text box being edited (Enter starts a line, Backspace and Delete take a
+            character away, Esc finishes; lines wrap at the page's right edge). The caret goes where you
+            press in the box; the arrows, Home and End move it, with Shift they select (so does a drag);
+            Ctrl+A, C, X and V work on the text with the Windows clipboard. Undo takes back what you have
+            typed first. In the desktop mode Ctrl+Z undoes, Ctrl+Y or Ctrl+Shift+Z redoes, Ctrl+S saves,
+            and the keyboard works on the selection (see below).
+
+SELECTING AND EDITING. Every tool works on the items it made (the pen on handwriting, the shape tool on
+shapes, the text tool on text boxes), with whatever the mode gives you: at a desk the left mouse button and
+the keyboard, as a tablet the tip of the stylus. The bar under the tools has the buttons:
+  draw / select / erase   what the plain tip (or the left mouse button) does. With select chosen, tap an
+                          item, or draw a loop round some, to select them; drag them to move them. With
+                          erase chosen, the tip erases what it passes over.
+  duplicate, copy, paste, delete
+                          work on what is selected (paste puts the copy in the middle of what you see).
+  three buttons for a point of a line or curve being edited: add a point, take the one you touched last
+                          away, smooth it or sharpen it.
+  five colours            one tap gives the tool, and what is selected, that colour; a tap on the colour
+                          in use opens its editor. (On a narrow window they are one dot that opens the panel.)
+  settings                unfolds the tool's panel from the bar: thickness (a text box's size), smoothing,
+                          the shape. What you choose changes what is selected too.
+At a desk: Ctrl+A selects all of the tool's items on the page, Ctrl+C copies, Ctrl+X cuts, Ctrl+V pastes,
+Ctrl+D duplicates, Delete deletes, Esc lets go, the arrows nudge (with Shift, further). With the shape tool,
+Backspace takes away the point you touched last. The barrel button, the eraser end and the mouse's right
+and middle buttons are shortcuts for select and erase; nothing needs them.
 The buttons: X closes the document and starts a blank page (it asks first if there is unsaved
 work); undo, redo, save; the bin deletes the page you are looking at, at once, with no question
 asked (it cannot be undone, and the last page there is stays; the file only loses the page when you
 save); + adds a page after the one you are looking at; then the pen, shape, text and pointer tools
-(tap a tool again to open its colours, thickness and options); a monitor or a tablet, which shows the
-mode in use (the tablet in blue) and switches to the other when pressed; full screen.
+(a tool's button only chooses it; its settings are in the bar under the tools); a monitor or a tablet, which shows the
+mode in use (the tablet in blue) and switches to the other when pressed; full screen. (Under the tools:
+the bar described above.)
 Your tools and their settings are kept in %APPDATA%\InkPDF\settings.txt.
 
 When InkPDF is your default PDF app (Settings > Apps > Default apps), Explorer shows the first

@@ -38,6 +38,54 @@ enforced by tests (`src/architecture.rs`, `src/editor/tests/contract.rs`).
 * **adapters** — everything touching the OS. The session knows winit's event *types* (the vocabulary of
   input) but never the window, GPU, files or the pointer layer.
 
+### The layers, as enforced (`src/architecture.rs`)
+
+Every top-level module has a layer, and the tests read the sources (production lines only, whatever the position of
+the `#[cfg(test)]` items) to check the real module graph against this table. A module may use its own layer and the
+ones below; no two modules may reach each other, directly or through others.
+
+| Layer | Modules |
+|---|---|
+| adapter | `app`, `gpu`, `win_pointer`, `native`, `posture`, `doc`, `ink_io`, `tiles`, `thumbnail` |
+| session | `editor` |
+| tools | `tools` |
+| ui | `toolbar` |
+| domain | `tool`, `input`, `requests`, `workspace`, `selection`, `settings` |
+| model | `figure`, `ink`, `laser`, `links` |
+| base | `plane`, `scene`, `clock`, `geometry`, `colour`, `coords`, `view`, `text`, `smooth`, `clipboard` |
+
+* `plane` holds the point type `P` and the plane arithmetic (distances, polygon tests, simplify, thin, `clamp_into`)
+  that `ink`, `figure`, `smooth`, `text` and `laser` all stand on; `ink` re-exports the common ones. `geometry` is only
+  the `Shape` enum; the polyline a shape makes is `figure::shape_points`. `figure::NodeAction` is what can be done to
+  a point of a shape. None of these depend on anything above them, which is what removed the cycles
+  `ink`/`figure`/`geometry` and `toolbar`/`selection`/`workspace`/`requests`.
+* `tool` holds which tool is in use (`Tool`), how each writes (`ToolStyle`), the colour slots and the thickness ranges,
+  and `requests` holds `Choice`, the answer to the unsaved-changes prompt: plain data that the document state, the saved
+  settings and the toolbar all use, so none of the first two reaches into the toolbar any more.
+* There are no upward edges and no cycles left: `KNOWN_EXCEPTIONS` in the test is empty, and an edge that points up has to be
+  added there, with a reason, or fixed.
+* `scene` holds what is drawn as plain data (round-ended lines and rounded rectangles); the toolbar and the tools describe
+  what they want in it and `gpu` draws it. `clock` is the performance-counter clock; the editor takes it as a function
+  (`Editor::set_clock`), so tests can give it another.
+
+### Simplification plan (status): done
+
+1. Layer table, ratchet and cycle test.
+2. The `ink`/`figure`/`geometry` and `toolbar`/`selection`/`workspace` cycles (the base module `plane`).
+3. `Tool`, `ToolStyle`, the palette and the ranges moved out of `toolbar` (into `tool`), and `Choice` (into `requests`).
+4. `toolbar` describes what it draws in `scene` types, which `gpu` draws; it no longer knows `gpu`.
+5. The tools share what they have in common:
+   * `tools::gestures::Pick` is erase / select by loop or tap / drag the selection, which the pen, shape and text tools
+     each used to carry their own copy of;
+   * `Tool::actions`, `action_enabled` and `act` let a tool offer buttons of its own to the bar (`ToolAction`), so the bar
+     does not know that shapes have points;
+   * `tool::Tool` carries what is true of each tool (`ALL`, `kind`, `makes_items`, `name`), and `Kind` lives beside it.
+6. The editor:
+   * the window's own controls are `editor::Chrome` (the prompt, the panel and its colour editor, the hover, the press under
+     way), whose small state machines take the document state as an argument; the `Editor` routes input and owns one;
+   * `Editor` derefs to the document state read-only outside tests, so only the editor and the tools change it, and the
+     shell asks for changes in the editor's terms (`set_dpr`, `document_saved`, `requests()`, ...);
+   * the editor reads the time from its own clock, not from the pointer layer.
 ## SOLID, concretely
 
 * **S** — `Tool`s (one interaction style each), `InputPolicy` (who may do what), `Workspace` (shared
@@ -73,17 +121,49 @@ The rules depend on a `Mode`, which follows the machine's posture (`src/posture.
 
 | Mode | When | Mouse | Keyboard |
 |---|---|---|---|
-| **Desktop** | not in slate posture, or not a machine that has one (every desktop PC) | stands in for a stylus on the pen, shape and pointer tools; text as itself | shortcuts (Ctrl+Z, Ctrl+Y, Ctrl+Shift+Z, Ctrl+S) and typing |
+| **Desktop** | not in slate posture, or not a machine that has one (every desktop PC) | stands in for a stylus on the pen, shape and pointer tools; text as itself | shortcuts (Ctrl+Z, Ctrl+Y, Ctrl+Shift+Z, Ctrl+S, Ctrl+A/C/X/V/D), the selection's keys and typing |
 | **Tablet** | the OS reports slate posture on a portable machine with a touch or pen digitizer | scrolls only | typing (physical or Windows' touch keyboard), no shortcuts |
 
 | Tool | Stylus | Mouse (desktop) | Mouse (tablet) | Touch | Keyboard |
 |---|---|---|---|---|---|
-| Pen | draw, erase (eraser end), lasso (barrel) | as a stylus: left tip, right eraser end, middle barrel | scroll | pan/zoom | none |
-| Shape | select, draw, erase, lasso (tap-drawn polylines and splines) | as a stylus | scroll | pan/zoom | none |
+| Pen | draw, erase (eraser end), lasso (barrel) | as a stylus: left tip, right eraser end, middle barrel | scroll | pan/zoom | desktop: the selection's keys |
+| Shape | select, draw, erase, lasso (tap-drawn polylines and splines) | as a stylus | scroll | pan/zoom | desktop: the selection's keys, Backspace on a point |
 | Pointer | point | as a stylus (dot follows the mouse) | scroll | pan/zoom | none |
-| Text | desktop: none; tablet: place/select/move text | place/select/move text | scroll | pan/zoom | types |
+| Text | desktop: none; tablet: place/select/move text | place/select/move text | scroll | pan/zoom | types, caret, selection |
 
-Every device still presses the window's chrome (toolbars, panel, prompt); the wheel always scrolls.
+Every device still presses the window's chrome (toolbars, panel, prompt, the bar under the tools); the wheel
+always scrolls.
+
+### Create, select, move, restyle, copy, erase, delete: whatever the device
+
+The promise: with a tool chosen, every item it made supports all of those, with only the devices the mode
+guarantees (desktop: left button and keyboard; tablet: the stylus tip). `editor/tests/capability.rs` states it per
+tool and mode and runs it through those devices alone; the stylus's barrel button and eraser end and the mouse's
+right and middle buttons are shortcuts and no test may need them.
+
+* **Intent** (`input::Intent`: draw, select, erase) is what the plain tip does. `Workspace::role` is the one
+  place that combines it with the pen's own buttons (a held button wins), so every tool that takes a stylus gets
+  select and erase for free: the pen and shape tools in `down`, the text tool in `press_at`.
+* **The selection's operations** live once, on the workspace (`selection.rs`): select all, delete, duplicate,
+  copy, cut, paste, nudge, restyle. Each is one undo step (`InkStore::add_copies`, `replace_many` with its
+  `Cmd::Restyle`, which coalesces a slider drag into one step). Keys, shortcuts and the buttons of the bar call
+  these; nothing is implemented twice.
+* **Tool scope** (`selection::Kind`): selecting, erasing, select-all and paste only touch the tool's own kind of
+  item (handwriting, shapes, text boxes), so tools stay independent and a loop cannot grab what another tool made.
+* **The bar** (`toolbar/context_bar.rs`, `editor/context.rs`): buttons for the intents, the selection operations, the
+  points of the shape being edited (`selection::NodeAction`, done by `ShapeTool::node_action`, the same edits the
+  barrel button and a double tap make), the five colours, and the settings button. It is a chrome interaction
+  (`Act::Context`) like the toolbar's, so every device presses it. The tool's panel is not a separate pop-up: it
+  unfolds from the bar (`ContextBar::draw` draws bar and panel as one card; `Editor::drawer` is the card's rectangle
+  for hit testing, where a press does nothing), and a tool's own button only chooses the tool. On a window too narrow
+  for five colours they are one dot that opens the panel (`ContextBar`'s `compact`).
+* **Keys** reach a tool as `tools::Key`. `tools/shortcuts.rs::selection_key` (Delete, Escape, arrows) is shared by the
+  pen, shape and text tools; Ctrl+letter shortcuts are the session's (`Editor::shortcut`, desktop only) and go to
+  the text tool as `Key::Chord` while a box is being edited.
+* **Text editing** is `TextEdit` (text, caret, selection anchor) in the text tool plus pure layout in `text.rs`
+  (`caret_at`, `index_at`, `vertical`, `selection_rects`, `follow_wrap`). The system clipboard is a domain trait
+  (`clipboard::TextClipboard`) held by the workspace; `native::SystemClipboard` is the Windows adapter, and tests use
+  the in-memory one.
 
 How it fits the layers: a tool states a `Tool::policy(mode)` (an `InputPolicy` with a `MouseUse`: `Scrolls`,
 `Itself` or `AsStylus`) and never learns the mode. The editor's router hands a mouse to a stylus tool as a

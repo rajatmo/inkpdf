@@ -1,0 +1,10 @@
+\documentclass[tikz,border=0pt]{standalone}
+\input{style}
+\begin{document}
+\begin{tikzpicture}
+  \iconbox
+  % Smooth a corner (or sharpen a smooth point): a curve through a point.
+  \draw (-0.9,-0.35) .. controls (-0.25,0.95) and (0.25,-0.95) .. (0.9,0.35);
+  \draw (0.0,0.0) circle (0.15);
+\end{tikzpicture}
+\end{document}

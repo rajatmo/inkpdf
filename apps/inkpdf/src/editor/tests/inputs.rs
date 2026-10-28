@@ -9,7 +9,7 @@ const TOOLS: [Tool; 4] = [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Laser];
 fn with(tool: Tool) -> Editor {
     let mut ed = editor();
     ed.set_tool(tool);
-    ed.panel = None;
+    ed.chrome.panel = None;
     ed
 }
 
@@ -40,7 +40,7 @@ fn the_mouse_does_nothing_to_the_page_with_any_tool_but_scroll_in_the_tablet_mod
             ed.mouse_button(ElementState::Released, button);
         }
         assert_eq!(snapshot(&ed), before, "{tool:?}: the mouse changed something");
-        assert!(ed.is_idle() && ed.panel.is_none());
+        assert!(ed.is_idle() && ed.chrome.panel.is_none());
         assert!(
             !(ed.requests.has(&Request::Save)
                 || ed.requests.has(&Request::Close)
@@ -113,10 +113,13 @@ fn the_stylus_does_the_work_and_what_it_does_depends_on_the_tool() {
     drag(&mut ed, TIP);
     assert_eq!(ed.ink.len(), 0);
     assert!(ed.laser().is_fading());
-    // The eraser end erases with the pen and shape tools, and does not with the pointer.
+    // The eraser end erases with the pen and shape tools (what each made), and does not with the pointer.
     for (tool, erases) in [(Tool::Pen, true), (Tool::Geometry, true), (Tool::Text, false), (Tool::Laser, false)] {
         let mut ed = with(tool);
-        let id = add_stroke(&mut ed, &[[100.0, 300.0], [400.0, 300.0]]);
+        let id = match tool {
+            Tool::Geometry => add_shape(&mut ed, [100.0, 300.0], [400.0, 300.0]),
+            _ => add_stroke(&mut ed, &[[100.0, 300.0], [400.0, 300.0]]),
+        };
         let across = [on_page(&ed, 250.0, 250.0), on_page(&ed, 250.0, 300.0), on_page(&ed, 250.0, 350.0)];
         pen_stroke(&mut ed, ERASER, &across);
         assert_eq!(ed.ink.get(id).is_none(), erases, "{tool:?}");
@@ -124,7 +127,10 @@ fn the_stylus_does_the_work_and_what_it_does_depends_on_the_tool() {
     // The barrel button lassos with the pen and shape tools.
     for (tool, selects) in [(Tool::Pen, true), (Tool::Geometry, true), (Tool::Text, false), (Tool::Laser, false)] {
         let mut ed = with(tool);
-        let id = add_stroke(&mut ed, &[[200.0, 300.0], [300.0, 300.0]]);
+        let id = match tool {
+            Tool::Geometry => add_shape(&mut ed, [200.0, 300.0], [300.0, 300.0]),
+            _ => add_stroke(&mut ed, &[[200.0, 300.0], [300.0, 300.0]]),
+        };
         let around = [
             on_page(&ed, 150.0, 250.0),
             on_page(&ed, 350.0, 250.0),
@@ -138,10 +144,10 @@ fn the_stylus_does_the_work_and_what_it_does_depends_on_the_tool() {
 }
 
 #[test]
-fn only_the_shape_tool_selects_ink_by_tapping_with_the_stylus() {
+fn only_the_shape_tool_selects_a_shape_by_tapping_it_with_the_stylus() {
     for (tool, selects) in [(Tool::Pen, false), (Tool::Geometry, true), (Tool::Text, false), (Tool::Laser, false)] {
         let mut ed = with(tool);
-        let id = add_stroke(&mut ed, &[[100.0, 300.0], [400.0, 300.0]]);
+        let id = add_shape(&mut ed, [100.0, 300.0], [400.0, 300.0]);
         let on = on_page(&ed, 250.0, 300.0);
         pen_stroke(&mut ed, TIP, &[on, on]);
         assert_eq!(ed.selection == vec![id], selects, "{tool:?}");

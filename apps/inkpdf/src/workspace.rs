@@ -4,9 +4,11 @@
 
 use std::collections::HashSet;
 
+use crate::clipboard::{MemoryClipboard, TextClipboard};
 use crate::geometry::Shape;
-use crate::ink::{InkStore, P};
-use crate::toolbar::{PALETTE, Tool, ToolStyle};
+use crate::ink::{InkStore, P, Stroke};
+use crate::input::{Intent, PenButtons, Role, role_with};
+use crate::tool::{PALETTE, Tool, ToolStyle};
 use crate::view::{Layout, View};
 
 use crate::requests::Requests;
@@ -24,6 +26,18 @@ pub struct Workspace {
     pub erasing: HashSet<u64>,
     /// The tool in use.
     pub tool: Tool,
+    /// What the plain tip of the stylus (or the left mouse button) does with the tool in use: draw, select or
+    /// erase. Back to drawing whenever the tool changes.
+    pub intent: Intent,
+    /// What was copied: the items themselves, to be pasted again (see [`crate::selection`]).
+    pub clipboard: Vec<Stroke>,
+    /// How many times the clipboard has been pasted since it was filled.
+    pub pasted: u32,
+    /// The system's text clipboard: text copied from a text box goes there, and text from anywhere can be pasted.
+    pub text_clipboard: Box<dyn TextClipboard>,
+    /// The text that copying a text box put on the system clipboard (so pasting can tell it from text that came
+    /// from elsewhere).
+    pub clipboard_echo: Option<String>,
     /// The five colours the tools write in (shared), and how each tool that writes uses them: the
     /// colour slot in use and the thickness (or, for text, the size) in points.
     pub palette: [[u8; 4]; 5],
@@ -51,6 +65,11 @@ impl Workspace {
             selection: Vec::new(),
             erasing: HashSet::new(),
             tool: Tool::Pen,
+            intent: Intent::default(),
+            clipboard: Vec::new(),
+            pasted: 0,
+            text_clipboard: Box::new(MemoryClipboard::default()),
+            clipboard_echo: None,
             palette: PALETTE,
             pen: ToolStyle::PEN,
             shape_style: ToolStyle::SHAPES,
@@ -60,6 +79,12 @@ impl Workspace {
             requests: Requests::default(),
             redraw: false,
         }
+    }
+
+    /// What a press of the stylus (or the mouse standing in for it) does: its own buttons if one is held, else
+    /// what was chosen on screen.
+    pub fn role(&self, pen: &PenButtons) -> Role {
+        role_with(pen, self.intent)
     }
 
     /// A screen position in document space.

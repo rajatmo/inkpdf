@@ -11,10 +11,11 @@ pub mod paint;
 mod pen;
 mod pointer;
 mod shape;
+mod shortcuts;
 mod text;
 
 use crate::input::{Device, Mode, PenButtons, Phase, Sample};
-use crate::toolbar::Tool as ToolId;
+use crate::tool::{Tool as ToolId, ToolAction};
 use crate::workspace::Workspace;
 
 pub use paint::Painter;
@@ -58,6 +59,12 @@ impl InputPolicy {
         let mouse = if mode == Mode::Desktop { MouseUse::AsStylus } else { MouseUse::Scrolls };
         Self { stylus: true, mouse, keyboard: false }
     }
+
+    /// A stylus tool that makes items (pen, shape): in the desktop mode the keyboard also works on its selection
+    /// (delete it, let go of it, nudge it); a tablet has no keyboard to rely on.
+    pub fn editing_tool(mode: Mode) -> Self {
+        Self { keyboard: mode == Mode::Desktop, ..Self::stylus_tool(mode) }
+    }
 }
 
 /// A pointer message for a tool: a stylus or mouse on the page.
@@ -70,13 +77,30 @@ pub struct PageEvent<'a> {
     pub pen: PenButtons,
 }
 
+/// An arrow key.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Dir {
+    Left,
+    Right,
+    Up,
+    Down,
+}
+
 /// What the keyboard does to a tool that takes it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Key<'a> {
     /// Characters typed (a new line is `"\n"`).
     Text(&'a str),
     Backspace,
+    Delete,
     Escape,
+    /// An arrow, with whether Shift is held.
+    Arrow(Dir, bool),
+    /// Home or End, with whether Shift is held.
+    Home(bool),
+    End(bool),
+    /// A letter pressed with Ctrl (the ones that work on text being edited: a, c, x, v).
+    Chord(char),
 }
 
 pub trait Tool {
@@ -129,6 +153,22 @@ pub trait Tool {
 
     /// The colour or size in the tool's panel changed.
     fn restyled(&mut self, _ws: &mut Workspace) {}
+
+    /// The actions of its own the tool offers now, as buttons of the bar (what it is editing decides which): the bar
+    /// shows them without knowing what they are.
+    fn actions(&self, _ws: &Workspace) -> &'static [ToolAction] {
+        &[]
+    }
+
+    /// Whether `action` can be done now (a button that cannot is dimmed).
+    fn action_enabled(&self, _ws: &Workspace, _action: ToolAction) -> bool {
+        false
+    }
+
+    /// Do `action`, as one undo step. `true` if it did something.
+    fn act(&mut self, _ws: &mut Workspace, _action: ToolAction) -> bool {
+        false
+    }
 
     /// How far the selection is being dragged, in document space.
     fn drag_offset(&self) -> [f32; 2] {

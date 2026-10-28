@@ -24,22 +24,25 @@ impl Editor {
     }
 
     pub(super) fn pen_down(&mut self, ev: &PointerEvent) {
-        if !matches!(self.act, Act::Idle) {
+        if !matches!(self.chrome.act, Act::Idle) {
             self.end_act();
         }
         self.tools.end_all(&mut self.ws);
         let Some(first) = ev.samples.first() else { return };
         let pos = first.pos;
-        self.view.stop();
+        self.ws.view.stop();
         if self.press_panel(Device::Pen, ev.id, pos) {
             return;
         }
         let bar = self.toolbar();
         if bar.contains(pos) {
-            self.act = Act::Toolbar { dev: Device::Pen, id: ev.id, item: bar.hit(pos) };
+            self.chrome.act = Act::Toolbar { dev: Device::Pen, id: ev.id, item: bar.hit(pos) };
             return;
         }
-        if !self.has_doc {
+        if self.press_context(Device::Pen, ev.id, pos) {
+            return;
+        }
+        if !self.ws.has_doc {
             return;
         }
         // On the page the tool in use takes the press (or, by its policy, ignores the pen).
@@ -53,6 +56,7 @@ impl Editor {
         self.pointer_moved(Device::Pen, ev.id, &ev.samples);
         let pos = ev.samples.last().map(|s| s.pos);
         self.release_toolbar(Device::Pen, ev.id, pos);
+        self.release_context(Device::Pen, ev.id, pos);
         self.end_act();
     }
 }

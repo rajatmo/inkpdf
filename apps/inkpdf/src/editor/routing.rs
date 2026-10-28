@@ -6,7 +6,7 @@
 use crate::figure::Figure;
 use crate::geometry::Shape;
 use crate::input::{Device, Mode, PenButtons, Phase, Sample};
-use crate::toolbar::Tool;
+use crate::tool::Tool;
 use crate::tools::{Key, MouseUse, PageEvent, TextEdit};
 
 use super::{Editor, Request};
@@ -45,7 +45,7 @@ impl Editor {
 
     /// The single selected shape, and the figure to show for it, while the shape tool is in use.
     pub fn editing(&self) -> Option<(u64, &Figure)> {
-        if self.tool != Tool::Geometry {
+        if self.ws.tool != Tool::Geometry {
             return None;
         }
         self.tools.shape.editing(&self.ws)
@@ -66,25 +66,28 @@ impl Editor {
     /// Whether nothing is under way: no press on the window, no gesture of any tool.
     #[cfg(test)]
     pub fn is_idle(&self) -> bool {
-        matches!(self.act, super::Act::Idle) && !self.tools.busy()
+        matches!(self.chrome.act, super::Act::Idle) && !self.tools.busy()
     }
 
     /// Whether the keyboard is heard: a text box is being typed into.
     pub fn is_typing(&self) -> bool {
-        self.tool == Tool::Text && self.tools.text.is_typing() && self.prompt.is_none()
+        self.ws.tool == Tool::Text && self.tools.text.is_typing() && self.chrome.prompt.is_none()
     }
 
     /// Type `typed` at the end of the text (see [`crate::text::clean`]). Heard only while typing.
+    #[cfg(test)]
     pub fn type_text(&mut self, typed: &str) {
         self.key(Key::Text(typed));
     }
 
     /// Take the last character away (a new line goes whole).
+    #[cfg(test)]
     pub fn backspace(&mut self) {
         self.key(Key::Backspace);
     }
 
     /// Escape ends the edit of the text box: the typing becomes an undo step of its own.
+    #[cfg(test)]
     pub fn escape(&mut self) {
         self.key(Key::Escape);
     }
@@ -95,14 +98,23 @@ impl Editor {
         self.tools.text.finish_text(&mut self.ws);
     }
 
+    /// A key that is not a letter with Ctrl, if the tool in use listens to the keyboard (see [`Key`]). `true` if it was
+    /// used. The window's own presses of the bar under the tools go through the tool alike, so a key and a button
+    /// that mean the same thing do the same thing.
+    pub fn press(&mut self, key: Key<'_>) -> bool {
+        self.key(key)
+    }
+
     /// The keyboard, if the tool in use listens to it.
     fn key(&mut self, key: Key<'_>) -> bool {
-        if self.prompt.is_some() {
+        if self.chrome.prompt.is_some() {
             return false;
         }
         let mode = self.mode;
         let tool = self.tools.get_mut(self.ws.tool);
-        tool.policy(mode).keyboard && tool.key(&mut self.ws, key)
+        let used = tool.policy(mode).keyboard && tool.key(&mut self.ws, key);
+        self.ws.redraw |= used;
+        used
     }
 
     /// How the machine is being used now (see [`Mode`]).
@@ -120,30 +132,63 @@ impl Editor {
         self.tools.end_all(&mut self.ws);
         self.mouse_press = None;
         self.mode = mode;
-        self.redraw = true;
+        self.ws.redraw = true;
     }
 
     /// Whether the mouse draws, as a stylus does, with the tool in use in the mode in use.
     pub(super) fn mouse_draws(&self) -> bool {
-        self.tools.get(self.tool).policy(self.mode).mouse == MouseUse::AsStylus
+        self.tools.get(self.ws.tool).policy(self.mode).mouse == MouseUse::AsStylus
     }
 
-    /// A keyboard shortcut, in the desktop mode only (a tablet has no keyboard to rely on): `key` is the letter
-    /// pressed with Ctrl. Z undoes (with Shift, redoes), Y redoes, S saves. Returns whether it was one.
+    /// A keyboard shortcut: `key` is the letter pressed with Ctrl. While a text box is being typed into, A, C, X and
+    /// V are the text's (select all, copy, cut, paste), in both modes: a keyboard on a tablet types. Otherwise they
+    /// are the desktop mode's only (a tablet has no keyboard to rely on): Z undoes (with Shift, redoes), Y redoes,
+    /// S saves; A selects all of what the tool made, C copies, X cuts, V pastes, D duplicates. Returns whether it
+    /// was one.
     pub fn shortcut(&mut self, key: &str, shift: bool) -> bool {
-        if self.mode != Mode::Desktop || self.prompt.is_some() {
+        if self.chrome.prompt.is_some() {
             return false;
         }
-        match (key.to_ascii_lowercase().as_str(), shift) {
+        let letter = key.to_ascii_lowercase();
+        if self.is_typing()
+            && let Some(c) = letter.chars().next().filter(|c| letter.len() == 1 && matches!(c, 'a' | 'c' | 'x' | 'v'))
+        {
+            self.key(Key::Chord(c));
+            self.ws.redraw = true;
+            return true;
+        }
+        if self.mode != Mode::Desktop {
+            return false;
+        }
+        match (letter.as_str(), shift) {
             ("z", false) => self.undo(),
             ("z", true) | ("y", _) => self.redo(),
             ("s", _) => {
                 self.settle();
-                self.requests.push(Request::Save);
+                self.ws.requests.push(Request::Save);
+            }
+            ("a", _) => {
+                self.settle();
+                self.ws.select_all();
+            }
+            ("c", _) => {
+                self.ws.copy_selection();
+            }
+            ("x", _) => {
+                self.settle();
+                self.ws.cut_selection();
+            }
+            ("v", _) => {
+                self.settle();
+                self.ws.paste();
+            }
+            ("d", _) => {
+                self.settle();
+                self.ws.duplicate_selection();
             }
             _ => return false,
         }
-        self.redraw = true;
+        self.ws.redraw = true;
         true
     }
 
@@ -154,11 +199,11 @@ impl Editor {
 
     /// Choose the shape the shape tool makes.
     pub(super) fn pick_shape(&mut self, shape: Shape) {
-        if shape != self.shape {
+        if shape != self.ws.shape {
             self.finish_draft();
-            self.shape = shape;
-            self.requests.push(Request::SettingsChanged);
-            self.redraw = true;
+            self.ws.shape = shape;
+            self.ws.requests.push(Request::SettingsChanged);
+            self.ws.redraw = true;
         }
     }
 
@@ -186,7 +231,7 @@ impl Editor {
 
     /// A mouse message at `pos` (screen) on the page, with the buttons that stand for the stylus's.
     pub(super) fn route_mouse(&mut self, phase: Phase, pos: [f32; 2], pen: PenButtons) {
-        let samples = [Sample { pos, pressure: 0.5, t_ms: crate::win_pointer::now_ms() }];
+        let samples = [Sample { pos, pressure: 0.5, t_ms: (self.clock)() }];
         self.route_to_tool(Device::Mouse, 0, phase, &samples, pen);
     }
 
@@ -194,18 +239,21 @@ impl Editor {
     pub(super) fn over_interface(&self, p: [f32; 2]) -> bool {
         let bar = self.toolbar();
         bar.contains(p)
+            || self.context_bar().is_some_and(|c| c.contains(p))
+            || self.drawer().is_some_and(|d| crate::ink::rect_contains(d, p))
             || self
+                .chrome
                 .panel
-                .is_some_and(|s| bar.tool_panel(self.tool, self.view.viewport[0], s.editing.is_some()).is_some_and(|panel| panel.contains(p)))
+                .is_some_and(|s| bar.tool_panel(self.ws.tool, self.ws.view.viewport[0], s.editing.is_some()).is_some_and(|panel| panel.contains(p)))
     }
 
     /// The pen hovers at `pos` (or has gone): the tool's dot or draft follows it, except over the toolbars.
     pub(super) fn route_hover(&mut self, pos: Option<[f32; 2]>) {
-        let free = pos.filter(|&p| self.has_doc && !self.over_interface(p));
+        let free = pos.filter(|&p| self.ws.has_doc && !self.over_interface(p));
         let here;
         let (phase, samples): (Phase, &[Sample]) = match free {
             Some(pos) => {
-                here = [Sample { pos, pressure: 0.0, t_ms: crate::win_pointer::now_ms() }];
+                here = [Sample { pos, pressure: 0.0, t_ms: (self.clock)() }];
                 (Phase::Hover, &here)
             }
             None => (Phase::Leave, &[]),

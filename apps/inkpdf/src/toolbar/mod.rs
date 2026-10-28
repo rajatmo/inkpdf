@@ -119,6 +119,8 @@ pub enum Item {
     Undo,
     Redo,
     Save,
+    /// Delete the page being looked at (without asking). Not on the last page there is.
+    DeletePage,
     /// Add a blank page after the one being looked at.
     AddPage,
     Tool(Tool),
@@ -131,6 +133,8 @@ pub enum Item {
 pub struct State {
     pub can_undo: bool,
     pub can_redo: bool,
+    /// There is more than one page, so one can go.
+    pub can_delete: bool,
     pub unsaved: bool,
     pub fullscreen: bool,
     pub tool: Tool,
@@ -147,6 +151,7 @@ impl Default for State {
         Self {
             can_undo: false,
             can_redo: false,
+            can_delete: false,
             unsaved: false,
             fullscreen: false,
             tool: Tool::Pen,
@@ -159,13 +164,14 @@ impl Default for State {
 }
 
 /// What goes in each pill, left to right; `None` is a gap with a hairline in it.
-const LEFT: [Option<Item>; 7] = [Some(Item::Close), None, Some(Item::Undo), Some(Item::Redo), Some(Item::Save), None, Some(Item::AddPage)];
+const LEFT: [Option<Item>; 8] =
+    [Some(Item::Close), None, Some(Item::Undo), Some(Item::Redo), Some(Item::Save), None, Some(Item::DeletePage), Some(Item::AddPage)];
 const MIDDLE: [Option<Item>; 4] =
     [Some(Item::Tool(Tool::Pen)), Some(Item::Tool(Tool::Geometry)), Some(Item::Tool(Tool::Text)), Some(Item::Tool(Tool::Laser))];
 const RIGHT: [Option<Item>; 1] = [Some(Item::Fullscreen)];
 
 /// Buttons in all.
-const BUTTONS: usize = 10;
+const BUTTONS: usize = 11;
 
 pub struct Toolbar {
     /// The three pills, `[x0, y0, x1, y1]` in pixels: left, middle, right.
@@ -181,9 +187,9 @@ impl Toolbar {
     /// Along the top of a viewport of `viewport` pixels, sized for `dpr`.
     pub fn layout(viewport: [f32; 2], dpr: f32) -> Toolbar {
         let (gap, pad, margin) = (10.0 * dpr, 8.0 * dpr, 12.0 * dpr);
-        // Shrink to fit narrow windows, never below something still tappable: the left pill (four
-        // buttons and a gap) and half the middle one must fit in half the window.
-        let unit = (44.0 * dpr).min(((viewport[0] / 2.0 - margin - 3.0 * pad - 3.0 * gap) / 7.0).max(24.0 * dpr));
+        // Shrink to fit narrow windows, never below something still tappable: the left pill (six
+        // buttons and two gaps) and half the middle one must fit in half the window.
+        let unit = (44.0 * dpr).min(((viewport[0] / 2.0 - margin - 3.0 * pad - 3.0 * gap) / 8.0).max(20.0 * dpr));
         let height = unit + 2.0 * pad;
         let width_of = |slots: &[Option<Item>]| slots.iter().map(|s| if s.is_some() { unit } else { gap }).sum::<f32>() + 2.0 * pad;
         let (left_w, middle_w, right_w) = (width_of(&LEFT), width_of(&MIDDLE), width_of(&RIGHT));
@@ -258,6 +264,7 @@ impl Toolbar {
             let enabled = match item {
                 Item::Undo => state.can_undo,
                 Item::Redo => state.can_redo,
+                Item::DeletePage => state.can_delete,
                 _ => true,
             };
             // The wash behind a button: blue for the tool in use, grey under the mouse.
@@ -278,6 +285,7 @@ impl Toolbar {
                 Item::Redo => icons.redo.draw(&mut ui.lines, cx, cy, half, line, ink(state.can_redo)),
                 Item::Save => icons.save.draw(&mut ui.lines, cx, cy, half, line, if state.unsaved { ACCENT } else { INK }),
                 Item::Close => icons.close.draw(&mut ui.lines, cx, cy, half, line, INK),
+                Item::DeletePage => icons.trash.draw(&mut ui.lines, cx, cy, half, line, ink(state.can_delete)),
                 Item::AddPage => icons.plus.draw(&mut ui.lines, cx, cy, half, line, INK),
                 Item::Fullscreen => {
                     let icon = if state.fullscreen { &icons.exit_fullscreen } else { &icons.fullscreen };

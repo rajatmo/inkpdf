@@ -3,6 +3,7 @@
 
 mod anchors;
 mod contract;
+mod delete_page;
 mod draft;
 mod inputs;
 mod laser;

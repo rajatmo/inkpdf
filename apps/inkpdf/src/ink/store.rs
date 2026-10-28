@@ -223,6 +223,25 @@ impl InkStore {
         self.structural = self.revision;
     }
 
+    /// The page at index `at` was deleted, and the pages after it moved up the document by `dy` (a negative
+    /// number): its strokes are gone, the strokes on the later pages go up with them and keep their place on
+    /// their page. The history is dropped: it may hold strokes of the deleted page, and steps between pages
+    /// that no longer exist.
+    pub fn delete_page_at(&mut self, at: u32, dy: f32) {
+        // (A shift that is not a number leaves the strokes where they are rather than ruining them.)
+        let dy = if dy.is_finite() { dy } else { 0.0 };
+        self.strokes.retain(|s| s.page != at);
+        for s in self.strokes.iter_mut().filter(|s| s.page > at) {
+            s.page -= 1;
+            s.translate(0.0, dy);
+        }
+        self.undo.clear();
+        self.redo.clear();
+        self.dirty = self.dirty.iter().filter(|&&p| p != at).map(|&p| if p > at { p - 1 } else { p }).collect();
+        self.revision += 1;
+        self.structural = self.revision;
+    }
+
     /// Move strokes by `(dx, dy)` as one undo step, optionally onto another page.
     pub fn move_by(&mut self, ids: &[u64], dx: f32, dy: f32, to_page: Option<u32>) -> usize {
         if !dx.is_finite() || !dy.is_finite() {
@@ -650,5 +669,50 @@ mod tests {
         store.insert_page_at(0, f32::MAX);
         store.insert_page_at(0, f32::NAN);
         assert!(store.get(a).is_some());
+    }
+
+    #[test]
+    fn a_deleted_page_takes_its_strokes_and_the_later_pages_move_up_with_theirs() {
+        let mut store = InkStore::new();
+        let a = store.add(0, BLACK, on_page(0, 10.0)).expect("a");
+        let b = store.add(1, BLACK, on_page(1, 10.0)).expect("b");
+        let c = store.add(2, BLACK, on_page(2, 10.0)).expect("c");
+        store.delete_page_at(1, -1000.0);
+        assert!(store.get(b).is_none(), "the page's own ink is gone");
+        let (sa, sc) = (store.get(a).expect("a"), store.get(c).expect("c"));
+        assert_eq!((sa.page, sc.page), (0, 1));
+        assert_eq!(sa.pts, on_page(0, 10.0), "before the deleted page: untouched");
+        assert_eq!(sc.pts[0], [10.0, 1010.0], "after it: up by the page");
+        assert_eq!(sc.bbox()[1], 1010.0 - 1.0, "the bounding box moved too");
+    }
+
+    #[test]
+    fn deleting_a_page_drops_the_history_and_keeps_the_dirty_pages_straight() {
+        let mut store = InkStore::new();
+        store.add(0, BLACK, on_page(0, 10.0)).expect("a");
+        store.add(1, BLACK, on_page(1, 10.0)).expect("b");
+        store.add(3, BLACK, on_page(3, 10.0)).expect("d");
+        store.mark_dirty(4);
+        assert!(store.can_undo());
+        let before = store.revision();
+        store.delete_page_at(1, -1000.0);
+        assert!(!store.can_undo() && !store.can_redo(), "no step can refer to a page that has gone");
+        // Page 1 is gone, the pages after it have a number less: 0 stays, 3 becomes 2, 4 becomes 3.
+        assert_eq!(store.dirty_pages().iter().copied().collect::<Vec<_>>(), vec![0, 2, 3]);
+        assert!(store.revision() > before && !store.only_appended_since(before), "drawn afresh, not just appended to");
+    }
+
+    #[test]
+    fn deleting_the_last_page_or_one_that_is_not_there_or_with_a_shift_that_is_not_a_number_does_no_harm() {
+        let mut store = InkStore::new();
+        let a = store.add(0, BLACK, on_page(0, 10.0)).expect("a");
+        let b = store.add(1, BLACK, on_page(1, 10.0)).expect("b");
+        let before = store.get(a).expect("a").clone();
+        store.delete_page_at(1, 0.0);
+        assert!(store.get(b).is_none() && store.get(a) == Some(&before), "the last page goes alone");
+        store.delete_page_at(9, -1000.0);
+        store.delete_page_at(0, f32::NAN);
+        store.delete_page_at(0, f32::MAX);
+        assert_eq!(store.len(), 0, "nothing is left on page 0 once it is deleted too, and no stroke was ruined on the way");
     }
 }

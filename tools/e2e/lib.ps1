@@ -1,11 +1,13 @@
 # Helpers for real-input end-to-end checks of InkPDF: stylus/finger via inkpdf-bot, real keyboard via SendKeys,
 # real mouse via mouse_event. Always runs with APPDATA in a scratch folder (never the user's settings).
-# Scratch files (screenshots, settings, copies of test PDFs) go here, never next to the sources.
-$script:sp = if ($env:INKPDF_E2E_DIR) { $env:INKPDF_E2E_DIR } else { Join-Path $env:TEMP "inkpdf-e2e" }
-New-Item -ItemType Directory -Force $script:sp | Out-Null
-# The release build under test: `cargo build --release -p inkpdf` (set CARGO_TARGET_DIR if you build elsewhere).
+# Nothing is written inside the repository: scratch files (screenshots, settings, copies of test PDFs) go to
+# `inkpdf-e2e` beside it (or INKPDF_E2E_DIR), and the release build under test is read from `inkpdf-build` beside it
+# (`cargo build --release -p inkpdf`; or CARGO_TARGET_DIR if you build elsewhere).
 $script:repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-$script:target = Join-Path $(if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $script:repo "target" }) "release"
+$script:workspace = Split-Path -Parent $script:repo
+$script:sp = if ($env:INKPDF_E2E_DIR) { $env:INKPDF_E2E_DIR } else { Join-Path $script:workspace "inkpdf-e2e" }
+New-Item -ItemType Directory -Force $script:sp | Out-Null
+$script:target = Join-Path $(if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $script:workspace "inkpdf-build" }) "release"
 
 $script:bot = "$script:target\inkpdf-bot.exe"
 # The 60-page test PDF some scripts open, made by the build's own generator.
@@ -81,8 +83,8 @@ function Shot([string]$n) {
     $g = [System.Drawing.Graphics]::FromImage($bmp); $g.CopyFromScreen($pt.X, $pt.Y, 0, 0, $bmp.Size)
     $path = Join-Path $script:sp "$n.png"; $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png); $g.Dispose(); $bmp.Dispose(); $path
 }
-# toolbar buttons as window fractions (maximized window, 4K): close, undo, redo, save, plus | pen, shape, text, laser | fullscreen
-$script:btn = @{ close=@(0.016,0.031); undo=@(0.0365,0.031); redo=@(0.0545,0.031); save=@(0.0715,0.031); plus=@(0.093,0.031); pen=@(0.4745,0.031); shape=@(0.4915,0.031); text=@(0.5085,0.031); laser=@(0.5255,0.031); full=@(0.9835,0.031) }
+# toolbar buttons as window fractions (maximized window, 4K): close, undo, redo, save, delete page, plus | pen, shape, text, laser | fullscreen
+$script:btn = @{ close=@(0.016,0.031); undo=@(0.0365,0.031); redo=@(0.0545,0.031); save=@(0.0715,0.031); del=@(0.093,0.031); plus=@(0.1102,0.031); pen=@(0.4745,0.031); shape=@(0.4915,0.031); text=@(0.5085,0.031); laser=@(0.5255,0.031); full=@(0.9835,0.031) }
 function Press($name) { Tap $script:btn[$name][0] $script:btn[$name][1] }
 function Fail($m) { Write-Host "FAIL: $m" -ForegroundColor Red }
 function Ok($m) { Write-Host "ok:   $m" }

@@ -33,7 +33,9 @@ wheel scrolls in both modes.
 Shapes are lines, polylines, polygons, splines, rectangles, ellipses and 2D/3D axes, each edited by the
 anchors that suit it (nodes, tangent handles, diagonals, bounding corners, axis ends). Line and curve are
 drawn by tapping: a tap adds a node, a double tap ends the stroke, a double tap near the first node closes
-it. A finger also follows links and, pulled past the last page, adds a blank page. See
+it. A finger also follows links and, pulled past the last page, adds a blank page. The + button adds a page
+after the one you are looking at, and the bin button next to it deletes the one you are looking at, at once and
+without asking (the last page stays; it cannot be undone, and the file only loses it when you save). See
 [apps/inkpdf/installer/readme.txt](apps/inkpdf/installer/readme.txt) for the full user guide.
 
 ## Install
@@ -53,16 +55,20 @@ with a Windows SDK.
 
 ```powershell
 cargo run --release -p inkpdf                 # run it
-cargo test                                    # 396 unit and stress tests
+cargo test                                    # unit and stress tests
 cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 ```
 
 The PDF engine comes from [pdfcraft](https://github.com/storytold/pdfcraft), pinned by commit in
-[Cargo.toml](Cargo.toml), so the first build fetches it from GitHub. Build outputs are large; consider
-`CARGO_TARGET_DIR` outside any cloud-synced folder.
+[Cargo.toml](Cargo.toml), so the first build fetches it from GitHub.
 
-Packaging (both write to `apps/inkpdf/installer/Output/`):
+Nothing is built or written inside the repository. By default the build output goes to `inkpdf-build`, the
+installer and portable zip to `inkpdf-dist`, and the end-to-end scratch files to `inkpdf-e2e`, all next to the
+repository folder (`.cargo/config.toml` and the scripts say so). Set `CARGO_TARGET_DIR`, `INKPDF_DIST` and
+`INKPDF_E2E_DIR` to put them elsewhere.
+
+Packaging (both write to `inkpdf-dist`, beside the repository):
 
 ```powershell
 winget install JRSoftware.InnoSetup              # once

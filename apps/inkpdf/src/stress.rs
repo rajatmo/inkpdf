@@ -389,6 +389,7 @@ fn poke(ed: &mut Editor, rng: &mut Rng, hostile: bool) -> String {
                 Item::Tool(Tool::Laser),
                 Item::Fullscreen,
                 Item::AddPage,
+                Item::DeletePage,
             ];
             let at = ed.toolbar().centre_of(rng.pick(&items));
             what = format!("tap the toolbar at {at:?}");
@@ -502,6 +503,14 @@ fn poke(ed: &mut Editor, rng: &mut Rng, hostile: bool) -> String {
                     sizes.insert(after + 1, like);
                     what = format!("insert a page after {after}: now {}", sizes.len());
                     ed.page_inserted(Layout::new(&sizes), after + 1);
+                }
+            }
+            if let Some(page) = ed.requests.take_delete_page() {
+                let mut sizes: Vec<[f32; 2]> = (0..ed.layout.len()).filter_map(|i| ed.layout.page(i)).map(|r| [r.w, r.h]).collect();
+                if sizes.len() > 1 && page < sizes.len() {
+                    sizes.remove(page);
+                    what = format!("delete page {page}: now {}", sizes.len());
+                    ed.page_deleted(Layout::new(&sizes), page);
                 }
             }
             if std::mem::take(&mut ed.requests.has(&Request::Close)) {
@@ -1439,9 +1448,9 @@ fn stress_pages_inserted_anywhere_among_ink_keep_every_stroke_on_its_page_throug
     let mut ed = Editor::new([1100.0, 900.0], 1.0);
     ed.load(doc.layout.clone(), vec![]);
     let mut rng = Rng::new(606);
-    let (mut inserted, mut saves) = (0, 0);
+    let (mut inserted, mut deleted, mut saves) = (0, 0, 0);
     for round in 0..(300 * scale().min(4)) {
-        match rng.below(10) {
+        match rng.below(12) {
             0..=2 if doc.page_count() < 60 => {
                 // A page somewhere among the others, the size of one of them.
                 let (at, like) = (rng.below(doc.page_count() + 1), rng.below(doc.page_count()));
@@ -1466,6 +1475,13 @@ fn stress_pages_inserted_anywhere_among_ink_keep_every_stroke_on_its_page_throug
             }
             8 => {
                 ed.redo();
+            }
+            // A page goes, somewhere among the others, with the ink on it.
+            9 | 10 if doc.page_count() > 1 => {
+                let at = rng.below(doc.page_count());
+                assert!(doc.delete_page(at), "page {at} of {} is deleted", doc.page_count());
+                ed.page_deleted(doc.layout.clone(), at);
+                deleted += 1;
             }
             _ => {
                 doc.save(&ed.ink).expect("save");
@@ -1494,8 +1510,8 @@ fn stress_pages_inserted_anywhere_among_ink_keep_every_stroke_on_its_page_throug
             );
         }
     }
-    eprintln!("pages inserted: {inserted}; saves checked: {saves}; strokes at the end: {}", ed.ink.len());
-    assert!(inserted > 20 && saves > 5);
+    eprintln!("pages inserted: {inserted}; deleted: {deleted}; saves checked: {saves}; strokes at the end: {}", ed.ink.len());
+    assert!(inserted > 20 && deleted > 10 && saves > 5);
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -1577,7 +1593,7 @@ fn every_tool_together(seed: u64, rounds: usize) {
     ed.load(doc.layout.clone(), vec![]);
     let mut rng = Rng::new(seed);
     let words = ["Hello", "wörld", "✓ done", "a longer line of text to type", "x", "日本語", "line\nbreak", "  spaced  "];
-    let (mut typed, mut shapes, mut inks, mut saves, mut inserted) = (0, 0, 0, 0, 0);
+    let (mut typed, mut shapes, mut inks, mut saves, mut inserted, mut deleted) = (0, 0, 0, 0, 0, 0);
     for round in 0..rounds {
         let size = ed.view.viewport;
         // Below the toolbar, so a press is a press on the page.
@@ -1676,13 +1692,21 @@ fn every_tool_together(seed: u64, rounds: usize) {
                 "undo/redo"
             }
             13 => {
-                if doc.page_count() < 30 {
-                    let (at, like) = (rng.below(doc.page_count() + 1), rng.below(doc.page_count()));
-                    doc.insert_blank_page(at, like).expect("inserted");
-                    ed.page_inserted(doc.layout.clone(), at);
-                    inserted += 1;
+                if rng.chance(0.4) && doc.page_count() > 1 {
+                    let at = rng.below(doc.page_count());
+                    assert!(doc.delete_page(at));
+                    ed.page_deleted(doc.layout.clone(), at);
+                    deleted += 1;
+                    "delete a page"
+                } else {
+                    if doc.page_count() < 30 {
+                        let (at, like) = (rng.below(doc.page_count() + 1), rng.below(doc.page_count()));
+                        doc.insert_blank_page(at, like).expect("inserted");
+                        ed.page_inserted(doc.layout.clone(), at);
+                        inserted += 1;
+                    }
+                    "insert a page"
                 }
-                "insert a page"
             }
             14 => {
                 // The view moves: scroll, a finger's pan, the wheel.
@@ -1721,8 +1745,11 @@ fn every_tool_together(seed: u64, rounds: usize) {
             }
         }
     }
-    eprintln!("text boxes begun: {typed}; shapes: {shapes}; ink: {inks}; saves: {saves}; pages inserted: {inserted}; alive: {}", ed.ink.len());
-    assert!(typed > 200 && shapes > 100 && inks > 100 && saves > 10 && inserted > 10, "the storm should have used every tool");
+    eprintln!(
+        "text boxes begun: {typed}; shapes: {shapes}; ink: {inks}; saves: {saves}; pages inserted: {inserted}; pages deleted: {deleted}; alive: {}",
+        ed.ink.len()
+    );
+    assert!(typed > 200 && shapes > 100 && inks > 100 && saves > 10 && inserted > 10 && deleted > 5, "the storm should have used every tool");
     // Undoing everything the history holds leaves a consistent editor, and so does redoing it all.
     ed.finish_text();
     let mut undone = 0;

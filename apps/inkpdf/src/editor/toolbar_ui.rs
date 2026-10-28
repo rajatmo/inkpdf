@@ -161,6 +161,12 @@ impl Editor {
                     let page = self.view.current_page(&self.layout);
                     self.requests.push(Request::InsertPage(page));
                 }
+                // The last page there is stays (a document has at least one).
+                Item::DeletePage if self.layout.len() > 1 => {
+                    let page = self.view.current_page(&self.layout);
+                    self.requests.push(Request::DeletePage(page));
+                }
+                Item::DeletePage => {}
                 Item::Tool(_) => {}
             }
         }

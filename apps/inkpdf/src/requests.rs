@@ -18,6 +18,8 @@ pub enum Request {
     AddPage,
     /// Add a blank page after this page.
     InsertPage(usize),
+    /// Delete this page; nobody is asked.
+    DeletePage(usize),
     /// Open a web address (a link was tapped).
     OpenUrl(String),
     /// The tool, colours or sizes changed: write them to the settings file.
@@ -63,6 +65,19 @@ impl Requests {
     #[cfg(test)]
     pub fn insert_page(&self) -> Option<usize> {
         self.queue.iter().find_map(|r| if let Request::InsertPage(n) = r { Some(*n) } else { None })
+    }
+
+    /// The page a delete was asked for.
+    #[cfg(test)]
+    pub fn delete_page(&self) -> Option<usize> {
+        self.queue.iter().find_map(|r| if let Request::DeletePage(n) = r { Some(*n) } else { None })
+    }
+
+    #[cfg(test)]
+    pub fn take_delete_page(&mut self) -> Option<usize> {
+        let n = self.delete_page()?;
+        self.take(&Request::DeletePage(n));
+        Some(n)
     }
 
     #[cfg(test)]

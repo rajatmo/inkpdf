@@ -5,7 +5,7 @@
 #   .\tools\e2e\run-all.ps1            all of them
 #   .\tools\e2e\run-all.ps1 -Only r1   just r1
 param([string[]]$Only)
-$all = "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "s1", "s2", "s3", "s4", "s5", "t1", "r1", "r2", "r3"
+$all = "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "s1", "s2", "s3", "s4", "s5", "t1", "r1", "r2", "r3", "p1"
 $scripts = if ($Only) { $Only } else { $all }
 $failed = 0; $passed = 0
 foreach ($s in $scripts) {

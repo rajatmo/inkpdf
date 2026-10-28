@@ -1,0 +1,3 @@
+# Build output goes beside the repository (`../inkpdf-build`), not in it; CARGO_TARGET_DIR still overrides this.
+[build]
+target-dir = "../inkpdf-build"

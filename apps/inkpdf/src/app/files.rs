@@ -181,6 +181,20 @@ impl State {
         self.ink_built = InkStamp::NEVER;
     }
 
+    /// Delete page t (the document keeps at least one page), and glide to the page that took its place.
+    fn delete_page(&mut self, at: usize) {
+        let Some(doc) = &mut self.doc else { return };
+        if !doc.delete_page(at) {
+            return;
+        }
+        self.ed.page_deleted(doc.layout.clone(), at);
+        self.ed.links.clone_from(&doc.links);
+        // Pages after it have new numbers: what is on the GPU for them is out of date.
+        self.gpu.clear_textures();
+        self.failed.clear();
+        self.ink_built = InkStamp::NEVER;
+    }
+
     /// A finger pulled past the end of the document: add a blank page, the size of the last, and
     /// glide to it.
     fn add_page(&mut self) {
@@ -221,6 +235,7 @@ impl State {
                 Request::Close => self.close_document(),
                 Request::AddPage => self.add_page(),
                 Request::InsertPage(after) => self.insert_page(after + 1, after),
+                Request::DeletePage(page) => self.delete_page(page),
                 Request::OpenUrl(url) => native::open_url(&url),
             }
         }

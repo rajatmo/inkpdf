@@ -19,6 +19,7 @@ fn every_item_is_hit_at_its_centre_and_there_are_no_others() {
             Item::Undo,
             Item::Redo,
             Item::Save,
+            Item::DeletePage,
             Item::AddPage,
             Item::Tool(Tool::Pen),
             Item::Tool(Tool::Geometry),
@@ -172,12 +173,36 @@ fn a_hovered_button_gets_a_wash_unless_it_is_disabled() {
 }
 
 #[test]
-fn the_plus_button_is_the_last_thing_in_the_left_pill_with_a_gap_before_it() {
+fn the_delete_button_is_left_of_the_add_button_and_both_end_the_left_pill_with_a_gap_before_them() {
     for (w, dpr) in WINDOWS {
         let tb = Toolbar::layout([w, 900.0], dpr);
-        let (save, plus) = (tb.button(Item::Save).expect("save"), tb.button(Item::AddPage).expect("add"));
-        assert!(plus[0] > save[2] + 4.0 * dpr, "a gap between save and add at {w}");
-        assert!(rect_contains(tb.pills[0], [(plus[0] + plus[2]) / 2.0, (plus[1] + plus[3]) / 2.0]), "in the left pill at {w}");
+        let (save, delete, plus) =
+            (tb.button(Item::Save).expect("save"), tb.button(Item::DeletePage).expect("delete"), tb.button(Item::AddPage).expect("add"));
+        assert!(delete[0] > save[2] + 4.0 * dpr, "a gap between save and delete at {w}");
+        assert!((plus[0] - delete[2]).abs() < 1.0, "delete is right beside add, on its left, at {w}");
+        for button in [delete, plus] {
+            assert!(rect_contains(tb.pills[0], [(button[0] + button[2]) / 2.0, (button[1] + button[3]) / 2.0]), "in the left pill at {w}");
+        }
         assert!(plus[2] < tb.pills[0][2] && tb.pills[0][2] < tb.pills[1][0], "and the pills do not touch at {w}");
     }
+}
+
+#[test]
+fn the_delete_button_is_dim_and_does_not_light_up_when_there_is_only_one_page() {
+    let panels = |state: State| {
+        let mut ui = Ui::default();
+        Toolbar::layout([1650.0, 1350.0], 1.5).draw(&state, &mut ui);
+        ui.panels.len()
+    };
+    let one_page = panels(State { can_delete: false, ..State::default() });
+    let many = panels(State { can_delete: true, ..State::default() });
+    assert_eq!(many, one_page, "no wash either way until the mouse is over it");
+    assert_eq!(panels(State { can_delete: true, hover: Some(Item::DeletePage), ..State::default() }), many + 1, "it lights up under the mouse");
+    assert_eq!(panels(State { can_delete: false, hover: Some(Item::DeletePage), ..State::default() }), one_page, "but not with nothing to delete");
+    let lines = |state: State| {
+        let mut ui = Ui::default();
+        Toolbar::layout([1650.0, 1350.0], 1.5).draw(&state, &mut ui);
+        ui.lines.iter().map(|l| format!("{l:?}")).collect::<Vec<_>>()
+    };
+    assert_ne!(lines(State { can_delete: true, ..State::default() }), lines(State { can_delete: false, ..State::default() }), "drawn dimmer");
 }

@@ -171,6 +171,30 @@ impl Editor {
         self.redraw = true;
     }
 
+    /// Page t was deleted: take the new layout, drop the ink that was on it, carry the ink on the later pages
+    /// up with them, mark the page that took its place changed (so saving writes the file without it) and glide
+    /// there. The undo history goes: it may hold steps on a page that no longer exists.
+    pub fn page_deleted(&mut self, layout: Layout, at: usize) {
+        // Whatever the pen was in the middle of was on the old layout.
+        if !matches!(self.act, Act::Idle) {
+            self.end_act();
+        }
+        self.tools.end_all(&mut self.ws);
+        self.settle();
+        let shift = match (self.layout.page(at + 1), layout.page(at)) {
+            (Some(was), Some(now)) => now.y - was.y,
+            _ => 0.0,
+        };
+        self.ink.delete_page_at(at as u32, shift);
+        let shown = at.min(layout.len().saturating_sub(1));
+        self.ink.mark_dirty(shown as u32);
+        self.layout = layout;
+        self.prune_selection();
+        self.tools.pointer.laser.clear();
+        self.scroll_to_page(shown);
+        self.redraw = true;
+    }
+
     /// End what is being typed or drawn by taps, so that it is part of the document (before the tool
     /// changes, the file is saved, a page is added).
     pub fn settle(&mut self) {
@@ -186,6 +210,7 @@ impl Editor {
         toolbar::State {
             can_undo: self.ink.can_undo(),
             can_redo: self.ink.can_redo(),
+            can_delete: self.layout.len() > 1,
             unsaved: self.ink.is_dirty(),
             fullscreen: self.fullscreen,
             tool: self.tool,

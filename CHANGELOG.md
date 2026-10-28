@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0
+
+- A delete-page button (a bin) on the left of the + button. It deletes the page being looked at, at once, with no
+  question asked; the ink on it goes with it, the later pages move up with theirs, links are carried along, and
+  the file loses the page when saved. The last page there is stays (the button is dimmed). It cannot be undone,
+  and it drops the undo history, which may refer to the page.
+- Build output, packages and test scratch files default to folders beside the repository, not in it.
+- The portable build script no longer leaves its build settings behind in the shell.
+
 ## 0.3.0
 
 - Desktop and tablet modes, chosen from the machine's posture (`SM_CONVERTIBLESLATEMODE`, guarded so that an

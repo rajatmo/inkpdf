@@ -55,8 +55,10 @@ Each kind of input does one thing, and what the stylus does depends on the tool:
             typed first. In the desktop mode Ctrl+Z undoes, Ctrl+Y or Ctrl+Shift+Z redoes, Ctrl+S saves;
             nothing else is heard.
 The buttons: X closes the document and starts a blank page (it asks first if there is unsaved
-work); undo, redo, save; + adds a page after the one you are looking at; then the pen, shape, text and
-pointer tools (tap a tool again to open its colours, thickness and options); full screen.
+work); undo, redo, save; the bin deletes the page you are looking at, at once, with no question
+asked (it cannot be undone, and the last page there is stays; the file only loses the page when you
+save); + adds a page after the one you are looking at; then the pen, shape, text and pointer tools
+(tap a tool again to open its colours, thickness and options); full screen.
 Your tools and their settings are kept in %APPDATA%\InkPDF\settings.txt.
 
 When InkPDF is your default PDF app (Settings > Apps > Default apps), Explorer shows the first

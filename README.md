@@ -3,6 +3,8 @@
 A fast, pen-first PDF annotator for Windows. Open a PDF, write on it with a stylus, save it back. No account,
 no library, no sync: just the page and your pen.
 
+![InkPDF: pen strokes, a shape edited by its anchors, typed text, the desktop/tablet mode button, adding and deleting a page](docs/demo.gif)
+
 - **Low latency.** The frame waits for the display, *then* reads the pen, so the ink carries the newest
   samples; the live stroke is extended a few milliseconds ahead of the pen. Pen sample to frame submitted is
   about 2.5 ms median on a 60 Hz panel.

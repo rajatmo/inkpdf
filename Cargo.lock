@@ -995,7 +995,7 @@ dependencies = [
 
 [[package]]
 name = "inkpdf"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "bytemuck",
  "pdfcraft-annot",
@@ -1015,7 +1015,7 @@ dependencies = [
 
 [[package]]
 name = "inkpdf-thumb"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "windows",
  "windows-core",

@@ -89,7 +89,9 @@ How it fits the layers: a tool states a `Tool::policy(mode)` (an `InputPolicy` w
 `Itself` or `AsStylus`) and never learns the mode. The editor's router hands a mouse to a stylus tool as a
 stylus with an id of its own, so no tool has a mouse code path. The mode is the session's (`Editor::set_mode`
 ends whatever was under way first); the shell sets it from `posture::detect()` at start and again when
-Windows sends `WM_SETTINGCHANGE` "ConvertibleSlateMode", unless `--mode desktop|tablet` forced it.
+Windows sends `WM_SETTINGCHANGE` "ConvertibleSlateMode", unless `--mode desktop|tablet` forced it. The toolbar's
+`Item::ModeSwitch` (right pill, left of full screen) both shows the mode (`State.mode`: a monitor, or a tablet in
+the accent colour) and flips it through the same `set_mode`; it is not saved, and a posture change decides again.
 
 `SM_CONVERTIBLESLATEMODE` alone cannot be trusted: an ordinary desktop PC reports 0 ("slate"). So `posture::decide`
 also needs a touch or pen digitizer and a platform role of mobile or slate (`PowerDeterminePlatformRole`). The
@@ -119,9 +121,10 @@ with whether a frame lands on a vblank boundary.
   the editor, the toolbar, an adapter or another tool, the session imports the GPU/shell, or the shell names
   a tool type (shown to fail on a real violation).
 * Stress: seeded storms (all tools, undo, pages, save/reopen) at `INKPDF_STRESS=10`.
-* Real input (`tools/e2e/`, run with `run-all.ps1`): scripts drive the built exe with a synthetic stylus/finger, the real mouse and keyboard and
-un-all.ps1): scripts drive the built exe with a synthetic stylus/finger, the real mouse and keyboard and
-  check pixels and the title's changed mark: the device-rule matrix (every tool × stylus, barrel lasso,
-  mouse click/drag/wheel, finger drag/pinch, keyboard), the per-tool scenario scripts, and a seeded storm.
+* Real input (`tools/e2e/`, `run.ps1`, about half a minute): two scripts drive the built exe, in four app starts in all,
+  with a synthetic stylus and finger, the real mouse and keyboard, and check pixels and the title. They prove only
+  what the other tests cannot see: that each device reaches the app and does its work, that the tools draw on the
+  screen, that pages and the saved file come out right, and that the mode button and the posture message work.
+  The rules themselves (every device in every tool and mode, every edge) are the unit and stress tests' job.
   Known limit: Windows' synthetic pen injector drops the eraser flag on this OS build, so the eraser end is
   covered by the unit and stress tests only.

@@ -277,3 +277,76 @@ fn undo_by_shortcut_while_typing_takes_back_the_typing_first() {
     assert!(!ed.is_typing(), "the typing was thrown away");
     assert_eq!(texts(&ed), 0);
 }
+
+fn mode_button(ed: &Editor) -> [f32; 2] {
+    ed.toolbar().centre_of(Item::ModeSwitch)
+}
+
+#[test]
+fn the_mode_button_switches_the_mode_with_every_device_and_shows_it() {
+    let mut ed = editor();
+    assert_eq!((ed.mode(), ed.toolbar_state().mode), (Mode::Desktop, Mode::Desktop));
+    let button = mode_button(&ed);
+    mouse_click_at(&mut ed, button);
+    assert_eq!((ed.mode(), ed.toolbar_state().mode), (Mode::Tablet, Mode::Tablet), "the mouse");
+    pen_stroke(&mut ed, TIP, &[button, button]);
+    assert_eq!(ed.mode(), Mode::Desktop, "the stylus");
+    ed.palm = crate::input::PalmGuard::default();
+    ed.pointer_event(touch(2, Phase::Down, button, 30.0));
+    ed.pointer_event(touch(2, Phase::Up, button, 30.0));
+    assert_eq!(ed.mode(), Mode::Tablet, "a finger");
+    assert_eq!(ed.ink.len(), 0, "and none of those presses drew anything");
+    assert!(!ed.ink.is_dirty(), "a mode is not a change to the document");
+}
+
+#[test]
+fn the_button_works_with_every_tool_and_not_while_the_prompt_is_up() {
+    for tool in [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Laser] {
+        let mut ed = with(tool, Mode::Desktop);
+        let button = mode_button(&ed);
+        mouse_click_at(&mut ed, button);
+        assert_eq!(ed.mode(), Mode::Tablet, "{tool:?}");
+    }
+    let mut asked = editor();
+    asked.ask_unsaved();
+    let button = mode_button(&asked);
+    mouse_click_at(&mut asked, button);
+    assert_eq!(asked.mode(), Mode::Desktop, "only the prompt hears the mouse while it is up");
+}
+
+#[test]
+fn after_the_switch_the_devices_do_what_the_new_mode_says() {
+    let mut ed = with(Tool::Pen, Mode::Desktop);
+    let path = wave(&ed);
+    mouse_drag(&mut ed, MouseButton::Left, &path);
+    assert_eq!(ed.ink.len(), 1, "at a desk the mouse draws");
+    let button = mode_button(&ed);
+    mouse_click_at(&mut ed, button);
+    mouse_drag(&mut ed, MouseButton::Left, &path);
+    assert_eq!(ed.ink.len(), 1, "as a tablet it does not");
+    pen_stroke(&mut ed, TIP, &path);
+    assert_eq!(ed.ink.len(), 2, "the stylus still does");
+    assert!(!ed.shortcut("z", false), "and there are no shortcuts");
+    mouse_click_at(&mut ed, button);
+    mouse_drag(&mut ed, MouseButton::Left, &path);
+    assert_eq!(ed.ink.len(), 3, "back at the desk, the mouse draws again");
+    assert!(ed.shortcut("z", false) && ed.ink.len() == 2, "and Ctrl+Z works");
+}
+
+#[test]
+fn switching_while_typing_keeps_the_text_and_places_it_with_the_stylus_afterwards() {
+    let mut ed = with(Tool::Text, Mode::Desktop);
+    let at = on_page(&ed, 100.0, 300.0);
+    mouse_click_at(&mut ed, at);
+    ed.type_text("kept");
+    let button = mode_button(&ed);
+    pen_stroke(&mut ed, TIP, &[button, button]);
+    assert_eq!((ed.mode(), texts(&ed)), (Mode::Tablet, 1), "what was typed is a text box, not lost");
+    assert!(!ed.is_typing());
+    let elsewhere = on_page(&ed, 300.0, 500.0);
+    ed.pointer_event(pen(Phase::Down, TIP, &[elsewhere]));
+    ed.pointer_event(pen(Phase::Up, TIP, &[elsewhere]));
+    ed.type_text("also");
+    ed.escape();
+    assert_eq!(texts(&ed), 2, "the tablet's stylus places the next one");
+}

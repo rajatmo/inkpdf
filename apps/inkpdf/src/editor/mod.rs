@@ -213,6 +213,7 @@ impl Editor {
             can_delete: self.layout.len() > 1,
             unsaved: self.ink.is_dirty(),
             fullscreen: self.fullscreen,
+            mode: self.mode,
             tool: self.tool,
             pen_colour: self.colour_of(self.pen),
             shape_colour: self.colour_of(self.shape_style),

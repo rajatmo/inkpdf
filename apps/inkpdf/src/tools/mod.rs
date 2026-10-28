@@ -102,8 +102,10 @@ pub trait Tool {
         self.end(ws);
     }
 
-    /// The tool is being put away: settle, and leave nothing of its own on the screen.
+    /// The tool is being put away: end the gesture under way (a press may still be down) and settle what is
+    /// pending, so that nothing of its own is left to surface later, when something else ends gestures.
     fn leave(&mut self, ws: &mut Workspace) {
+        self.end(ws);
         self.settle(ws);
     }
 

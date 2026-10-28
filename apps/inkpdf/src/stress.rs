@@ -390,6 +390,7 @@ fn poke(ed: &mut Editor, rng: &mut Rng, hostile: bool) -> String {
                 Item::Fullscreen,
                 Item::AddPage,
                 Item::DeletePage,
+                Item::ModeSwitch,
             ];
             let at = ed.toolbar().centre_of(rng.pick(&items));
             what = format!("tap the toolbar at {at:?}");
@@ -1246,8 +1247,11 @@ fn stress_shapes_drawn_by_the_pen_stay_on_their_page_undo_redo_exactly_and_survi
     let (mut made, mut edits) = (0usize, 0usize);
     for round in 0..(4_000 * scale()) {
         let size = ed.view.viewport;
-        // (A random press can land on a toolbar button; the storm is about the shape tool.)
-        ed.tool = Tool::Geometry;
+        // (A random press can land on a toolbar button; the storm is about the shape tool. Back to it the way the
+        // toolbar changes tools, which ends what the other was doing: the mode button can make the stylus place text.)
+        if ed.tool != Tool::Geometry {
+            use_tool(&mut ed, Tool::Geometry);
+        }
         ed.shape = rng.pick(&crate::geometry::SHAPES);
         ed.shape_style = crate::toolbar::ToolStyle { colour: rng.below(5), width: rng.range(MIN_WIDTH, MAX_WIDTH) };
         // Anywhere in the window, off the page, or far beyond it.

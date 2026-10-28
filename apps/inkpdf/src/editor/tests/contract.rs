@@ -138,6 +138,28 @@ fn ending_settling_and_leaving_an_idle_tool_change_nothing_and_can_be_repeated()
 }
 
 #[test]
+fn a_tool_put_away_in_the_middle_of_a_press_leaves_nothing_behind_to_surface_later() {
+    for tool in ALL {
+        let mut ed = editor();
+        ed.tool = tool;
+        let dev = listens_to(tool);
+        let (a, b) = (on_page(&ed, 100.0, 300.0), on_page(&ed, 220.0, 340.0));
+        send(&mut ed, tool, dev, 1, Phase::Down, &[a], TIP);
+        send(&mut ed, tool, dev, 1, Phase::Move, &[a, b], TIP);
+        // Choosing another tool puts this one away while the press is still down...
+        ed.tools.get_mut(tool).leave(&mut ed.ws);
+        assert!(!ed.tools.get(tool).busy(), "{tool:?}: nothing under way once it is put away");
+        let state = |ed: &Editor| (ed.ink.revision(), ed.ink.len(), ed.selection.clone(), ed.text_edit().cloned(), ed.draft().cloned());
+        let away = state(&ed);
+        // ...and a press elsewhere, a change of mode, saving, all end what is under way: none of it may bring the old
+        // tool's work back (a text box begun, a shape made) when it is not the tool in use.
+        ed.tools.end_all(&mut ed.ws);
+        ed.tools.settle_all(&mut ed.ws);
+        assert_eq!(state(&ed), away, "{tool:?}: it came back");
+        assert!(ed.text_edit().is_none() || tool == Tool::Text && ed.is_typing(), "{tool:?}: a text box left over");
+    }
+}
+#[test]
 fn what_a_tool_does_not_listen_to_never_reaches_it() {
     for (tool, mode) in ALL.into_iter().flat_map(|t| [(t, Mode::Desktop), (t, Mode::Tablet)]) {
         let mut ed = editor();

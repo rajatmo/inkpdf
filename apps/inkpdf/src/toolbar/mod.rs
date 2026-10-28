@@ -16,6 +16,7 @@ mod tool_panel;
 mod tests;
 
 use crate::ink::rect_contains;
+use crate::input::Mode;
 
 use icons::icons;
 pub use prompt::{Choice, PromptLayout, PromptView};
@@ -124,6 +125,8 @@ pub enum Item {
     /// Add a blank page after the one being looked at.
     AddPage,
     Tool(Tool),
+    /// Switch between the desktop and the tablet mode (and show which it is).
+    ModeSwitch,
     /// Fill the whole screen, or give it back.
     Fullscreen,
 }
@@ -137,6 +140,8 @@ pub struct State {
     pub can_delete: bool,
     pub unsaved: bool,
     pub fullscreen: bool,
+    /// The mode the devices are used in, shown on its button.
+    pub mode: Mode,
     pub tool: Tool,
     /// The colours the pen and the shape tool write in, shown on their buttons.
     pub pen_colour: [u8; 4],
@@ -154,6 +159,7 @@ impl Default for State {
             can_delete: false,
             unsaved: false,
             fullscreen: false,
+            mode: Mode::default(),
             tool: Tool::Pen,
             pen_colour: PALETTE[0],
             shape_colour: PALETTE[1],
@@ -168,10 +174,10 @@ const LEFT: [Option<Item>; 8] =
     [Some(Item::Close), None, Some(Item::Undo), Some(Item::Redo), Some(Item::Save), None, Some(Item::DeletePage), Some(Item::AddPage)];
 const MIDDLE: [Option<Item>; 4] =
     [Some(Item::Tool(Tool::Pen)), Some(Item::Tool(Tool::Geometry)), Some(Item::Tool(Tool::Text)), Some(Item::Tool(Tool::Laser))];
-const RIGHT: [Option<Item>; 1] = [Some(Item::Fullscreen)];
+const RIGHT: [Option<Item>; 2] = [Some(Item::ModeSwitch), Some(Item::Fullscreen)];
 
 /// Buttons in all.
-const BUTTONS: usize = 11;
+const BUTTONS: usize = 12;
 
 pub struct Toolbar {
     /// The three pills, `[x0, y0, x1, y1]` in pixels: left, middle, right.
@@ -287,6 +293,12 @@ impl Toolbar {
                 Item::Close => icons.close.draw(&mut ui.lines, cx, cy, half, line, INK),
                 Item::DeletePage => icons.trash.draw(&mut ui.lines, cx, cy, half, line, ink(state.can_delete)),
                 Item::AddPage => icons.plus.draw(&mut ui.lines, cx, cy, half, line, INK),
+                // The mode in use, drawn as the machine it is for; the tablet in the accent colour, as the one you chose
+                // to leave the desk for.
+                Item::ModeSwitch => match state.mode {
+                    Mode::Desktop => icons.desktop.draw(&mut ui.lines, cx, cy, half, line, INK),
+                    Mode::Tablet => icons.tablet.draw(&mut ui.lines, cx, cy, half, line, ACCENT),
+                },
                 Item::Fullscreen => {
                     let icon = if state.fullscreen { &icons.exit_fullscreen } else { &icons.fullscreen };
                     icon.draw(&mut ui.lines, cx, cy, half, line, INK);

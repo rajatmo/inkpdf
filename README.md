@@ -18,7 +18,9 @@ no library, no sync: just the page and your pen.
 Each kind of input does one thing, and what it does depends on the tool and on the **mode**. InkPDF picks the
 mode itself from how the machine is being used: **desktop** (a keyboard and mouse in front of you) or
 **tablet** (a convertible turned into a slate, or a tablet). It reads the posture Windows reports, so a
-desktop PC is always in desktop mode; `--mode desktop|tablet` forces one.
+desktop PC starts in desktop mode; `--mode desktop|tablet` starts in one. A button at the top right, left of
+full screen, shows the mode (a monitor, or a tablet in blue) and switches it whenever you like; if the machine is
+then turned into a tablet or back, InkPDF looks again and follows.
 
 | Tool | Stylus | Mouse, desktop mode | Mouse, tablet mode | Touch | Keyboard |
 |---|---|---|---|---|---|
@@ -103,10 +105,13 @@ and the latency work. The layering is enforced by a test (`src/architecture.rs`)
 tool), the layering test, and seeded stress storms. `INKPDF_STRESS=10 cargo test --release` runs the storms
 ten times larger.
 
-`tools/e2e/run-all.ps1` goes further and drives the *built app* with a synthetic stylus and finger, the real
-mouse and keyboard, and checks pixels and the window's changed mark. It takes over the mouse and keyboard for
-several minutes, so run it on a machine you are not using. Windows' synthetic pen injector drops the eraser
-flag, so the eraser end is covered by the unit and stress tests only; please try it on real hardware.
+`tools/e2e/run.ps1` goes one step further and drives the *built app* with a synthetic stylus and finger, the real
+mouse and keyboard, and checks the pixels and the window title. It is deliberately small, two scripts and four
+app starts, about half a minute: it only proves what the other tests cannot see (that each device reaches the app,
+that things draw on screen, that pages and the saved file are right, that the mode button and the posture message
+work). It takes over the mouse and keyboard while it runs, so leave the machine alone. Windows' synthetic pen
+injector drops the eraser flag, so the eraser end is covered by the unit and stress tests only; please try it on
+real hardware.
 
 ## Authors
 

@@ -9,8 +9,10 @@ so any PDF reader shows them; nothing else is kept.
 InkPDF has two modes, and picks one itself from how the machine is being used: DESKTOP (at a desk,
 with a keyboard and mouse) or TABLET (a convertible turned into a slate, or a tablet). They differ in
 what the mouse and the keyboard do; the stylus and the finger do the same in both, except that the
-stylus can also place text in the tablet mode. On a desktop PC the mode is always desktop. To force one:
-inkpdf --mode desktop   or   inkpdf --mode tablet   (the default is --mode auto).
+stylus can also place text in the tablet mode. On a desktop PC the mode starts as desktop. The button at the
+top right, left of full screen, shows the mode and switches it whenever you like; when the machine is
+turned into a tablet or back, InkPDF looks at it again and follows. To start in one: inkpdf --mode desktop
+or inkpdf --mode tablet (the default is --mode auto).
 
 Each kind of input does one thing, and what the stylus does depends on the tool:
 
@@ -58,7 +60,8 @@ The buttons: X closes the document and starts a blank page (it asks first if the
 work); undo, redo, save; the bin deletes the page you are looking at, at once, with no question
 asked (it cannot be undone, and the last page there is stays; the file only loses the page when you
 save); + adds a page after the one you are looking at; then the pen, shape, text and pointer tools
-(tap a tool again to open its colours, thickness and options); full screen.
+(tap a tool again to open its colours, thickness and options); a monitor or a tablet, which shows the
+mode in use (the tablet in blue) and switches to the other when pressed; full screen.
 Your tools and their settings are kept in %APPDATA%\InkPDF\settings.txt.
 
 When InkPDF is your default PDF app (Settings > Apps > Default apps), Explorer shows the first

@@ -25,6 +25,7 @@ fn every_item_is_hit_at_its_centre_and_there_are_no_others() {
             Item::Tool(Tool::Geometry),
             Item::Tool(Tool::Text),
             Item::Tool(Tool::Laser),
+            Item::ModeSwitch,
             Item::Fullscreen
         ]
     );
@@ -205,4 +206,34 @@ fn the_delete_button_is_dim_and_does_not_light_up_when_there_is_only_one_page() 
         ui.lines.iter().map(|l| format!("{l:?}")).collect::<Vec<_>>()
     };
     assert_ne!(lines(State { can_delete: true, ..State::default() }), lines(State { can_delete: false, ..State::default() }), "drawn dimmer");
+}
+
+#[test]
+fn the_mode_button_is_left_of_the_fullscreen_button_in_the_right_pill() {
+    for (w, dpr) in WINDOWS {
+        let tb = Toolbar::layout([w, 900.0], dpr);
+        let (mode, full) = (tb.button(Item::ModeSwitch).expect("mode"), tb.button(Item::Fullscreen).expect("fullscreen"));
+        assert!((full[0] - mode[2]).abs() < 1.0, "mode is right beside fullscreen, on its left, at {w}");
+        for button in [mode, full] {
+            assert!(rect_contains(tb.pills[2], [(button[0] + button[2]) / 2.0, (button[1] + button[3]) / 2.0]), "in the right pill at {w}");
+        }
+        assert!(tb.pills[1][2] < tb.pills[2][0], "and the right pill does not touch the middle one at {w}");
+        assert!(full[2] <= w + 0.5 && tb.pills[2][2] >= w - 13.0 * dpr, "the right pill still hugs the right edge at {w}");
+    }
+}
+
+#[test]
+fn the_mode_button_shows_which_mode_it_is_by_its_icon_and_the_tablet_in_the_accent_colour() {
+    let lines = |mode: Mode| {
+        let mut ui = Ui::default();
+        Toolbar::layout([1650.0, 1350.0], 1.5).draw(&State { mode, ..State::default() }, &mut ui);
+        ui.lines.iter().map(|l| format!("{l:?}")).collect::<Vec<_>>()
+    };
+    let (desk, slate) = (lines(Mode::Desktop), lines(Mode::Tablet));
+    assert_ne!(desk, slate, "the two modes look different");
+    // Nothing else on the toolbars changed: only the one button's lines differ.
+    let differing = desk.iter().zip(&slate).filter(|(a, b)| a != b).count();
+    assert!(differing > 0 && differing <= desk.len().max(slate.len()) / 4, "only the mode button is redrawn: {differing} of {}", desk.len());
+    let accent = |lines: &[String]| lines.iter().filter(|l| l.contains(&format!("{:?}", super::ACCENT))).count();
+    assert!(accent(&slate) > accent(&desk), "the tablet is drawn in the accent colour");
 }

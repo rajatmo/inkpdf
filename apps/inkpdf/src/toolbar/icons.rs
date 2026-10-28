@@ -26,6 +26,8 @@ pub(super) struct Icons {
     pub geometry: Icon,
     pub plus: Icon,
     pub text: Icon,
+    pub desktop: Icon,
+    pub tablet: Icon,
 }
 
 static ICONS: LazyLock<Icons> = LazyLock::new(|| Icons {
@@ -42,6 +44,8 @@ static ICONS: LazyLock<Icons> = LazyLock::new(|| Icons {
     geometry: Icon::from_svg(include_str!("../../icons/svg/geometry.svg")),
     plus: Icon::from_svg(include_str!("../../icons/svg/plus.svg")),
     text: Icon::from_svg(include_str!("../../icons/svg/text.svg")),
+    desktop: Icon::from_svg(include_str!("../../icons/svg/desktop.svg")),
+    tablet: Icon::from_svg(include_str!("../../icons/svg/tablet.svg")),
 });
 
 pub(super) fn icons() -> &'static Icons {
@@ -290,6 +294,8 @@ mod tests {
             ("geometry", &all.geometry),
             ("plus", &all.plus),
             ("text", &all.text),
+            ("desktop", &all.desktop),
+            ("tablet", &all.tablet),
         ] {
             assert!(!icon.lines.is_empty(), "{name} has no strokes");
             for p in icon.lines.iter().flatten() {

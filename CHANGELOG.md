@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+- A mode button on the left of full screen: it shows the mode in use (a monitor for desktop, a tablet in the accent
+  colour for tablet) and switches it. It is not saved; a posture change makes the app decide again.
+- The real-input tests are cut from twenty scripts and about a hundred app starts to two scripts and four starts
+  (about half a minute): they now prove only what unit tests cannot see. The checks were shown to catch a broken
+  mouse mode and a broken mode button.
+
 ## 0.4.0
 
 - A delete-page button (a bin) on the left of the + button. It deletes the page being looked at, at once, with no

@@ -1,6 +1,6 @@
 //! Toolbar presses, the tools, and the tool panel under the toolbar.
 
-use crate::input::Device;
+use crate::input::{Device, Mode};
 use crate::toolbar::{self, Channel, Item, PanelState, Slider, Tool};
 
 use super::{Act, Editor, Request};
@@ -156,6 +156,8 @@ impl Editor {
                 Item::Redo => self.redo(),
                 Item::Save => self.requests.push(Request::Save),
                 Item::Fullscreen => self.requests.push(Request::Fullscreen),
+                // The other mode (the posture decides again when the machine is turned into a tablet or back).
+                Item::ModeSwitch => self.set_mode(if self.mode == Mode::Desktop { Mode::Tablet } else { Mode::Desktop }),
                 Item::Close => self.requests.push(Request::Close),
                 Item::AddPage => {
                     let page = self.view.current_page(&self.layout);

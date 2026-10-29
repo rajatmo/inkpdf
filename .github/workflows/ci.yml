@@ -53,6 +53,37 @@ jobs:
       - name: Window smoke test (virtual display)
         run: tools/e2e/linux-smoke.sh
 
+  windows-portable:
+    # The standalone Windows build: one exe with the C runtime linked in, a portable.txt beside it, zipped. (The same script as on a PC.)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build the portable package
+        shell: pwsh
+        env:
+          INKPDF_DIST: ${{ github.workspace }}\dist
+          CARGO_TARGET_DIR: ${{ github.workspace }}\target-ci
+        run: ./apps/inkpdf/installer/build-portable.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inkpdf-windows-portable
+          path: dist/InkPDF-Portable-*.zip
+
+  linux-portable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build the portable package
+        run: tools/linux/build-portable.sh "$PWD/dist"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inkpdf-linux-portable
+          path: dist/InkPDF-Portable-*.tar.gz
+
   android:
     # The program type-checks for Android, and an installable test APK is built from it (arm64, signed with the debug key in
     # tools/android). The SDK and NDK are the ones installed on GitHub's Ubuntu runners.

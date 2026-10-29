@@ -7,6 +7,7 @@ mod contract;
 mod delete_page;
 mod draft;
 mod inputs;
+mod latency_budget;
 mod laser;
 mod links;
 mod modes;

@@ -20,7 +20,7 @@ use pdfcraft_organize::{OrganizeError, delete_pages, duplicate_pages, insert_bla
 use crate::coords::PageGeom;
 use crate::figure::Figure;
 use crate::ink::{InkStore, P, PageStroke, Style, TextBlock};
-use crate::links::{self, Link};
+use crate::links::Link;
 use crate::outline::OutlineItem;
 use crate::view::Layout;
 
@@ -150,8 +150,8 @@ fn find_ours(doc: &Document) -> Vec<Found> {
 /// Read the ink this app saved earlier.
 pub fn load(bytes: &Arc<Vec<u8>>, geoms: &[PageGeom], layout: &Layout) -> Result<Loaded, String> {
     let mut doc = Document::open(bytes.clone()).map_err(|e| e.to_string())?;
-    let links = links::read(&doc, geoms, layout);
-    let outline = crate::outline::read(&doc);
+    let links = crate::pdf_read::links(&doc, geoms, layout);
+    let outline = crate::pdf_read::outline(&doc);
     let found = find_ours(&doc);
     if found.is_empty() {
         return Ok(Loaded { strokes: Vec::new(), render_bytes: bytes.clone(), links, outline });
@@ -581,7 +581,7 @@ mod tests {
             ];
             let bytes = Arc::new(crate::testutil::build_pdf(&objs));
             let info = pdfcraft_render::inspect(bytes.clone(), None).expect("inspect");
-            let geoms: Vec<PageGeom> = info.pages.iter().map(PageGeom::from_info).collect();
+            let geoms: Vec<PageGeom> = info.pages.iter().map(crate::pdf_read::page_geom).collect();
             let sizes: Vec<[f32; 2]> = info.pages.iter().map(|p| [p.width, p.height]).collect();
             let layout = Layout::new(&sizes);
             let o = page_origin(&layout);
@@ -661,7 +661,7 @@ mod tests {
         let (Ok(base), Ok(out)) = (std::env::var("INKPDF_DEMO_BASE"), std::env::var("INKPDF_DEMO_OUT")) else { return };
         let bytes = Arc::new(std::fs::read(base).expect("read the base PDF"));
         let info = pdfcraft_render::inspect(bytes.clone(), None).expect("inspect");
-        let geoms: Vec<PageGeom> = info.pages.iter().map(PageGeom::from_info).collect();
+        let geoms: Vec<PageGeom> = info.pages.iter().map(crate::pdf_read::page_geom).collect();
         let sizes: Vec<[f32; 2]> = info.pages.iter().map(|p| [p.width, p.height]).collect();
         let layout = Layout::new(&sizes);
 

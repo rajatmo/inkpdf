@@ -1,6 +1,6 @@
 digraph G {
 rankdir=BT; newrank=true; compound=true; splines=true; nodesep=0.35; ranksep=0.9; pad=0.4;
-label=<<b>InkPDF essential skeleton (transitive reduction: 59 of 125 edges)</b>>; labelloc=t; fontsize=22; fontname="Helvetica";
+label=<<b>InkPDF essential skeleton (transitive reduction: 59 of 130 edges)</b>>; labelloc=t; fontsize=22; fontname="Helvetica";
 node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=13, margin="0.14,0.07", color="#888888"];
 edge [arrowsize=0.6];
 subgraph cluster_Base { label="base — plain data and arithmetic"; labeljust=l; fontname="Helvetica"; fontsize=14; style="rounded,filled"; fillcolor="#e8f1fb55"; color="#4a7fb5";
@@ -49,6 +49,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
   "gpu" [fillcolor="white"];
   "ink_io" [fillcolor="white"];
   "path_store" [fillcolor="white"];
+  "pdf_read" [fillcolor="white"];
   "platform" [fillcolor="white" penwidth=2.5 color="#c0392b" fontcolor="#c0392b"];
   "thumbnail" [fillcolor="white"];
   "tiles" [fillcolor="white"];
@@ -72,19 +73,19 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "gpu" -> "tiles" [color="#55555599", penwidth=1.60, tooltip="2 uses"];
 "ink" -> "figure" [color="#3a8f5c99", penwidth=1.60, tooltip="3 uses"];
 "ink" -> "pages" [color="#3a8f5c99", penwidth=1.60, tooltip="1 uses"];
-"ink_io" -> "links" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
-"ink_io" -> "outline" [color="#55555599", penwidth=1.60, tooltip="2 uses"];
+"ink_io" -> "pdf_read" [color="#55555599", penwidth=1.60, tooltip="2 uses"];
 "ink_io" -> "text" [color="#55555599", penwidth=1.60, tooltip="2 uses"];
 "laser" -> "plane" [color="#3a8f5c99", penwidth=1.60, tooltip="1 uses"];
-"links" -> "coords" [color="#3a8f5c99", penwidth=1.60, tooltip="1 uses"];
 "links" -> "ink" [color="#3a8f5c99", penwidth=1.60, tooltip="1 uses"];
 "outline" -> "pages" [color="#3a8f5c99", penwidth=1.60, tooltip="1 uses"];
 "pages" -> "view" [color="#3a8f5c99", penwidth=1.60, tooltip="1 uses"];
 "path_store" -> "store" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
+"pdf_read" -> "coords" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
+"pdf_read" -> "links" [color="#55555599", penwidth=1.60, tooltip="2 uses"];
+"pdf_read" -> "outline" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "platform" -> "clipboard" [color="#55555599", penwidth=1.60, tooltip="3 uses"];
 "platform" -> "clock" [color="#55555599", penwidth=1.60, tooltip="3 uses"];
 "platform" -> "input" [color="#55555599", penwidth=1.60, tooltip="10 uses"];
-"platform" -> "links" [color="#55555599", penwidth=1.60, tooltip="3 uses"];
 "platform" -> "motion" [color="#55555599", penwidth=1.60, tooltip="8 uses"];
 "platform" -> "path_store" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "requests" -> "pages" [color="#b8860b99", penwidth=1.60, tooltip="1 uses"];

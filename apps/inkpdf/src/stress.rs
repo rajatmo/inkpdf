@@ -2169,7 +2169,6 @@ fn hostile_pdf(kind: usize, pages: usize) -> Vec<u8> {
 
 #[test]
 fn stress_hostile_outlines_and_page_trees_open_or_are_refused_and_what_opens_edits_draws_and_saves() {
-    use crate::outline;
     let dir = temp_dir("hostile-outline");
     let mut rng = Rng::new(99);
     let (mut opened, mut refused, mut edited) = (0, 0, 0);
@@ -2230,7 +2229,7 @@ fn stress_hostile_outlines_and_page_trees_open_or_are_refused_and_what_opens_edi
     }
     eprintln!("hostile files: {opened} opened, {refused} refused; page edits made on them: {edited}");
     assert!(opened > 10 && edited > 50, "most of them should open and take edits ({opened} opened, {edited} edits)");
-    let _ = outline::read; // (the reader under test, named so that a rename here is noticed)
+    let _ = crate::pdf_read::outline; // (the reader under test, named so that a rename here is noticed)
     let _ = std::fs::remove_dir_all(dir);
 }
 

@@ -54,7 +54,7 @@ ones below; no two modules may reach each other, directly or through others.
 
 | Layer | Modules |
 |---|---|
-| adapter | `app`, `gpu`, `platform`, `doc`, `path_store`, `ink_io`, `tiles`, `thumbnail` |
+| adapter | `app`, `gpu`, `platform`, `doc`, `path_store`, `pdf_read`, `ink_io`, `tiles`, `thumbnail` |
 | session | `editor` |
 | tools | `tools` |
 | ui | `toolbar` |

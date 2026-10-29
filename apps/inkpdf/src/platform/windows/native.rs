@@ -61,11 +61,9 @@ pub fn motion_prefs() -> crate::motion::Prefs {
     crate::motion::Prefs { reduced: known && animations == 0 }
 }
 
-/// Open a web address in the system's default program for it (a browser, or a mail app). The
-/// address is checked again here: only a plain http, https or mailto address is ever handed over.
+/// Open a web address in the system's default program for it (a browser, or a mail app).
 pub fn open_url(url: &str) {
-    let Some(url) = crate::links::safe_url(url) else { return };
-    let (verb, target) = (wide("open"), wide(&url));
+    let (verb, target) = (wide("open"), wide(url));
     // SAFETY: both strings are NUL-terminated and live across the call; no owner window or
     // working directory is passed.
     unsafe { ShellExecuteW(std::ptr::null_mut(), verb.as_ptr(), target.as_ptr(), std::ptr::null(), std::ptr::null(), SW_SHOWNORMAL) };

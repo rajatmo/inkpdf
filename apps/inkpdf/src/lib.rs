@@ -28,6 +28,7 @@ mod motion;
 mod outline;
 mod pages;
 mod path_store;
+mod pdf_read;
 mod plane;
 mod platform;
 mod requests;

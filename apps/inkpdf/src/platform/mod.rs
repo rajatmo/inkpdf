@@ -55,7 +55,7 @@ pub trait Platform {
     /// The bytes of the font the system draws text in, if its widths are the ones PDF readers use (Arial). Without one the program's
     /// own Liberation Sans is used, which is as wide.
     fn system_font(&self) -> Option<Vec<u8>>;
-    /// Open a web address in the default program for it (only plain http, https or mailto addresses are handed over).
+    /// Open a web address in the default program for it. The shell has checked it (`links::safe_url`): a platform does not.
     fn open_url(&self, url: &str);
     /// Tell the user something went wrong, over `window`.
     fn error_box(&self, window: &dyn HasWindowHandle, text: &str);

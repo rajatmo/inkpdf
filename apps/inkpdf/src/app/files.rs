@@ -267,7 +267,12 @@ impl State {
                         doc.forget_graves(&graves);
                     }
                 }
-                Request::OpenUrl(url) => self.platform.open_url(&url),
+                // (A PDF can ask for any address; only a plain web or mail one is handed to the system.)
+                Request::OpenUrl(url) => {
+                    if let Some(url) = crate::links::safe_url(&url) {
+                        self.platform.open_url(&url);
+                    }
+                }
             }
         }
         // The on-screen keyboard (a phone or tablet has none) is there while something wants typed text.

@@ -53,11 +53,9 @@ pub fn detect_mode() -> Mode {
     Mode::Desktop
 }
 
-/// Open a web address in the default program for it, through `xdg-open`. The address is checked again here: only a
-/// plain http, https or mailto address is ever handed over.
+/// Open a web address in the default program for it, through `xdg-open`.
 pub fn open_url(url: &str) {
-    let Some(url) = crate::links::safe_url(url) else { return };
-    match std::process::Command::new("xdg-open").arg(&url).spawn() {
+    match std::process::Command::new("xdg-open").arg(url).spawn() {
         // (Reaped on its own thread so that it does not stay a zombie.)
         Ok(mut child) => drop(std::thread::spawn(move || drop(child.wait()))),
         Err(e) => eprintln!("could not open {url}: {e}"),

@@ -89,9 +89,7 @@ pub fn detect_mode() -> Mode {
 
 /// Opening a web address is an `Intent`, which needs the Java side; until then it is only said.
 pub fn open_url(url: &str) {
-    if let Some(url) = crate::links::safe_url(url) {
-        eprintln!("cannot open {url} on Android yet");
-    }
+    eprintln!("cannot open {url} on Android yet");
 }
 
 /// The pen, touch and key reader: it shares the activity's input queue with the toolkit and reads it first (see `reader`).

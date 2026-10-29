@@ -147,7 +147,7 @@ enum Layer {
 }
 
 /// Every top-level module of the program, and its layer. A new module is placed here or the test fails.
-const LAYERS: [(&str, Layer); 36] = [
+const LAYERS: [(&str, Layer); 37] = [
     ("plane", Layer::Base),
     ("motion", Layer::Base),
     ("scene", Layer::Base),
@@ -181,6 +181,7 @@ const LAYERS: [(&str, Layer); 36] = [
     ("platform", Layer::Adapter),
     ("doc", Layer::Adapter),
     ("path_store", Layer::Adapter),
+    ("pdf_read", Layer::Adapter),
     ("ink_io", Layer::Adapter),
     ("tiles", Layer::Adapter),
     ("thumbnail", Layer::Adapter),
@@ -347,7 +348,7 @@ fn nothing_below_the_adapters_touches_the_disk_the_environment_or_an_operating_s
     // The inner layers are pure: the same input gives the same output on every machine. What they need from the world (a font,
     // a settings folder, a clock's source) is handed to them by the adapters, which ask `platform`.
     let forbidden =
-        ["std::fs", "std::env", "std::process", "std::net", "windows_sys", "cfg(windows)", "cfg(not(windows))", "cfg(unix", "cfg(target_os", "cfg(not(target_os"];
+        ["std::fs", "std::env", "std::process", "std::net", "windows_sys", "cfg(windows)", "cfg(not(windows))", "cfg(unix", "cfg(target_os", "cfg(not(target_os", "pdfcraft_", "wgpu", "winit"];
     let inner: Vec<String> = LAYERS
         .iter()
         .filter(|(_, layer)| *layer != Layer::Adapter)

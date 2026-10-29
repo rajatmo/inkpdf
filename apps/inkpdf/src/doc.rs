@@ -111,7 +111,7 @@ impl Doc {
         }
         let pages = info.pages.iter().take(tiles::MAX_PAGES);
         let sizes: Vec<[f32; 2]> = pages.clone().map(|p| [p.width, p.height]).collect();
-        let geoms: Vec<PageGeom> = pages.map(PageGeom::from_info).collect();
+        let geoms: Vec<PageGeom> = pages.map(crate::pdf_read::page_geom).collect();
         let layout = Layout::new(&sizes);
         // A file this app inked earlier shows that ink from the ink layer, not the page raster.
         let (strokes, mut links, mut outline, render_bytes) = match ink_io::load(&bytes, &geoms, &layout) {

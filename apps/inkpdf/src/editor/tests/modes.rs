@@ -16,11 +16,11 @@ fn with(tool: Tool, mode: Mode) -> Editor {
 /// Press `button` at the first point, move through the rest, release at the last.
 fn mouse_drag(ed: &mut Editor, button: MouseButton, pts: &[[f32; 2]]) {
     ed.mouse_moved(pts[0]);
-    ed.mouse_button(ElementState::Pressed, button);
+    ed.mouse_button(ButtonState::Pressed, button);
     for p in &pts[1..] {
         ed.mouse_moved(*p);
     }
-    ed.mouse_button(ElementState::Released, button);
+    ed.mouse_button(ButtonState::Released, button);
 }
 
 fn wave(ed: &Editor) -> Vec<[f32; 2]> {
@@ -87,7 +87,7 @@ fn the_tablet_mouse_only_scrolls_and_the_wheel_scrolls_in_both_modes() {
     for mode in [Mode::Desktop, Mode::Tablet] {
         let mut ed = with(Tool::Pen, mode);
         let before = ed.view.scroll;
-        ed.wheel(MouseScrollDelta::LineDelta(0.0, -3.0));
+        ed.wheel(Wheel::Lines(0.0, -3.0));
         settle(&mut ed);
         assert_ne!(ed.view.scroll, before, "{mode:?}: the wheel scrolls");
     }
@@ -115,15 +115,15 @@ fn a_second_button_pressed_during_a_drag_changes_nothing() {
     let mut ed = with(Tool::Pen, Mode::Desktop);
     let path = wave(&ed);
     ed.mouse_moved(path[0]);
-    ed.mouse_button(ElementState::Pressed, MouseButton::Left);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
     ed.mouse_moved(path[1]);
     // The right button goes down and up in the middle of the stroke: not an eraser, not the end of the stroke.
-    ed.mouse_button(ElementState::Pressed, MouseButton::Right);
-    ed.mouse_button(ElementState::Released, MouseButton::Right);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Right);
+    ed.mouse_button(ButtonState::Released, MouseButton::Right);
     ed.mouse_moved(path[2]);
     ed.mouse_moved(path[3]);
     assert_eq!(ed.ink.len(), 0, "the stroke is still being drawn");
-    ed.mouse_button(ElementState::Released, MouseButton::Left);
+    ed.mouse_button(ButtonState::Released, MouseButton::Left);
     assert_eq!(ed.ink.len(), 1, "one stroke, drawn whole");
 }
 
@@ -132,7 +132,7 @@ fn losing_the_focus_ends_what_the_mouse_was_doing() {
     let mut ed = with(Tool::Pen, Mode::Desktop);
     let path = wave(&ed);
     ed.mouse_moved(path[0]);
-    ed.mouse_button(ElementState::Pressed, MouseButton::Left);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
     ed.mouse_moved(path[1]);
     ed.mouse_moved(path[2]);
     ed.focus_lost();
@@ -148,13 +148,13 @@ fn a_lost_release_does_not_make_the_next_press_of_that_button_be_ignored() {
     let mut ed = with(Tool::Pen, Mode::Desktop);
     let path = wave(&ed);
     ed.mouse_moved(path[0]);
-    ed.mouse_button(ElementState::Pressed, MouseButton::Left);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
     ed.mouse_moved(path[1]);
     // The release never arrives. The next press is a new one, on the toolbar as much as on the page.
     let laser = ed.toolbar().centre_of(Item::Tool(Tool::Laser));
     ed.mouse_moved(laser);
-    ed.mouse_button(ElementState::Pressed, MouseButton::Left);
-    ed.mouse_button(ElementState::Released, MouseButton::Left);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
+    ed.mouse_button(ButtonState::Released, MouseButton::Left);
     assert_eq!(ed.tool, Tool::Laser, "the toolbar button was pressed");
     assert!(!ed.tools.busy(), "and the old stroke is over");
 }
@@ -177,14 +177,14 @@ fn changing_the_mode_in_the_middle_of_a_stroke_ends_it_cleanly() {
     let mut ed = with(Tool::Pen, Mode::Desktop);
     let path = wave(&ed);
     ed.mouse_moved(path[0]);
-    ed.mouse_button(ElementState::Pressed, MouseButton::Left);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
     ed.mouse_moved(path[1]);
     ed.mouse_moved(path[2]);
     ed.set_mode(Mode::Tablet);
     assert_eq!(ed.ink.len(), 1, "the stroke was ended and kept");
     assert!(!ed.tools.busy());
     // The release that follows is for a gesture that no longer exists.
-    ed.mouse_button(ElementState::Released, MouseButton::Left);
+    ed.mouse_button(ButtonState::Released, MouseButton::Left);
     assert_eq!(ed.ink.len(), 1);
 }
 

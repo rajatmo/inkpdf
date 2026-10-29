@@ -11,8 +11,7 @@ pub(super) const PALM_PX: f32 = 106.0;
 
 impl Editor {
     pub(super) fn touch_event(&mut self, ev: &PointerEvent) {
-        let now = ev.samples.last().map_or_else(self.clock, |s| s.t_ms);
-        if !self.palm.admit_touch(ev, now, PALM_PX * self.ws.dpr) {
+        if !self.palm.admit_touch(ev, PALM_PX * self.ws.dpr) {
             return;
         }
         let (Some(first), Some(last)) = (ev.samples.first(), ev.samples.last()) else { return };
@@ -51,13 +50,15 @@ impl Editor {
                 }
             }
             Phase::Up | Phase::Cancel => {
+                // (A touch the system gave up on presses, taps and flings nothing.)
+                let lifted = ev.phase == Phase::Up;
                 if matches!(self.chrome.act, Act::Toolbar { dev: Device::Touch, id, .. } if id == ev.id) {
-                    self.release_toolbar(Device::Touch, ev.id, Some(last.pos));
+                    self.release_toolbar(Device::Touch, ev.id, lifted.then_some(last.pos));
                     self.chrome.act = Act::Idle;
                     return;
                 }
                 if matches!(self.chrome.act, Act::Context { dev: Device::Touch, id, .. } if id == ev.id) {
-                    self.release_context(Device::Touch, ev.id, Some(last.pos));
+                    self.release_context(Device::Touch, ev.id, lifted.then_some(last.pos));
                     self.chrome.act = Act::Idle;
                     return;
                 }
@@ -67,13 +68,13 @@ impl Editor {
                     return;
                 }
                 let released = self.fingers.up(ev.id, last.pos, last.t_ms);
-                if let Some(v) = released.fling {
+                if let Some(v) = released.fling.filter(|_| lifted) {
                     self.ws.scroll_by_px(v[0] * FLING_SECONDS, v[1] * FLING_SECONDS);
                 }
                 if self.fingers.fingers() == 0 {
                     self.end_pull();
                 }
-                if let Some(pos) = released.tap {
+                if let Some(pos) = released.tap.filter(|_| lifted) {
                     // A tap follows a link under the finger; failing that, on the page it lets go of
                     // a selection.
                     if !self.follow_link_at(pos) {
@@ -83,6 +84,24 @@ impl Editor {
             }
             Phase::Hover | Phase::Leave => {}
         }
+        self.ws.redraw = true;
+    }
+
+    /// Every finger's business is called off, as when the pen comes near: no pan, pinch, toolbar press or fling goes on, and
+    /// nothing is activated.
+    pub(super) fn cancel_touches(&mut self) {
+        self.fingers = crate::input::TouchGestures::default();
+        self.end_pull();
+        if matches!(
+            self.chrome.act,
+            Act::Toolbar { dev: Device::Touch, .. }
+                | Act::Context { dev: Device::Touch, .. }
+                | Act::Slider { dev: Device::Touch, .. }
+                | Act::Swallow { dev: Device::Touch, .. }
+        ) {
+            self.end_act();
+        }
+        self.overview_gestures_lost();
         self.ws.redraw = true;
     }
 
@@ -103,50 +122,8 @@ impl Editor {
         }
     }
 
-    /// Touch through winit's own events, used only if the Windows pointer layer could not be
-    /// installed. Pans and zooms; it cannot tell a pen from a finger.
-    pub fn basic_touch(&mut self, phase: winit::event::TouchPhase, id: u64, pos: [f32; 2]) {
-        use winit::event::TouchPhase;
-        if self.chrome.prompt.is_some() || self.chrome.overview.is_some() {
-            return;
-        }
-        match phase {
-            TouchPhase::Started => {
-                self.ws.view.stop();
-                self.basic_touches.insert(id, pos);
-                self.basic_pinch = self.basic_pinch_state();
-            }
-            TouchPhase::Moved => {
-                let Some(old) = self.basic_touches.insert(id, pos) else { return };
-                if self.basic_touches.len() == 1 {
-                    self.ws.pan_px(pos[0] - old[0], pos[1] - old[1]);
-                } else if let (Some(prev), Some(now)) = (self.basic_pinch.take(), self.basic_pinch_state()) {
-                    if prev.0 > 1.0 {
-                        self.ws.fit_mode = false;
-                        let zoom = self.ws.view.zoom * now.0 / prev.0;
-                        self.ws.zoom_about(zoom, now.1);
-                    }
-                    self.ws.pan_px(now.1[0] - prev.1[0], now.1[1] - prev.1[1]);
-                    self.basic_pinch = Some(now);
-                }
-                self.ws.redraw = true;
-            }
-            TouchPhase::Ended | TouchPhase::Cancelled => {
-                self.basic_touches.remove(&id);
-                self.basic_pinch = self.basic_pinch_state();
-            }
-        }
-    }
-
-    fn basic_pinch_state(&self) -> Option<(f32, [f32; 2])> {
-        let mut ids: Vec<&u64> = self.basic_touches.keys().collect();
-        ids.sort();
-        let (a, b) = (self.basic_touches.get(ids.first()?)?, self.basic_touches.get(ids.get(1)?)?);
-        Some((((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt(), [(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0]))
-    }
-
-    /// Whether a second finger or the pinch fallback means the zoom is in motion.
+    /// Whether a second finger means the zoom is in motion.
     pub fn pinching(&self) -> bool {
-        self.basic_pinch.is_some() || self.fingers.fingers() >= 2
+        self.fingers.fingers() >= 2
     }
 }

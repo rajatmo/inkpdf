@@ -10,6 +10,11 @@ publish = false
 # Not `[lints] workspace = true`: the workspace forbids unsafe code, and reading the pen
 # through Win32 pointer messages (M2) needs it, confined to one small module.
 
+# The program is the library; the binary below is only its entry point (the Android library is another).
+[lib]
+name = "inkpdf"
+path = "src/lib.rs"
+
 [[bin]]
 name = "inkpdf"
 path = "src/main.rs"
@@ -38,9 +43,19 @@ wgpu = { version = "30", features = ["wgsl"] }
 winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
 pollster = "1"
 bytemuck = { version = "1", features = ["derive"] }
-rfd = { workspace = true }
 # Typed text: reads the outlines of a system font (the same font parser the page renderer uses).
 skrifa = "0.47"
+
+# Linux: a window on Wayland or X11, whichever the session runs (decided when the window is made). The Wayland client
+# library is loaded when needed, so one binary starts on either.
+[target.'cfg(all(unix, not(target_os = "android")))'.dependencies]
+winit = { version = "0.30", default-features = false, features = ["rwh_06", "x11", "wayland", "wayland-dlopen"] }
+
+# Android: NativeActivity (no Java glue to start with; the file picker and clipboard will need a little, see docs/PORTING.md).
+[target.'cfg(target_os = "android")'.dependencies]
+winit = { version = "0.30", default-features = false, features = ["rwh_06", "android-native-activity"] }
+# The monotonic clock the input events are stamped with (see `platform/android/reader.rs`).
+libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
 # Pen and touch arrive as Windows pointer messages: winit reports only pressure and cannot tell a
@@ -48,6 +63,8 @@ skrifa = "0.47"
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Com",
     "Win32_System_Console",
     "Win32_System_DataExchange",
     "Win32_System_Memory",

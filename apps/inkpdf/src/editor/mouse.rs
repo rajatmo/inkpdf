@@ -4,10 +4,9 @@
 //! (left button the tip, right the eraser end, middle the barrel button) and the text tool takes it as itself
 //! (click to place, edit and move text); in the tablet mode it only scrolls.
 
-use winit::event::{ElementState, MouseButton, MouseScrollDelta};
+use crate::input::{ButtonState, Device, MouseButton, PenButtons, Phase, Wheel};
 
-use crate::input::{Device, PenButtons, Phase};
-
+use super::modal::Modal;
 use super::{Act, Editor};
 
 /// Pixels one mouse-wheel notch scrolls.
@@ -25,13 +24,11 @@ pub(super) struct MousePress {
 impl Editor {
     pub(crate) fn mouse_moved(&mut self, pos: [f32; 2]) {
         self.cursor = pos;
-        if self.chrome.prompt.is_some() {
-            self.prompt_pointer(Device::Mouse, 0, Phase::Move, pos);
-            return;
-        }
-        if self.chrome.overview.is_some() {
-            self.overview_pointer(Device::Mouse, 0, Phase::Move, pos);
-            return;
+        match self.modal() {
+            Some(Modal::Prompt) => return self.prompt_pointer(Device::Mouse, 0, Phase::Move, pos),
+            Some(Modal::SaveAs) => return self.save_as_pointer(Device::Mouse, 0, Phase::Move, pos),
+            Some(Modal::Overview) => return self.overview_pointer(Device::Mouse, 0, Phase::Move, pos),
+            None => {}
         }
         self.update_hover(Some(pos));
         match self.chrome.act {
@@ -63,6 +60,7 @@ impl Editor {
     /// The window lost the keyboard focus: a button released elsewhere never reaches us, so what the mouse was
     /// in the middle of is ended now.
     pub(crate) fn focus_lost(&mut self) {
+        self.palm.reset();
         self.overview_gestures_lost();
         if self.mouse_press.take().is_some() {
             self.tools.end_all(&mut self.ws);
@@ -88,20 +86,20 @@ impl Editor {
     /// A mouse button went down or up. The left button presses what is under it if that is part of the window
     /// (a toolbar button, the tool panel, the prompt); anywhere on the page, any of the three starts what the tool
     /// and the mode make of a mouse.
-    pub(crate) fn mouse_button(&mut self, state: ElementState, button: MouseButton) {
-        if !matches!(button, MouseButton::Left | MouseButton::Right | MouseButton::Middle) {
+    pub(crate) fn mouse_button(&mut self, state: ButtonState, button: MouseButton) {
+        if button == MouseButton::Other {
             return;
         }
-        let pressed = state == ElementState::Pressed;
-        if self.chrome.overview.is_some() {
-            if button == MouseButton::Left && self.chrome.prompt.is_none() {
-                self.overview_pointer(Device::Mouse, 0, if pressed { Phase::Down } else { Phase::Up }, self.cursor);
-            }
-            return;
-        }
-        if self.chrome.prompt.is_some() {
+        let pressed = state == ButtonState::Pressed;
+        if let Some(modal) = self.modal() {
+            // A modal layer answers the left button alone.
             if button == MouseButton::Left {
-                self.prompt_pointer(Device::Mouse, 0, if pressed { Phase::Down } else { Phase::Up }, self.cursor);
+                let (phase, at) = (if pressed { Phase::Down } else { Phase::Up }, self.cursor);
+                match modal {
+                    Modal::Prompt => self.prompt_pointer(Device::Mouse, 0, phase, at),
+                    Modal::SaveAs => self.save_as_pointer(Device::Mouse, 0, phase, at),
+                    Modal::Overview => self.overview_pointer(Device::Mouse, 0, phase, at),
+                }
             }
             return;
         }
@@ -157,18 +155,17 @@ impl Editor {
     }
 
     /// The wheel scrolls, up and down and (for a wheel that tilts or a touchpad) sideways.
-    pub fn wheel(&mut self, delta: MouseScrollDelta) {
-        if self.chrome.prompt.is_some() {
-            return;
-        }
-        if self.chrome.overview.is_some() {
-            self.overview_wheel(delta);
-            return;
+    pub fn wheel(&mut self, delta: Wheel) {
+        match self.modal() {
+            Some(Modal::Prompt) => return,
+            Some(Modal::SaveAs) => return self.save_as_wheel(delta),
+            Some(Modal::Overview) => return self.overview_wheel(delta),
+            None => {}
         }
         match delta {
-            MouseScrollDelta::LineDelta(x, y) => self.ws.scroll_by_px(-x * WHEEL_NOTCH_PX, y * WHEEL_NOTCH_PX),
+            Wheel::Lines(x, y) => self.ws.scroll_by_px(-x * WHEEL_NOTCH_PX, y * WHEEL_NOTCH_PX),
             // Precision touchpads already glide: follow them exactly.
-            MouseScrollDelta::PixelDelta(p) => self.ws.pan_px(p.x as f32, p.y as f32),
+            Wheel::Pixels(x, y) => self.ws.pan_px(x, y),
         }
         self.ws.redraw = true;
     }

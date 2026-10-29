@@ -1,0 +1,113 @@
+//! Finding the user's folders on a Unix-like system (Linux, and Android's fallback): the configuration folder, the folders a desktop
+//! names in `user-dirs.dirs`, and the places the save dialog offers.
+
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+use crate::browse::Place;
+
+/// The user's configuration folder on a desktop: `$XDG_CONFIG_HOME`, else `~/.config`.
+#[cfg_attr(target_os = "android", allow(dead_code, reason = "Android keeps its settings in the app's own folder"))]
+pub fn xdg_config_dir() -> Option<std::path::PathBuf> {
+    let non_empty = |name: &str| std::env::var_os(name).filter(|v| !v.is_empty()).map(std::path::PathBuf::from);
+    non_empty("XDG_CONFIG_HOME").or_else(|| non_empty("HOME").map(|home| home.join(".config")))
+}
+
+/// The folders a desktop names in `user-dirs.dirs` (`XDG_DOCUMENTS_DIR="$HOME/Documents"`), by their keys. Anything
+/// that is not a quoted absolute path, or `$HOME` followed by a path, is left out: the file is the user's, and not trusted
+/// to be well made.
+#[cfg_attr(target_os = "android", allow(dead_code, reason = "Android has no user-dirs file; the parser is tested wherever there is one"))]
+pub fn parse_user_dirs(text: &str, home: &Path) -> HashMap<String, PathBuf> {
+    let mut found = HashMap::new();
+    for line in text.lines() {
+        let line = line.trim();
+        let Some((key, value)) = line.split_once('=') else { continue };
+        if line.starts_with('#') || !key.starts_with("XDG_") || !key.ends_with("_DIR") {
+            continue;
+        }
+        let value = value.trim().trim_matches('"');
+        let path = match value.strip_prefix("$HOME") {
+            Some(rest) if rest.is_empty() || rest.starts_with('/') => home.join(rest.trim_start_matches('/')),
+            _ if value.starts_with('/') => PathBuf::from(value),
+            _ => continue,
+        };
+        found.insert(key.to_string(), path);
+    }
+    found
+}
+
+/// The home folder.
+pub fn home_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME").filter(|h| !h.is_empty()).map(PathBuf::from)
+}
+
+/// The first of `candidates` that is a folder, else `home` if it is, else wherever the program is, else the top.
+pub fn first_folder(candidates: &[PathBuf], home: Option<&Path>) -> PathBuf {
+    candidates
+        .iter()
+        .map(PathBuf::as_path)
+        .chain(home)
+        .find(|p| p.is_dir())
+        .map(Path::to_path_buf)
+        .or_else(|| std::env::current_dir().ok())
+        .unwrap_or_else(|| PathBuf::from("/"))
+}
+
+/// `places` that exist as folders, each once (the first label a folder is given is the one it keeps).
+pub fn existing_places(places: Vec<(&str, PathBuf)>, exists: impl Fn(&Path) -> bool) -> Vec<Place> {
+    let mut out: Vec<Place> = Vec::new();
+    for (label, path) in places {
+        if exists(&path) && !out.iter().any(|p| p.path == path) {
+            out.push(Place { label: label.to_string(), path });
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_folders_a_desktop_names_are_read_from_its_file_and_nothing_untrusted_is() {
+        let home = Path::new("/home/me");
+        let text = "# comment\nXDG_DESKTOP_DIR=\"$HOME/Desktop\"\nXDG_DOCUMENTS_DIR=\"$HOME/Dokumente\"\nXDG_DOWNLOAD_DIR=\"/data/dl\"\nXDG_MUSIC_DIR=\"$HOME\"\nXDG_VIDEOS_DIR=\"$HOMEBASE/x\"\nXDG_PICTURES_DIR=\"relative/path\"\nNOT_XDG=\"/x\"\n#XDG_TEMPLATES_DIR=\"/t\"\nXDG_PUBLICSHARE_DIR\n";
+        let dirs = parse_user_dirs(text, home);
+        assert_eq!(dirs["XDG_DESKTOP_DIR"], Path::new("/home/me/Desktop"));
+        assert_eq!(dirs["XDG_DOCUMENTS_DIR"], Path::new("/home/me/Dokumente"), "a translated name is used, not Documents");
+        assert_eq!(dirs["XDG_DOWNLOAD_DIR"], Path::new("/data/dl"));
+        assert_eq!(dirs["XDG_MUSIC_DIR"], Path::new("/home/me"), "$HOME alone is home");
+        for left_out in ["XDG_VIDEOS_DIR", "XDG_PICTURES_DIR", "NOT_XDG", "XDG_TEMPLATES_DIR", "XDG_PUBLICSHARE_DIR"] {
+            assert!(!dirs.contains_key(left_out), "{left_out}");
+        }
+    }
+
+    #[test]
+    fn the_start_folder_is_the_first_that_exists_then_home_then_somewhere() {
+        let dir = std::env::temp_dir().join(format!("inkpdf-folders-{}", std::process::id()));
+        let docs = dir.join("Documents");
+        std::fs::create_dir_all(&docs).unwrap();
+        let missing = dir.join("missing");
+        assert_eq!(first_folder(&[missing.clone(), docs.clone()], Some(&dir)), docs);
+        assert_eq!(first_folder(std::slice::from_ref(&missing), Some(&dir)), dir, "no Documents folder: home");
+        let somewhere = first_folder(std::slice::from_ref(&missing), Some(&missing));
+        assert!(somewhere.is_dir(), "never a folder that is not there: {somewhere:?}");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn places_that_are_not_there_or_are_the_same_folder_twice_are_left_out() {
+        let there = |p: &Path| p != Path::new("/gone");
+        let places = existing_places(
+            vec![
+                ("Documents", "/home/me/Documents".into()),
+                ("Desktop", "/gone".into()),
+                ("Home", "/home/me".into()),
+                ("Also home", "/home/me".into()),
+            ],
+            there,
+        );
+        let labels: Vec<&str> = places.iter().map(|p| p.label.as_str()).collect();
+        assert_eq!(labels, ["Documents", "Home"]);
+    }
+}

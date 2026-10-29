@@ -11,7 +11,7 @@ use crate::text;
 use crate::tiles::Key;
 use crate::toolbar::{Align, Image, Label, Ui};
 
-use super::State;
+use super::{Paint, UiLayers};
 
 /// What the overview needs drawn this frame, kept between frames so that its room is kept.
 #[derive(Default)]
@@ -34,19 +34,19 @@ fn label_key(label: &Label) -> u64 {
     hasher.finish()
 }
 
-impl State {
+impl UiLayers {
     /// Lay the overview out while it is up (every frame: its look follows the pointer and the scroll), or clear what it left.
     /// `true` if it is up and has taken the interface's place.
-    pub(super) fn sync_overview_ui(&mut self) -> bool {
-        if !self.ed.overview_open() {
+    pub(super) fn sync_overview_ui(&mut self, cx: &mut Paint) -> bool {
+        if !cx.ed.overview_open() {
             // Just put away: it goes out, drawn as it was, a little clearer each frame.
-            let leaving = self.ed.overview_leaving();
+            let leaving = cx.ed.overview_leaving();
             if leaving > 0.0
                 && let Some(ghost) = &self.overview.ghost
             {
                 let mut ui = ghost.clone();
                 ui.fade(leaving);
-                self.gpu.set_ui(&ui.panels, &ui.lines);
+                cx.gpu.set_ui(&ui.panels, &ui.lines);
                 self.overview.images = ui.images;
                 self.overview.labels = ui.labels;
                 self.ui_built = None;
@@ -62,8 +62,8 @@ impl State {
             return false;
         }
         let mut ui = Ui::default();
-        self.ed.draw_overview(&mut ui);
-        self.gpu.set_ui(&ui.panels, &ui.lines);
+        cx.ed.draw_overview(&mut ui);
+        cx.gpu.set_ui(&ui.panels, &ui.lines);
         self.overview.ghost = Some(ui.clone());
         self.overview.images = ui.images;
         self.overview.labels = ui.labels;
@@ -72,26 +72,42 @@ impl State {
         true
     }
 
+    /// The Save As dialog takes the window as the overview does: its panels and lines go where the interface's do, and its text
+    /// is drawn to bitmaps by [`Self::overview_frame`] (the dialog has no pictures). `true` if it is up.
+    pub(super) fn sync_save_as_ui(&mut self, cx: &mut Paint) -> bool {
+        if !cx.ed.save_as_open() {
+            return false;
+        }
+        let mut ui = Ui::default();
+        cx.ed.draw_save_as(&mut ui);
+        cx.gpu.set_ui(&ui.panels, &ui.lines);
+        self.overview.images.clear();
+        self.overview.labels = ui.labels;
+        // What the interface was built from is gone from the GPU: it is built afresh when the dialog leaves.
+        self.ui_built = None;
+        true
+    }
+
     /// The quads of the overview's text and pictures, and the ink in the pictures, for this frame; the bitmaps and the
     /// small renders they need are made sure of first.
-    pub(super) fn overview_frame(&mut self) {
+    pub(super) fn overview_frame(&mut self, cx: &mut Paint) {
         self.overview.quads.clear();
         self.overview.thumbs.clear();
-        if !self.ed.overview_open() && self.overview.images.is_empty() && self.overview.labels.is_empty() {
+        if !cx.ed.overview_open() && self.overview.images.is_empty() && self.overview.labels.is_empty() {
             return;
         }
-        let viewport = self.ed.view.viewport;
+        let viewport = cx.ed.view.viewport;
         // (The ink in the pictures is drawn once the overview is all there, and not while it goes out.)
-        let appear = if self.ed.overview_open() { self.ed.overview_appear() } else { 0.0 };
+        let appear = if cx.ed.overview_open() { cx.ed.overview_appear() } else { 0.0 };
         let mut used = HashSet::new();
         for label in &self.overview.labels {
             let key = label_key(label);
-            if self.gpu.text_size(key).is_none()
+            if cx.gpu.text_size(key).is_none()
                 && let Some(bitmap) = text::raster(&label.text, label.size, 1.0, label.color)
             {
-                self.gpu.upload_text(key, bitmap.width, bitmap.height, &bitmap.pixels);
+                cx.gpu.upload_text(key, bitmap.width, bitmap.height, &bitmap.pixels);
             }
-            let Some([bw, bh]) = self.gpu.text_size(key) else { continue };
+            let Some([bw, bh]) = cx.gpu.text_size(key) else { continue };
             used.insert(key);
             // The line's middle is where the label says; the bitmap has a margin round the text.
             let [width, height] = text::measure(&label.text, label.size);
@@ -113,20 +129,20 @@ impl State {
             // The picture of the page the file draws it from, once it is there: not for a page that was added (it is
             // blank), nor yet for one that is still being rendered. What is drawn on the page shows either way.
             // (It is kept under the page of the file that draws the page.)
-            let key = self.doc.as_ref().and_then(|d| d.render_page(image.page as usize)).map(|p| Key::Thumb { page: p });
-            if let Some(key) = key.filter(|&k| self.gpu.has(k)) {
-                self.gpu.touch(key, self.frame);
+            let key = cx.doc.and_then(|d| d.render_page(image.page as usize)).map(|p| Key::Thumb { page: p });
+            if let Some(key) = key.filter(|&k| cx.gpu.has(k)) {
+                cx.gpu.touch(key, cx.frame);
                 let uv = [(shown[0] - full[0]) / w, (shown[1] - full[1]) / h, (shown[2] - full[0]) / w, (shown[3] - full[1]) / h];
                 let a = image.alpha.clamp(0.0, 1.0);
                 self.overview.quads.push(Quad { uv, color: [a; 4], ..Quad::page(key, shown) });
             }
-            let Some(page) = self.ed.layout.page(image.page as usize) else { continue };
+            let Some(page) = cx.ed.layout.page(image.page as usize) else { continue };
             if page.w <= 0.0 {
                 continue;
             }
             let scale = w / page.w;
             // The typed text on the page (bitmaps, like the labels), over its picture.
-            self.thumb_text_quads(image, scale, &mut thumb_keys, &mut thumb_texts);
+            self.thumb_text_quads(cx, image, scale, &mut thumb_keys, &mut thumb_texts);
             let ranges: Vec<_> = self.ink_pages.iter().filter(|(p, _)| *p == image.page).map(|(_, r)| r.clone()).collect();
             if ranges.is_empty() {
                 continue;

@@ -25,8 +25,13 @@ impl GpuChoice {
 }
 
 fn backends() -> wgpu::Backends {
-    // DX12 on Windows (its swap chain has the least latency); `WGPU_BACKEND` overrides it.
-    wgpu::Backends::from_env().unwrap_or(wgpu::Backends::DX12)
+    // DX12 on Windows (its swap chain has the least latency), Vulkan on Linux and Android (the only API with
+    // the same control over presentation there); `WGPU_BACKEND` overrides it.
+    #[cfg(windows)]
+    const NATIVE: wgpu::Backends = wgpu::Backends::DX12;
+    #[cfg(not(windows))]
+    const NATIVE: wgpu::Backends = wgpu::Backends::VULKAN;
+    wgpu::Backends::from_env().unwrap_or(NATIVE)
 }
 
 pub(super) fn new_instance() -> wgpu::Instance {

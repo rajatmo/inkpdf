@@ -81,7 +81,7 @@ fn only_a_finger_adds_pages() {
     let mut ed = at_the_end();
     // The wheel scrolls to the end and stops.
     for _ in 0..30 {
-        ed.wheel(MouseScrollDelta::LineDelta(0.0, -5.0));
+        ed.wheel(Wheel::Lines(0.0, -5.0));
     }
     assert_eq!(ed.layout.len(), 2);
     // A pen dragging at the end draws.

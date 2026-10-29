@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased
+
+- On Android the stylus's first button (the S Pen's one button) erases, as in Samsung Notes; a second button is the barrel button (lasso), and a
+  real eraser end erases as before. Windows and Linux are unchanged: the eraser end erases and the barrel button lassos.
+- `--record FILE` saves the input the program was given (pen, touch, mouse, keys) as text, and `--replay FILE` plays it back at its
+  old pace and closes: the same recording gives the same document on every system, so a problem seen on one machine can be played
+  on another, and the speed of the editor can be measured with no one at the screen.
+- The pen's events are handed to the editor without allocating each frame.
+- Text boxes are set in Arial where Windows has it and in a built-in copy of Liberation Sans (as wide as Arial) everywhere else,
+  so a text box takes the same room on every machine. Settings are kept in the platform's configuration folder (on Android, the
+  app's private one), through the platform layer.
+- Palm rejection is one rule: touch is off for as long as the pen is above the screen or touching it, and comes back the moment the pen
+  leaves (no waiting period). Fingers already down when the pen arrives are given up cleanly (before, they could stay stuck as a
+  phantom finger). A pen whose screen does not report hover no longer locks touch out after a stroke. A contact too big for a
+  fingertip is still taken for a palm.
+- Save As is the app's own card, on every platform (it replaces the system's save window, which stays hidden when raised from a
+  pen tap and looks different everywhere): it opens on the Documents folder (the one Windows names, which may be in OneDrive;
+  on Linux the desktop's own; the document's folder when it already has a file), offers `Untitled.pdf` with its name selected,
+  and has places to start from, the folder you are in with an up button, its subfolders and PDFs, and Cancel and Save. A new
+  document saves through it from Ctrl+S or the save button; Ctrl+Shift+S saves any document under another name.
+- Every device finishes it: the left mouse button and keyboard at a desk, the stylus's tip on a slate (the name offered can be
+  saved as it is, so no keyboard is needed), a finger taps and drags the list, the wheel scrolls it. A name is checked
+  (no `/ \ : * ? " < > |`, no `CON`/`NUL`, no trailing dot, `.pdf` added) so a file saved here opens anywhere; a file that
+  is there is replaced only when Save is pressed a second time.
+- Inside: `browse.rs` (the entries, the places and the file-name rules, no file system), `editor/save_as.rs` (the state, which
+  asks the shell to list a folder and to write the file through `Request`s), `toolbar/save_as.rs` (layout and drawing as plain
+  data), `app/folders.rs` (folders are read on a thread of their own, so a slow drive cannot stall a frame). The `rfd`
+  dependency is gone. New tests: the name rules, the dialog's state machine, every device through the editor, and a hostile storm.
+
 ## 1.0.0
 
 Motion, the Material way: the interface now moves instead of switching.

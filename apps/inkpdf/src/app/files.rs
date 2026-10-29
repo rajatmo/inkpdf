@@ -1,18 +1,18 @@
 //! What the editor asks of the shell: opening and saving files, the context menu, settings.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use winit::window::Fullscreen;
 
 use crate::doc::{Doc, UNTITLED};
 use crate::editor::Request;
 use crate::ink::PageStroke;
-use crate::native;
 use crate::pages::PageEdit;
 use crate::requests::Choice;
-use crate::settings;
+use crate::store::DocId;
+use super::config;
 
-use super::{InkStamp, State};
+use super::{InkStamp, State, folders};
 
 /// What to do once any unsaved work has been dealt with.
 #[derive(Debug, PartialEq)]
@@ -37,11 +37,15 @@ impl State {
     /// wait for the answer (see [`Self::answered`]). While a prompt is up, further requests are
     /// ignored.
     pub(super) fn after_settling(&mut self, then: Then) {
+        // (The Save As dialog is a prompt too: what is asked while it is up waits for the person to finish with it.)
+        if self.ed.save_as_open() {
+            return;
+        }
         self.ed.settle();
         if !self.ed.ink.is_dirty() {
             self.run(then);
-        } else if self.then.is_none() {
-            self.then = Some(then);
+        } else if self.session.then.is_none() {
+            self.session.then = Some(then);
             self.ed.ask_unsaved();
             self.window.request_redraw();
         }
@@ -49,7 +53,7 @@ impl State {
 
     fn run(&mut self, then: Then) {
         match then {
-            Then::Exit => self.exit = true,
+            Then::Exit => self.timing.exit = true,
             Then::Open(path) => self.open_now(path),
             Then::Blank => self.open_blank(),
         }
@@ -57,7 +61,12 @@ impl State {
 
     /// The prompt was answered.
     pub(super) fn answered(&mut self, choice: Choice) {
-        let Some(then) = self.then.take() else { return };
+        let Some(then) = self.session.then.take() else { return };
+        // A document with no file yet is asked where to go: what was waiting follows when the file has been written.
+        if choice == Choice::Save && self.ed.ink.is_dirty() && self.session.doc.as_ref().is_some_and(|d| d.id.is_none()) {
+            self.begin_save_as(Some(then));
+            return;
+        }
         if proceeds(choice, || self.save_now()) {
             self.run(then);
         }
@@ -66,13 +75,14 @@ impl State {
     fn install(&mut self, mut doc: Doc, strokes: Vec<PageStroke>) {
         eprintln!("opened {} — {} pages, {} ink strokes, {} ms", doc.name, doc.page_count(), strokes.len(), doc.open_millis);
         self.gpu.clear_textures();
-        self.failed.clear();
+        self.session.failed.clear();
         self.ed.load(doc.layout(), strokes);
         self.ed.links = doc.take_links();
         self.ed.outline = doc.take_outline();
-        self.doc = Some(doc);
-        self.ink_built = InkStamp::NEVER;
-        self.last_zoom = self.ed.view.zoom;
+        self.session.doc = Some(doc);
+        self.session.save_then = None;
+        self.layers.ink_built = InkStamp::NEVER;
+        self.timing.last_zoom = self.ed.view.zoom;
         self.title.clear();
         self.window.request_redraw();
     }
@@ -83,11 +93,11 @@ impl State {
     }
 
     fn open_now(&mut self, path: PathBuf) {
-        match Doc::open(&path) {
+        match Doc::open_from(&*self.session.files, &DocId::Path(path.clone())) {
             Ok((doc, strokes)) => self.install(doc, strokes),
             Err(e) => {
                 eprintln!("could not open {}: {e}", path.display());
-                native::error_box(&self.window, &format!("Could not open {}:\n{e}", path.display()));
+                self.platform.error_box(&*self.window, &format!("Could not open {}:\n{e}", path.display()));
             }
         }
     }
@@ -109,13 +119,49 @@ impl State {
         self.after_settling(Then::Blank);
     }
 
-    /// Where to save a new document, asked for with the system's save window. `None` if cancelled.
-    fn save_dialog(&self) -> Option<PathBuf> {
-        let mut path = rfd::FileDialog::new().add_filter("PDF", &["pdf"]).set_file_name(format!("{UNTITLED}.pdf")).save_file()?;
-        if path.extension().is_none() {
-            path.set_extension("pdf");
+    /// Put the Save As dialog up, and let `then` (if there is one) wait for it. It starts in the folder the document is in, or in
+    /// the Documents folder for a document that has no file yet, offering the document's name, or `Untitled.pdf`.
+    pub(super) fn begin_save_as(&mut self, then: Option<Then>) {
+        if self.ed.save_as_open() {
+            return;
         }
-        Some(path)
+        self.ed.settle();
+        self.session.save_then = then;
+        let file = self.session.doc.as_ref().and_then(|d| d.path().map(Path::to_path_buf));
+        let dir = file.as_deref().and_then(Path::parent).filter(|p| p.is_dir()).map_or_else(|| self.platform.documents_dir(), Path::to_path_buf);
+        let name = file.as_deref().and_then(Path::file_name).map_or_else(|| format!("{UNTITLED}.pdf"), |n| n.to_string_lossy().into_owned());
+        self.ed.ask_save_as(dir, &name, self.platform.places());
+        self.window.request_redraw();
+    }
+
+    /// The Save As dialog was confirmed with the file `id`: the document is written there, and becomes that file.
+    fn save_to(&mut self, id: DocId) {
+        let result = match &mut self.session.doc {
+            Some(doc) => doc.save_as_to(&*self.session.files, &id, &self.ed.ink),
+            None => Err("there is no document to save".to_string()),
+        };
+        match result {
+            Ok(()) => {
+                self.ed.document_saved();
+                self.ed.save_as_done(Ok(()));
+                self.title.clear();
+                self.window.request_redraw();
+                if let Some(then) = self.session.save_then.take() {
+                    self.run(then);
+                }
+            }
+            Err(e) => {
+                eprintln!("save failed: {e}");
+                self.ed.save_as_done(Err(format!("Could not save: {e}")));
+            }
+        }
+    }
+
+    /// The folders the dialog asked for that have been read: handed to the editor.
+    fn take_listings(&mut self) {
+        while let Ok(listed) = self.session.listings.1.try_recv() {
+            self.ed.folder_listed(&listed.dir, listed.result);
+        }
     }
 
     /// Write the ink into the PDF; a document with no file yet asks where to save it first.
@@ -125,21 +171,15 @@ impl State {
         if !self.ed.ink.is_dirty() {
             return true;
         }
-        let Some(has_file) = self.doc.as_ref().map(|d| d.path.is_some()) else { return true };
-        // A document with no file yet is saved where the person says, or not at all.
-        let new_path = if has_file {
-            None
-        } else if let Some(path) = self.save_dialog() {
-            Some(path)
-        } else {
+        let Some(has_file) = self.session.doc.as_ref().map(|d| d.id.is_some()) else { return true };
+        // A document with no file yet is saved where the person says: the dialog asks, and the write follows from it
+        // (see `save_to`), so nothing has been saved yet.
+        if !has_file {
+            self.begin_save_as(None);
             return false;
-        };
-        let Some(doc) = &mut self.doc else { return true };
-        let result = match &new_path {
-            Some(path) => doc.save_as(path, &self.ed.ink),
-            None => doc.save(&self.ed.ink),
-        };
-        match result {
+        }
+        let Some(doc) = &mut self.session.doc else { return true };
+        match doc.save_to(&*self.session.files, &self.ed.ink) {
             Ok(()) => {
                 self.ed.document_saved();
                 self.title.clear();
@@ -148,7 +188,7 @@ impl State {
             }
             Err(e) => {
                 eprintln!("save failed: {e}");
-                native::error_box(&self.window, &format!("Could not save:\n{e}"));
+                self.platform.error_box(&*self.window, &format!("Could not save:\n{e}"));
                 false
             }
         }
@@ -168,16 +208,21 @@ impl State {
 
     /// The editor edited the pages: the file's page table follows, and what was drawn for the pages is out of date.
     fn pages_edited(&mut self, edit: &PageEdit) {
-        let Some(doc) = &mut self.doc else { return };
+        let Some(doc) = &mut self.session.doc else { return };
         if !doc.apply(edit) {
             eprintln!("the document could not follow the edit of its pages: {edit:?}");
             return;
         }
         // (What is on the GPU is kept by the page of the file that draws it: a change of the pages leaves it as it is.)
-        self.ink_built = InkStamp::NEVER;
+        self.layers.ink_built = InkStamp::NEVER;
     }
 
     pub(super) fn request_close(&mut self) {
+        // Closing the window puts the Save As dialog away first (what it was for is not going to happen).
+        if self.ed.save_as_open() {
+            self.ed.cancel_save_as();
+            self.session.save_then = None;
+        }
         self.after_settling(Then::Exit);
     }
 
@@ -192,13 +237,14 @@ impl State {
     }
 
     fn save_settings(&self) {
-        if let Err(e) = settings::save(&self.ed.settings()) {
+        if let Err(e) = config::save(self.platform.config_dir(), &self.ed.settings()) {
             eprintln!("could not save settings: {e}");
         }
     }
 
     /// Do what the editor asked for after an input event, in the order it asked.
     pub(super) fn service(&mut self) {
+        self.take_listings();
         while let Some(request) = self.ed.requests().pop() {
             match request {
                 Request::Answer(choice) => self.answered(choice),
@@ -206,16 +252,34 @@ impl State {
                 Request::Save => {
                     self.save_now();
                 }
+                Request::SaveAs => self.begin_save_as(None),
+                Request::ListFolder(dir) => folders::spawn(dir, self.session.files.clone(), self.window.clone(), self.session.listings.0.clone()),
+                Request::SaveTo(id) => self.save_to(id),
+                Request::SaveAsCancelled => {
+                    self.session.save_then = None;
+                    self.window.request_redraw();
+                }
                 Request::Fullscreen => self.toggle_fullscreen(),
                 Request::Close => self.close_document(),
                 Request::PagesEdited(edit) => self.pages_edited(&edit),
                 Request::GravesForgotten(graves) => {
-                    if let Some(doc) = &mut self.doc {
+                    if let Some(doc) = &mut self.session.doc {
                         doc.forget_graves(&graves);
                     }
                 }
-                Request::OpenUrl(url) => native::open_url(&url),
+                // (A PDF can ask for any address; only a plain web or mail one is handed to the system.)
+                Request::OpenUrl(url) => {
+                    if let Some(url) = crate::links::safe_url(&url) {
+                        self.platform.open_url(&url);
+                    }
+                }
             }
+        }
+        // The on-screen keyboard (a phone or tablet has none) is there while something wants typed text.
+        let typing = self.ed.is_typing();
+        if typing != self.keyboard_shown {
+            self.keyboard_shown = typing;
+            self.platform.set_text_input(typing);
         }
         if self.ed.take_redraw() {
             self.window.request_redraw();

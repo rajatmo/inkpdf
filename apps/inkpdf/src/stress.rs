@@ -7,15 +7,13 @@
 use std::cell::Cell;
 use std::time::Instant;
 
-use winit::dpi::PhysicalPosition;
-use winit::event::{ElementState, MouseButton, MouseScrollDelta};
 
 use crate::doc::Doc;
 use crate::editor::{Editor, Request};
 use crate::figure::NodeAction;
 use crate::geometry::Shape;
 use crate::ink::{InkStore, P, PageStroke, Style};
-use crate::input::{Device, Intent, PenButtons, Phase, PointerEvent, Sample};
+use crate::input::{ButtonState, Device, Intent, MouseButton, PenButtons, Phase, PointerEvent, Sample, Wheel};
 use crate::links::{Link, Target};
 use crate::pages::PageEdit;
 use crate::smooth::{PenFilter, curve_through};
@@ -112,8 +110,8 @@ thread_local! {
 }
 
 const PHASES: [Phase; 6] = [Phase::Down, Phase::Move, Phase::Up, Phase::Cancel, Phase::Hover, Phase::Leave];
-const BUTTONS: [MouseButton; 6] =
-    [MouseButton::Left, MouseButton::Right, MouseButton::Middle, MouseButton::Back, MouseButton::Forward, MouseButton::Other(7)];
+const BUTTONS: [MouseButton; 4] =
+    [MouseButton::Left, MouseButton::Right, MouseButton::Middle, MouseButton::Other];
 
 fn random_samples(rng: &mut Rng, size: [f32; 2], hostile: bool) -> Vec<Sample> {
     let n = rng.below(8);
@@ -239,11 +237,11 @@ fn gesture(ed: &mut Editor, rng: &mut Rng) -> String {
         }
         _ => {
             ed.mouse_moved(along(0));
-            ed.mouse_button(ElementState::Pressed, MouseButton::Left);
+            ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
             for i in 1..steps {
                 ed.mouse_moved(along(i));
             }
-            ed.mouse_button(ElementState::Released, MouseButton::Left);
+            ed.mouse_button(ButtonState::Released, MouseButton::Left);
         }
     }
     format!("gesture {kind} {start:?} -> {end:?}")
@@ -500,23 +498,23 @@ fn poke(ed: &mut Editor, rng: &mut Rng, hostile: bool) -> String {
             what = format!("mouse_moved {pos:?}");
             ed.mouse_moved(pos);
         }
-        10 | 11 => ed.mouse_button(if rng.chance(0.5) { ElementState::Pressed } else { ElementState::Released }, rng.pick(&BUTTONS)),
+        10 | 11 => ed.mouse_button(if rng.chance(0.5) { ButtonState::Pressed } else { ButtonState::Released }, rng.pick(&BUTTONS)),
         12 => {
             let (x, y) = if hostile { (rng.coord(10.0), rng.coord(10.0)) } else { (rng.finite(10.0), rng.finite(10.0)) };
             what = format!("wheel {x} {y}");
             ed.wheel(if rng.chance(0.5) {
-                MouseScrollDelta::LineDelta(x, y)
+                Wheel::Lines(x, y)
             } else {
-                MouseScrollDelta::PixelDelta(PhysicalPosition::new(x as f64 * 30.0, y as f64 * 30.0))
+                Wheel::Pixels(x * 30.0, y * 30.0)
             });
         }
         13 | 14 => {
             // The mouse presses and releases wherever it is, with any button, while a tool is held.
             let (x, y) = (rng.finite(size[0]), rng.finite(size[1]));
             ed.mouse_moved([x, y]);
-            ed.mouse_button(ElementState::Pressed, rng.pick(&BUTTONS));
+            ed.mouse_button(ButtonState::Pressed, rng.pick(&BUTTONS));
             ed.mouse_moved([x + rng.range(-50.0, 50.0), y + rng.range(-50.0, 50.0)]);
-            ed.mouse_button(ElementState::Released, rng.pick(&BUTTONS));
+            ed.mouse_button(ButtonState::Released, rng.pick(&BUTTONS));
         }
         15 => {
             let size = [rng.pick(&[0.0, 1.0, 50.0, 480.0, 1100.0, 3840.0, 20000.0]), rng.pick(&[0.0, 1.0, 50.0, 600.0, 900.0, 2160.0, 20000.0])];
@@ -527,15 +525,22 @@ fn poke(ed: &mut Editor, rng: &mut Rng, hostile: bool) -> String {
         17 => ed.mouse_left(),
         18 => {
             let phase = rng.pick(&[
-                winit::event::TouchPhase::Started,
-                winit::event::TouchPhase::Moved,
-                winit::event::TouchPhase::Ended,
-                winit::event::TouchPhase::Cancelled,
+                Phase::Down,
+                Phase::Move,
+                Phase::Up,
+                Phase::Cancel,
             ]);
             let (id, pos) =
-                (rng.below(4) as u64, if hostile { [rng.coord(size[0]), rng.coord(size[1])] } else { [rng.finite(size[0]), rng.finite(size[1])] });
-            what = format!("basic_touch {phase:?} {id} {pos:?}");
-            ed.basic_touch(phase, id, pos);
+                (rng.below(4) as u32, if hostile { [rng.coord(size[0]), rng.coord(size[1])] } else { [rng.finite(size[0]), rng.finite(size[1])] });
+            what = format!("touch from the toolkit {phase:?} {id} {pos:?}");
+            ed.pointer_event(PointerEvent {
+                device: Device::Touch,
+                id,
+                phase,
+                samples: vec![Sample { pos, pressure: 1.0, t_ms: crate::clock::now_ms() }],
+                pen: PenButtons::default(),
+                contact_px: 0.0,
+            });
         }
         19 => {
             let dt = rng.range(0.0, 0.1);
@@ -846,7 +851,7 @@ fn stress_realistic_input_draws_lots_of_ink_that_always_undoes_cleanly() {
         }
     }
     ed.pointer_event(PointerEvent { device: Device::Pen, id: 0, phase: Phase::Cancel, samples: vec![], pen: PenButtons::default(), contact_px: 0.0 });
-    ed.mouse_button(ElementState::Released, MouseButton::Left);
+    ed.mouse_button(ButtonState::Released, MouseButton::Left);
     eprintln!("strokes made during the storm: {created}; alive at the end: {}", ed.ink.len());
     assert!(created > 300, "the storm should have drawn plenty of ink ({created})");
     let added = PAGES_ADDED.with(Cell::get);
@@ -1155,7 +1160,7 @@ fn stress_documents_grow_save_and_reopen_without_losing_a_page_or_a_stroke() {
         let mut store = InkStore::new();
         let mut strokes_on: Vec<usize> = vec![0; doc.page_count()];
         let check = |doc: &Doc, strokes_on: &[usize], what: &str| {
-            let (back, strokes) = Doc::open(doc.path.as_ref().expect("saved")).expect("reopen");
+            let (back, strokes) = Doc::open(doc.path().expect("saved")).expect("reopen");
             assert_eq!(back.page_count(), strokes_on.len(), "round {round} {what}: pages");
             for (page, &n) in strokes_on.iter().enumerate() {
                 assert_eq!(strokes.iter().filter(|s| s.0 as usize == page).count(), n, "round {round} {what}: strokes on page {page}");
@@ -1631,18 +1636,18 @@ fn tap_pen(ed: &mut Editor, at: [f32; 2], t_ms: f64) {
 /// A click of the mouse at `at`, and a drag of it from `a` to `b` through a few steps.
 fn mouse_click(ed: &mut Editor, at: [f32; 2]) {
     ed.mouse_moved(at);
-    ed.mouse_button(ElementState::Pressed, MouseButton::Left);
-    ed.mouse_button(ElementState::Released, MouseButton::Left);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
+    ed.mouse_button(ButtonState::Released, MouseButton::Left);
 }
 
 fn mouse_drag(ed: &mut Editor, a: [f32; 2], b: [f32; 2], steps: usize) {
     ed.mouse_moved(a);
-    ed.mouse_button(ElementState::Pressed, MouseButton::Left);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
     for i in 1..=steps {
         let t = i as f32 / steps as f32;
         ed.mouse_moved([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
     }
-    ed.mouse_button(ElementState::Released, MouseButton::Left);
+    ed.mouse_button(ButtonState::Released, MouseButton::Left);
 }
 
 /// Switch tools the way the toolbar does: typing ends, and the selection is let go.
@@ -1815,7 +1820,7 @@ fn every_tool_together(seed: u64, rounds: usize) {
             14 => {
                 // The view moves: scroll, a finger's pan, the wheel.
                 ed.pan_px(rng.range(-200.0, 200.0), rng.range(-600.0, 600.0));
-                ed.wheel(MouseScrollDelta::LineDelta(0.0, rng.range(-5.0, 5.0)));
+                ed.wheel(Wheel::Lines(0.0, rng.range(-5.0, 5.0)));
                 if rng.chance(0.3) {
                     ed.step_view(0.5);
                 }
@@ -1998,7 +2003,7 @@ fn stress_the_pages_overview_under_hostile_input_keeps_the_pages_the_selection_a
             12 => {
                 let (x, y) = (rng.range(-3.0, 3.0), rng.range(-6.0, 6.0));
                 ed.mouse_moved(spot(&mut rng));
-                ed.wheel(MouseScrollDelta::LineDelta(x, y));
+                ed.wheel(Wheel::Lines(x, y));
             }
             13 => {
                 let key = match rng.below(8) {
@@ -2164,7 +2169,6 @@ fn hostile_pdf(kind: usize, pages: usize) -> Vec<u8> {
 
 #[test]
 fn stress_hostile_outlines_and_page_trees_open_or_are_refused_and_what_opens_edits_draws_and_saves() {
-    use crate::outline;
     let dir = temp_dir("hostile-outline");
     let mut rng = Rng::new(99);
     let (mut opened, mut refused, mut edited) = (0, 0, 0);
@@ -2225,7 +2229,7 @@ fn stress_hostile_outlines_and_page_trees_open_or_are_refused_and_what_opens_edi
     }
     eprintln!("hostile files: {opened} opened, {refused} refused; page edits made on them: {edited}");
     assert!(opened > 10 && edited > 50, "most of them should open and take edits ({opened} opened, {edited} edits)");
-    let _ = outline::read; // (the reader under test, named so that a rename here is noticed)
+    let _ = crate::pdf_read::outline; // (the reader under test, named so that a rename here is noticed)
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -2298,7 +2302,7 @@ fn run_with(prefs: crate::motion::Prefs, seed: u64, rounds: usize) -> Vec<Outcom
             }
             6 => {
                 ed.mouse_moved(spot(&mut rng));
-                ed.wheel(MouseScrollDelta::LineDelta(0.0, rng.range(-4.0, 4.0)));
+                ed.wheel(Wheel::Lines(0.0, rng.range(-4.0, 4.0)));
             }
             7 => {
                 ed.press(rng.pick(&[Key::Escape, Key::Delete, Key::Home(false), Key::End(false), Key::Arrow(Dir::Down, false)]));

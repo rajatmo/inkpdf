@@ -2,8 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, linux-android-port]
   pull_request:
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -26,3 +27,118 @@ jobs:
         run: cargo test
       - name: Release build (installer and portable inputs)
         run: cargo build --release -p inkpdf -p inkpdf-thumb
+  linux:
+    # The same checks on Linux: the layering, the tools and the storms are platform-free, so they must pass here too,
+    # and a short real-window run (software Vulkan on a virtual X display) proves the window, GPU, mouse and save.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: System packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libxkbcommon-x11-0 libxcb-xinput0 xvfb xdotool fonts-liberation
+      # (Formatting is checked once, by the Windows job above.)
+      - name: Clippy
+        run: cargo clippy -p inkpdf --all-targets -- -D warnings
+      - name: Tests
+        run: cargo test -p inkpdf --lib
+      - name: Build
+        run: cargo build -p inkpdf --bin inkpdf --bin inkpdf-gen
+      - name: Dependency graphs are up to date
+        run: python3 tools/deps/graph.py --check
+      - name: Window smoke test (virtual display)
+        run: tools/e2e/linux-smoke.sh
+
+  windows-portable:
+    # The standalone Windows build: one exe with the C runtime linked in, a portable.txt beside it, zipped. (The same script as on a PC.)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build the portable package
+        shell: pwsh
+        env:
+          INKPDF_DIST: ${{ github.workspace }}\dist
+          CARGO_TARGET_DIR: ${{ github.workspace }}\target-ci
+        run: ./apps/inkpdf/installer/build-portable.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inkpdf-windows-portable
+          path: dist/InkPDF-Portable-*.zip
+
+  linux-portable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build the portable package
+        run: tools/linux/build-portable.sh "$PWD/dist"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inkpdf-linux-portable
+          path: dist/InkPDF-Portable-*.tar.gz
+
+  android:
+    # The program type-checks for Android, and an installable test APK is built from it (arm64, signed with the debug key in
+    # tools/android). The SDK and NDK are the ones installed on GitHub's Ubuntu runners.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - name: Check
+        run: cargo check -p inkpdf-android --target aarch64-linux-android
+      - name: Build the APK
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+          export ANDROID_BUILD_TOOLS="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          export ANDROID_JAR="$(ls -d "$ANDROID_HOME"/platforms/android-3* | sort -V | tail -1)/android.jar"
+          tools/android/build-apk.sh release "$PWD/inkpdf-android-test.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inkpdf-android-test-apk
+          path: inkpdf-android-test.apk
+
+  android-emulator:
+    # Runs the APK on an Android emulator (x86_64, with KVM, which GitHub's Linux runners have) and leaves screenshots, logcat and a
+    # verdict as an artifact: tools/android/emulator-test.sh says what it checks. It is the nearest thing to a device in CI.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - name: Build the APK for the emulator
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+          export ANDROID_BUILD_TOOLS="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          export ANDROID_JAR="$(ls -d "$ANDROID_HOME"/platforms/android-3* | sort -V | tail -1)/android.jar"
+          ABIS=x86_64 tools/android/build-apk.sh release "$PWD/inkpdf-emulator.apk"
+      - name: Allow the emulator to use KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_tablet
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: tools/android/emulator-test.sh inkpdf-emulator.apk emulator-out
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-emulator-output
+          path: emulator-out

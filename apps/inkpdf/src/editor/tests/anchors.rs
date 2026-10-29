@@ -602,9 +602,9 @@ fn the_mouse_cannot_touch_anchors_in_the_tablet_mode() {
     let before = figure_of(&ed);
     let handle = at(&ed, Control::Fwd(0));
     ed.mouse_moved(handle);
-    ed.mouse_button(ElementState::Pressed, MouseButton::Left);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
     ed.mouse_moved([handle[0] + 25.0, handle[1] - 12.0]);
-    ed.mouse_button(ElementState::Released, MouseButton::Left);
+    ed.mouse_button(ButtonState::Released, MouseButton::Left);
     assert_eq!(figure_of(&ed), before);
     assert!(ed.is_idle());
 }

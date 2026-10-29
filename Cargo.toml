@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["apps/inkpdf", "apps/inkpdf-thumb"]
+members = ["apps/inkpdf", "apps/inkpdf-thumb", "apps/inkpdf-android"]
 
 [workspace.package]
 edition = "2024"
@@ -16,7 +16,6 @@ pdfcraft-annot = { git = "https://github.com/storytold/pdfcraft", rev = "1dd2737
 pdfcraft-render = { git = "https://github.com/storytold/pdfcraft", rev = "1dd2737b47a9c1c9562f0af563053d1bf510e4bf" }
 pdfcraft-create = { git = "https://github.com/storytold/pdfcraft", rev = "1dd2737b47a9c1c9562f0af563053d1bf510e4bf" }
 pdfcraft-organize = { git = "https://github.com/storytold/pdfcraft", rev = "1dd2737b47a9c1c9562f0af563053d1bf510e4bf" }
-rfd = "0.17"
 
 [profile.dev]
 opt-level = 1

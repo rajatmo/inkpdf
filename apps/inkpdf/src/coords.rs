@@ -15,10 +15,6 @@ pub struct PageGeom {
 }
 
 impl PageGeom {
-    pub fn from_info(info: &pdfcraft_render::PageInfo) -> Self {
-        Self { width: info.width, height: info.height, crop: info.crop, rotation: info.rotation }
-    }
-
     /// A point in view space to user space.
     pub fn view_to_user(&self, p: [f32; 2]) -> [f32; 2] {
         let [cx0, cy0, cx1, cy1] = self.crop;

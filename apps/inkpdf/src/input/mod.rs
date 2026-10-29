@@ -15,17 +15,23 @@
 //! What the plain tip does (draw, select or erase) is chosen on screen ([`Intent`]), so a device with no
 //! eraser end, barrel button or right button can still select and erase; those are shortcuts for the same.
 
+mod contract;
+mod event;
 mod gestures;
 mod palm;
 mod predict;
+pub mod record;
 
+#[allow(unused_imports, dead_code, reason = "the checker is for the sources' tests and for replay, which validates a recorded session with it")]
+pub use contract::{Broken, Checker, check};
+pub use event::{ButtonState, Dir, InputEvent, Key, KeyInput, MouseButton, Wheel};
 pub use gestures::{GestureDelta, TouchGestures};
 pub use palm::PalmGuard;
 pub use predict::predict;
 
 /// How the machine is being held, which decides what the devices do: with a keyboard and mouse in front of
 /// you (desktop), or as a slate you touch and write on (tablet). It follows the machine's posture (see
-/// [`crate::posture`]) and can be forced from the command line.
+/// [`crate::platform`]) and can be forced from the command line.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Mode {
     #[default]
@@ -62,21 +68,15 @@ pub struct PenButtons {
     pub barrel: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PenTool {
-    Draw,
-    Erase,
-    Lasso,
-}
-
 impl PenButtons {
-    pub fn tool(&self) -> PenTool {
+    /// What a press with these buttons does: the eraser end erases, the barrel button lassos, the tip draws.
+    pub fn role(&self) -> Role {
         if self.eraser {
-            PenTool::Erase
+            Role::Erase
         } else if self.barrel {
-            PenTool::Lasso
+            Role::Lasso
         } else {
-            PenTool::Draw
+            Role::Draw
         }
     }
 }
@@ -95,6 +95,8 @@ pub enum Phase {
     Down,
     Move,
     Up,
+    // (Only Windows says it so far: `WM_POINTERCAPTURECHANGED`. Android's `ACTION_CANCEL` will.)
+    #[cfg_attr(not(windows), allow(dead_code))]
     Cancel,
     /// A pen moving above the screen.
     Hover,
@@ -104,7 +106,7 @@ pub enum Phase {
 
 /// One pointer message: the samples it carried (oldest first; Windows batches the points between
 /// frames) and the state of the device.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PointerEvent {
     pub device: Device,
     pub id: u32,
@@ -122,15 +124,6 @@ pub enum Role {
     Draw,
     Erase,
     Lasso,
-}
-
-/// What a stylus press does.
-pub fn role(pen: &PenButtons) -> Role {
-    match pen.tool() {
-        PenTool::Draw => Role::Draw,
-        PenTool::Erase => Role::Erase,
-        PenTool::Lasso => Role::Lasso,
-    }
 }
 
 /// What the plain tip of the stylus (or the left mouse button) does, as chosen on screen: the way for a device with
@@ -159,7 +152,7 @@ impl Intent {
 
 /// What a press does: the pen's own buttons if one is held, else what was chosen on screen.
 pub fn role_with(pen: &PenButtons, intent: Intent) -> Role {
-    match role(pen) {
+    match pen.role() {
         Role::Draw => intent.role(),
         held => held,
     }
@@ -188,12 +181,12 @@ mod tests {
 
     #[test]
     fn pen_roles_follow_the_hardware() {
-        assert_eq!(role(&pen(false, false)), Role::Draw);
-        assert_eq!(role(&pen(true, false)), Role::Erase);
-        assert_eq!(role(&pen(false, true)), Role::Lasso);
+        assert_eq!(pen(false, false).role(), Role::Draw);
+        assert_eq!(pen(true, false).role(), Role::Erase);
+        assert_eq!(pen(false, true).role(), Role::Lasso);
         // The eraser end wins over the barrel button.
-        assert_eq!(role(&pen(true, true)), Role::Erase);
+        assert_eq!(pen(true, true).role(), Role::Erase);
         // Hovering with the button down is already a lasso.
-        assert_eq!(PenButtons { in_range: true, contact: false, eraser: false, barrel: true }.tool(), PenTool::Lasso);
+        assert_eq!(PenButtons { in_range: true, contact: false, eraser: false, barrel: true }.role(), Role::Lasso);
     }
 }

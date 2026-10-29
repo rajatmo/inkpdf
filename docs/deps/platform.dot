@@ -1,0 +1,67 @@
+digraph P {
+rankdir=LR; newrank=true; splines=true; nodesep=0.3; ranksep=1.1; pad=0.4;
+label=<<b>Platform routing (compile-time): who is built where, and what each side talks to</b>>; labelloc=t; fontsize=22; fontname="Helvetica";
+node [shape=box, style="rounded,filled", fillcolor=white, fontname="Helvetica", fontsize=13, margin="0.14,0.07"];
+edge [arrowsize=0.7, fontname="Helvetica", fontsize=11];
+subgraph cluster_shared { label="shared code (all OSes)"; style="rounded,filled"; fillcolor="#f4f6f7"; color="#aaaaaa"; fontname="Helvetica";
+  "app" [label="app\nframe loop · files · State"];
+  "main" [label="main.rs\nevent loop · args"];
+  "editor" [label="editor\n(session)"];
+  "input" [label="input\nPointerEvent · Mode · Sample"];
+}
+subgraph cluster_plat { label="platform/  (adapter layer, picks one backend at compile time)"; style="rounded,filled"; fillcolor="#fdf2f0"; color="#c0392b"; fontname="Helvetica";
+  "platform_mod" [label="platform/mod.rs\nPointerSource trait\ntrait Platform · PointerSource\nnative() picks the backend", penwidth=2.5, color="#c0392b"];
+  "p_android_mod" [label="platform/android/mod.rs", color="#8e44ad", penwidth=2];
+  "p_android_reader" [label="platform/android/reader.rs", color="#8e44ad", penwidth=2];
+  "p_linux" [label="platform/linux.rs", color="#27ae60", penwidth=2];
+  "p_motion_event" [label="platform/motion_event.rs", color="#d68910", penwidth=2];
+  "p_stubs" [label="platform/stubs.rs", color="#7f8c8d", penwidth=2];
+  "p_unix_dirs" [label="platform/unix_dirs.rs", color="#7f8c8d", penwidth=2];
+  "p_windows_counter" [label="platform/windows/counter.rs", color="#2e86c1", penwidth=2];
+  "p_windows_folders" [label="platform/windows/folders.rs", color="#2e86c1", penwidth=2];
+  "p_windows_mod" [label="platform/windows/mod.rs", color="#2e86c1", penwidth=2];
+  "p_windows_native" [label="platform/windows/native.rs", color="#2e86c1", penwidth=2];
+  "p_windows_pointer" [label="platform/windows/pointer.rs", color="#2e86c1", penwidth=2];
+  "p_windows_posture" [label="platform/windows/posture.rs", color="#2e86c1", penwidth=2];
+}
+subgraph cluster_ext { label="outside crates"; style="rounded,filled"; fillcolor="#f4f6f7"; color="#aaaaaa"; fontname="Helvetica";
+  "x_winit" [label="winit", shape=component, fillcolor="#fffbe6"];
+  "x_windows_sys" [label="windows_sys", shape=component, fillcolor="#fffbe6"];
+}
+"main" -> "app"
+"app" -> "platform_mod" [label="install_pointer · pump · drain\ndetect_mode · motion_prefs\nSystemClipboard · error_box · open_url", penwidth=2, color="#c0392b"]
+"app" -> "editor" [label="pointer_event · mouse_* · press"]
+"main" -> "platform_mod" [label="attach_parent_console\nreport_fatal", color="#c0392b"]
+"platform_mod" -> "input" [label="PointerEvent"]
+"editor" -> "input"
+"platform_mod" -> "p_android_mod" [label="cfg(target_os = android)", color="#8e44ad", penwidth=2, fontcolor="#8e44ad"]
+"p_android_mod" -> "x_winit" [color="#8e44ad", style=dashed]
+"p_android_reader" -> "x_winit" [color="#8e44ad", style=dashed]
+"platform_mod" -> "p_linux" [label="cfg(unix, not android)", color="#27ae60", penwidth=2, fontcolor="#27ae60"]
+"p_linux" -> "x_winit" [color="#27ae60", style=dashed]
+"platform_mod" -> "p_stubs" [label="cfg(not(windows))", color="#7f8c8d", penwidth=2, fontcolor="#7f8c8d"]
+"p_stubs" -> "x_winit" [color="#7f8c8d", style=dashed]
+"platform_mod" -> "p_unix_dirs" [label="cfg(not(windows))", color="#7f8c8d", penwidth=2, fontcolor="#7f8c8d"]
+"p_windows_counter" -> "x_windows_sys" [color="#2e86c1", style=dashed]
+"p_windows_folders" -> "x_windows_sys" [color="#2e86c1", style=dashed]
+"platform_mod" -> "p_windows_mod" [label="cfg(windows)", color="#2e86c1", penwidth=2, fontcolor="#2e86c1"]
+"p_windows_mod" -> "x_winit" [color="#2e86c1", style=dashed]
+"p_windows_native" -> "x_windows_sys" [color="#2e86c1", style=dashed]
+"p_windows_native" -> "x_winit" [color="#2e86c1", style=dashed]
+"p_windows_pointer" -> "x_windows_sys" [color="#2e86c1", style=dashed]
+"p_windows_pointer" -> "x_winit" [color="#2e86c1", style=dashed]
+"p_windows_posture" -> "x_windows_sys" [color="#2e86c1", style=dashed]
+"platform_mod" -> "x_winit" [style=dashed, color="#c0392b"]
+"p_windows_mod" -> "p_windows_pointer" [color="#2e86c1"]
+"p_windows_mod" -> "p_windows_native" [color="#2e86c1"]
+"p_windows_mod" -> "p_windows_posture" [color="#2e86c1"]
+"p_windows_mod" -> "p_windows_folders" [color="#2e86c1"]
+"p_windows_mod" -> "p_windows_counter" [color="#2e86c1"]
+"p_android_mod" -> "p_android_reader" [color="#8e44ad"]
+"p_linux" -> "p_stubs" [label="re-exports", color="#27ae60"]
+"p_linux" -> "p_unix_dirs" [label="re-exports", color="#27ae60"]
+"p_android_mod" -> "p_stubs" [label="re-exports", color="#8e44ad"]
+"p_android_mod" -> "p_unix_dirs" [label="re-exports", color="#8e44ad"]
+"p_android_reader" -> "p_motion_event" [label="decodes with", color="#8e44ad"]
+{rank=same; "p_windows_mod"; "p_linux"; "p_android_mod";}
+}

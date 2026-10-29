@@ -18,11 +18,11 @@ fn the_mouse_is_timed_by_the_clock_the_editor_was_given() {
     ed.set_clock(|| 5000.0);
     let p = path(&ed);
     ed.mouse_moved(p[0]);
-    ed.mouse_button(ElementState::Pressed, MouseButton::Left);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
     for &at in &p[1..] {
         ed.mouse_moved(at);
     }
-    ed.mouse_button(ElementState::Released, MouseButton::Left);
+    ed.mouse_button(ButtonState::Released, MouseButton::Left);
     assert!(ed.laser().pieces(5000.0 + 10.0).count() >= 9, "the trail was stamped 5000");
     assert_eq!(ed.laser().pieces(5000.0 + crate::laser::FADE_MS + 1.0).count(), 0, "and fades as 5000 ages");
 }
@@ -97,11 +97,11 @@ fn the_mouse_does_not_point_or_select_with_the_laser_in_the_tablet_mode() {
     let id = add_stroke(&mut ed, &[[100.0, 300.0], [300.0, 300.0]]);
     ed.mouse_moved(on_page(&ed, 100.0, 300.0));
     assert_eq!(ed.laser().head(), None, "no dot follows the mouse");
-    ed.mouse_button(ElementState::Pressed, MouseButton::Left);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
     for i in 1..8 {
         ed.mouse_moved(on_page(&ed, 100.0 + i as f32 * 25.0, 300.0));
     }
-    ed.mouse_button(ElementState::Released, MouseButton::Left);
+    ed.mouse_button(ButtonState::Released, MouseButton::Left);
     assert!(ed.selection.is_empty() && !ed.laser().is_fading(), "no selection and no trail");
     assert!(ed.ink.get(id).is_some() && ed.is_idle());
 }

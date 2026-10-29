@@ -9,6 +9,7 @@ use crate::input::{Device, Mode, PenButtons, Phase, Sample};
 use crate::tool::Tool;
 use crate::tools::{Key, MouseUse, PageEvent, TextEdit};
 
+use super::modal::Modal;
 use super::{Editor, Request};
 
 /// The pointer id the mouse has when it stands in for a stylus (real pointer ids are small).
@@ -71,7 +72,12 @@ impl Editor {
 
     /// Whether the keyboard is heard: a text box is being typed into.
     pub fn is_typing(&self) -> bool {
-        self.ws.tool == Tool::Text && self.tools.text.is_typing() && self.chrome.prompt.is_none()
+        // (The Save As dialog types the file's name.)
+        match self.modal() {
+            Some(Modal::SaveAs) => true,
+            Some(Modal::Prompt) => false,
+            Some(Modal::Overview) | None => self.ws.tool == Tool::Text && self.tools.text.is_typing(),
+        }
     }
 
     /// Type `typed` at the end of the text (see [`crate::text::clean`]). Heard only while typing.
@@ -107,11 +113,11 @@ impl Editor {
 
     /// The keyboard, if the tool in use listens to it.
     fn key(&mut self, key: Key<'_>) -> bool {
-        if self.chrome.prompt.is_some() {
-            return false;
-        }
-        if self.chrome.overview.is_some() {
-            return self.overview_key(key);
+        match self.modal() {
+            Some(Modal::Prompt) => return false,
+            Some(Modal::SaveAs) => return self.save_as_key(key),
+            Some(Modal::Overview) => return self.overview_key(key),
+            None => {}
         }
         let mode = self.mode;
         let tool = self.tools.get_mut(self.ws.tool);
@@ -149,13 +155,14 @@ impl Editor {
     /// S saves; A selects all of what the tool made, C copies, X cuts, V pastes, D duplicates. Returns whether it
     /// was one.
     pub fn shortcut(&mut self, key: &str, shift: bool) -> bool {
-        if self.chrome.prompt.is_some() {
-            return false;
-        }
         let letter = key.to_ascii_lowercase();
-        // The overview takes the document's own shortcuts (undo, redo, save) and leaves the rest of them alone.
-        if self.chrome.overview.is_some() && !matches!((letter.as_str(), self.mode), ("z" | "y" | "s", Mode::Desktop)) {
-            return self.mode == Mode::Desktop && self.overview_shortcut(&letter);
+        match self.modal() {
+            Some(Modal::Prompt | Modal::SaveAs) => return false,
+            // The overview takes the document's own shortcuts (undo, redo, save) and leaves the rest of them alone.
+            Some(Modal::Overview) if !matches!((letter.as_str(), self.mode), ("z" | "y" | "s", Mode::Desktop)) => {
+                return self.mode == Mode::Desktop && self.overview_shortcut(&letter);
+            }
+            _ => {}
         }
         if self.is_typing()
             && let Some(c) = letter.chars().next().filter(|c| letter.len() == 1 && matches!(c, 'a' | 'c' | 'x' | 'v'))
@@ -170,7 +177,11 @@ impl Editor {
         match (letter.as_str(), shift) {
             ("z", false) => self.undo(),
             ("z", true) | ("y", _) => self.redo(),
-            ("s", _) => {
+            ("s", true) => {
+                self.settle();
+                self.ws.requests.push(Request::SaveAs);
+            }
+            ("s", false) => {
                 self.settle();
                 self.ws.requests.push(Request::Save);
             }

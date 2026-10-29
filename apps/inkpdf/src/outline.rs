@@ -2,15 +2,7 @@
 //! Kept flat, in reading order, as it is shown; which entries are folded away is for whoever shows them. The pages of
 //! its entries follow the page edits like everything else that is kept by page (see [`crate::pages`]).
 
-use pdfcraft_cos::Document;
-use pdfcraft_organize::bookmarks;
-
 use crate::pages::Remap;
-
-/// Most entries read from one file, so a hostile file cannot fill memory.
-const MAX_ITEMS: usize = 20_000;
-/// Longest title kept, in characters.
-const MAX_TITLE_CHARS: usize = 200;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct OutlineItem {
@@ -23,27 +15,6 @@ pub struct OutlineItem {
     pub open: bool,
     /// Whether the next entry is under this one.
     pub has_children: bool,
-}
-
-/// The outline of the document, in reading order; empty if it has none.
-pub fn read(doc: &Document) -> Vec<OutlineItem> {
-    let listed = bookmarks(doc);
-    let mut items: Vec<OutlineItem> = listed
-        .iter()
-        .take(MAX_ITEMS)
-        .map(|b| OutlineItem { title: clean(&b.title), depth: b.path.len().saturating_sub(1), page: b.page, open: b.open, has_children: false })
-        .collect();
-    for i in 0..items.len().saturating_sub(1) {
-        items[i].has_children = items[i + 1].depth > items[i].depth;
-    }
-    items
-}
-
-/// A title as it is shown: no control characters, no runs of blanks, not unreasonably long.
-fn clean(title: &str) -> String {
-    let words: Vec<&str> = title.split_whitespace().collect();
-    let joined: String = words.join(" ").chars().filter(|c| !c.is_control()).collect();
-    joined.chars().take(MAX_TITLE_CHARS).collect()
 }
 
 /// What a damaged file can say: an entry that goes to a page the document does not show (it has `pages` pages) goes nowhere.
@@ -142,26 +113,10 @@ mod tests {
     }
 
     #[test]
-    fn the_outline_of_a_file_is_read_in_reading_order_with_its_depths_and_pages() {
-        let bytes = crate::testutil::pdf_with_outline();
-        let doc = Document::open(std::sync::Arc::new(bytes)).expect("open");
-        assert_eq!(read(&doc), sample());
-        let plain = Document::open(std::sync::Arc::new(crate::testutil::sample_pdf())).expect("open");
-        assert!(read(&plain).is_empty(), "a file with no outline has none");
-    }
-
-    #[test]
     fn an_entry_that_goes_to_a_page_that_is_not_there_goes_nowhere() {
         let mut items = sample();
         limit_to(&mut items, 3);
         assert_eq!(items.iter().map(|i| i.page).collect::<Vec<_>>(), [Some(0), Some(1), Some(2), None, None]);
-    }
-
-    #[test]
-    fn titles_are_shown_clean() {
-        assert_eq!(clean("  Chapter \t 1\n"), "Chapter 1");
-        assert_eq!(clean("a\u{0}b\u{7}c"), "abc");
-        assert_eq!(clean(&"x".repeat(1000)).chars().count(), MAX_TITLE_CHARS);
     }
 
     #[test]

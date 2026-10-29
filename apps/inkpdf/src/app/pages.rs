@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use crate::gpu::Quad;
 use crate::tiles::{self, Key, TILE};
 
-use super::State;
+use super::{Paint, UiLayers};
 
 /// What `State::scene` produces for one frame.
 pub(super) struct Scene {
@@ -16,18 +16,18 @@ pub(super) struct Scene {
     pub blank_pages: usize,
 }
 
-impl State {
+impl UiLayers {
     /// The quads to draw, the textures they use, and how many visible pages have nothing to show.
-    pub(super) fn scene(&self) -> Scene {
+    pub(super) fn scene(&self, cx: &Paint) -> Scene {
         let mut scene = Scene { quads: Vec::new(), drawn: Vec::new(), blank_pages: 0 };
-        let Some(doc) = &self.doc else { return scene };
-        let view = &self.ed.view;
+        let Some(doc) = cx.doc else { return scene };
+        let view = &cx.ed.view;
         let zoom = view.zoom;
         let level = tiles::level_for(zoom);
         let (top, bottom) = view.visible_y();
-        let resident: HashSet<Key> = self.gpu.keys().collect();
-        for page in self.ed.layout.pages_in(top, bottom) {
-            let Some(r) = self.ed.layout.page(page) else { continue };
+        let resident: HashSet<Key> = cx.gpu.keys().collect();
+        for page in cx.ed.layout.pages_in(top, bottom) {
+            let Some(r) = cx.ed.layout.page(page) else { continue };
             // Snap the page to whole pixels: its edges stay sharp, and a tile rendered at the
             // current zoom lands exactly on the pixel grid.
             let o = view.doc_to_screen([r.x, r.y]);
@@ -66,7 +66,7 @@ impl State {
             tiles.sort_by_key(|&(distance, _)| std::cmp::Reverse(distance));
             for (_, key) in tiles {
                 let Key::Tile { level: l, tx, ty, .. } = key else { continue };
-                let Some([tw, th]) = self.gpu.texture_size(key) else { continue };
+                let Some([tw, th]) = cx.gpu.texture_size(key) else { continue };
                 let scale = tiles::render_scale([r.w, r.h], l);
                 let (px, py) = (u32::from(tx) * TILE, u32::from(ty) * TILE);
                 let to_screen = |px: u32| (px as f32 / scale * zoom).round();
@@ -81,7 +81,7 @@ impl State {
             if !showing {
                 scene.blank_pages += 1;
             }
-            self.text_quads(page, &mut scene.quads);
+            self.text_quads(cx, page, &mut scene.quads);
         }
         scene
     }

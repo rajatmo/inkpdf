@@ -19,10 +19,10 @@ fn click(ed: &mut Editor, x: f32, y: f32) {
 
 fn drag(ed: &mut Editor, from: [f32; 2], to: [f32; 2]) {
     ed.mouse_moved(from);
-    ed.mouse_button(ElementState::Pressed, MouseButton::Left);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
     ed.mouse_moved([(from[0] + to[0]) / 2.0, (from[1] + to[1]) / 2.0]);
     ed.mouse_moved(to);
-    ed.mouse_button(ElementState::Released, MouseButton::Left);
+    ed.mouse_button(ButtonState::Released, MouseButton::Left);
 }
 
 fn key(ed: &mut Editor, key: Key<'_>) {

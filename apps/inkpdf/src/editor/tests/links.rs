@@ -50,8 +50,8 @@ fn a_mouse_click_never_follows_a_link() {
     with_links(&mut ed, Target::Url("https://example.com/".into()));
     let on = on_page(&ed, 150.0, 200.0);
     mouse_click_at(&mut ed, on);
-    ed.mouse_button(ElementState::Pressed, MouseButton::Right);
-    ed.mouse_button(ElementState::Released, MouseButton::Right);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Right);
+    ed.mouse_button(ButtonState::Released, MouseButton::Right);
     assert!(ed.requests.url().is_none());
     let before = ed.view.scroll;
     with_links(&mut ed, Target::Page(1));

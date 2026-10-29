@@ -15,10 +15,12 @@
 use std::cell::RefCell;
 use std::ffi::c_void;
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock};
 
-use crate::clock::{counter_ms, now_ms};
+use super::super::Waker;
+use super::counter::{calibrate, counter_ms};
+use crate::clock::now_ms;
 
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::ClientToScreen;
@@ -37,7 +39,6 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     WM_POINTERCAPTURECHANGED, WM_POINTERDOWN, WM_POINTERENTER, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE, WM_SETTINGCHANGE,
 };
 use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
-use winit::window::Window;
 
 use crate::input::{Device, PenButtons, Phase, PointerEvent, Sample};
 
@@ -49,7 +50,7 @@ thread_local! {
     /// The app window's handle (0 before `install`), for `pump`.
     static HWND_OF_APP: std::cell::Cell<isize> = const { std::cell::Cell::new(0) };
     static QUEUE: RefCell<Vec<PointerEvent>> = const { RefCell::new(Vec::new()) };
-    static WAKE: RefCell<Option<Arc<Window>>> = const { RefCell::new(None) };
+    static WAKE: RefCell<Option<Waker>> = const { RefCell::new(None) };
 }
 
 /// Whether `INKPDF_TRACE` is set: print the raw pen flags Windows delivers, for diagnosing a
@@ -60,10 +61,11 @@ fn trace_enabled() -> bool {
 }
 
 /// Start receiving pen and touch for `window`. Fails if the window has no Win32 handle.
-pub fn install(window: &Arc<Window>) -> Result<(), String> {
+pub fn install(window: &dyn HasWindowHandle, wake: Waker) -> Result<isize, String> {
     let hwnd = hwnd_of(window)?;
+    calibrate();
     HWND_OF_APP.with(|h| h.set(hwnd as isize));
-    WAKE.with(|w| *w.borrow_mut() = Some(window.clone()));
+    WAKE.with(|w| *w.borrow_mut() = Some(wake));
     // SAFETY: `hwnd` is this thread's live window; `subclass_proc` has the required signature
     // and stays valid for the life of the process.
     let ok = unsafe { SetWindowSubclass(hwnd, Some(subclass_proc), SUBCLASS_ID, 0) };
@@ -89,17 +91,16 @@ pub fn install(window: &Arc<Window>) -> Result<(), String> {
         // SAFETY: `off` outlives the call and the size matches the BOOL pointed to.
         unsafe { SetWindowFeedbackSetting(hwnd, feedback, 0, std::mem::size_of::<i32>() as u32, (&off as *const i32).cast::<c_void>()) };
     }
-    Ok(())
+    Ok(hwnd as isize)
 }
 
-pub fn uninstall(window: &Arc<Window>) {
-    if let Ok(hwnd) = hwnd_of(window) {
-        // SAFETY: removes the subclass installed by `install`.
-        unsafe { RemoveWindowSubclass(hwnd, Some(subclass_proc), SUBCLASS_ID) };
-    }
+/// Take the subclass off the window `install` returned the handle of.
+pub fn uninstall(hwnd: isize) {
+    // SAFETY: removes the subclass installed by `install`.
+    unsafe { RemoveWindowSubclass(hwnd as HWND, Some(subclass_proc), SUBCLASS_ID) };
 }
 
-fn hwnd_of(window: &Window) -> Result<HWND, String> {
+fn hwnd_of(window: &dyn HasWindowHandle) -> Result<HWND, String> {
     match window.window_handle().map_err(|e| e.to_string())?.as_raw() {
         RawWindowHandle::Win32(h) => Ok(h.hwnd.get() as HWND),
         _ => Err("not a Win32 window".into()),
@@ -124,7 +125,7 @@ pub fn pump() {
     // SAFETY: MSG is plain data, for which all zeros is a valid value.
     let mut msg: MSG = unsafe { std::mem::zeroed() };
     // Bounded, so a flood of input cannot hold the frame.
-    for _ in 0..512 {
+    for _ in 0..super::super::MAX_EVENTS_PER_PUMP {
         // SAFETY: `msg` is a valid out-pointer and `hwnd` is this thread's window.
         let got = unsafe { PeekMessageW(&mut msg, hwnd as HWND, WM_POINTERUPDATE, POINTER_MSG_LAST, PM_REMOVE) };
         if got == 0 {
@@ -148,17 +149,17 @@ pub fn pending() -> bool {
     QUEUE.with(|q| !q.borrow().is_empty())
 }
 
-/// Take the events received since the last call, oldest first.
-pub fn drain() -> Vec<PointerEvent> {
-    QUEUE.with(|q| std::mem::take(&mut *q.borrow_mut()))
+/// Append the events received since the last call to `out`, oldest first. (The queue keeps its room.)
+pub fn drain_into(out: &mut Vec<PointerEvent>) {
+    QUEUE.with(|q| out.append(&mut q.borrow_mut()));
 }
 
 unsafe extern "system" fn subclass_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM, _id: usize, _data: usize) -> LRESULT {
-    if msg == WM_SETTINGCHANGE && crate::posture::is_posture_message(lparam) {
+    if msg == WM_SETTINGCHANGE && super::posture::is_posture_message(lparam) {
         POSTURE_CHANGED.store(true, Ordering::Relaxed);
         WAKE.with(|w| {
-            if let Some(window) = w.borrow().as_ref() {
-                window.request_redraw();
+            if let Some(wake) = w.borrow().as_ref() {
+                wake();
             }
         });
     }
@@ -188,8 +189,8 @@ fn handle_pointer(hwnd: HWND, msg: u32, wparam: WPARAM) -> bool {
     if let Some(event) = event {
         QUEUE.with(|q| q.borrow_mut().push(event));
         WAKE.with(|w| {
-            if let Some(window) = w.borrow().as_ref() {
-                window.request_redraw();
+            if let Some(wake) = w.borrow().as_ref() {
+                wake();
             }
         });
     }

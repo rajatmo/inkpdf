@@ -1,10 +1,33 @@
 //! Routing a pointer to the interaction it belongs to.
 
-use crate::input::{Device, PointerEvent, Sample};
+use crate::input::{Device, InputEvent, PointerEvent, Sample};
 
+use super::modal::Modal;
 use super::{Act, Editor};
 
 impl Editor {
+    /// The one way in for what the person does: every device, and the window's own changes. The shell translates what its
+    /// toolkit says into an [`InputEvent`]; a replay of a recorded session hands over the same events, so the editor behaves
+    /// alike whoever is driving it. (The methods this calls are also public, as the tests use them.)
+    pub fn handle(&mut self, event: InputEvent) {
+        match event {
+            InputEvent::Pointer(ev) => self.pointer_event(ev),
+            InputEvent::MouseMoved(pos) => self.mouse_moved(pos),
+            InputEvent::MouseButton { state, button } => self.mouse_button(state, button),
+            InputEvent::MouseLeft => self.mouse_left(),
+            InputEvent::Wheel(delta) => self.wheel(delta),
+            InputEvent::Key(key) => {
+                self.press(key.as_key());
+            }
+            InputEvent::Shortcut { letter, shift } => {
+                self.shortcut(&letter, shift);
+            }
+            InputEvent::FocusLost => self.focus_lost(),
+            InputEvent::Resized(size) => self.set_viewport(size),
+            InputEvent::ScaleChanged(dpr) => self.set_dpr(dpr),
+        }
+    }
+
     /// Whether the chrome interaction under way belongs to this pointer.
     pub(super) fn act_belongs_to(&self, dev: Device, id: u32) -> bool {
         match &self.chrome.act {
@@ -18,26 +41,39 @@ impl Editor {
 
     /// A pen or touch message from the Windows pointer layer.
     pub(crate) fn pointer_event(&mut self, ev: PointerEvent) {
-        if self.chrome.prompt.is_some() {
-            self.prompt_event(&ev);
-            return;
-        }
-        if self.chrome.overview.is_some() {
-            if ev.device == Device::Pen {
-                self.palm.pen_event(&ev, (self.clock)());
+        match self.modal() {
+            Some(Modal::Prompt) => return self.prompt_event(&ev),
+            Some(Modal::SaveAs) => {
+                if ev.device != Device::Mouse {
+                    self.save_as_event(&ev);
+                }
+                return;
             }
-            if ev.device != Device::Mouse {
-                self.overview_event(&ev);
+            Some(Modal::Overview) => {
+                if ev.device == Device::Pen {
+                    self.pen_seen(&ev);
+                }
+                if ev.device != Device::Mouse {
+                    self.overview_event(&ev);
+                }
+                return;
             }
-            return;
+            None => {}
         }
         match ev.device {
             Device::Pen => {
-                self.palm.pen_event(&ev, (self.clock)());
+                self.pen_seen(&ev);
                 self.pen_event(&ev);
             }
             Device::Touch => self.touch_event(&ev),
             Device::Mouse => {}
+        }
+    }
+
+    /// The palm guard takes note of the pen. If that gives up fingers that were down, what they had started stops.
+    fn pen_seen(&mut self, ev: &PointerEvent) {
+        if self.palm.pen_event(ev) {
+            self.cancel_touches();
         }
     }
 

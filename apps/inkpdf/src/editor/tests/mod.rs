@@ -6,7 +6,9 @@ mod capability;
 mod contract;
 mod delete_page;
 mod draft;
+mod handle;
 mod inputs;
+mod latency_budget;
 mod laser;
 mod links;
 mod modes;
@@ -15,18 +17,18 @@ mod overview;
 mod pages;
 mod pen;
 mod prompt;
+mod replay;
+mod save_as;
 mod shapes;
 mod text;
 mod text_editing;
 mod toolbar;
 mod touch;
 
-use winit::event::{ElementState, MouseButton, MouseScrollDelta};
-
 use super::Request;
 use super::*;
 use crate::ink::{P, Style};
-use crate::input::{Device, PenButtons, Phase, PointerEvent, Sample};
+use crate::input::{ButtonState, Device, MouseButton, PenButtons, Phase, PointerEvent, Sample, Wheel};
 use crate::tool::{PALETTE, Tool, ToolStyle};
 use crate::toolbar::{Channel, Item, PanelState, Slider};
 use crate::view::Layout;
@@ -113,6 +115,6 @@ fn open_settings(ed: &mut Editor) {
 
 fn mouse_click_at(ed: &mut Editor, pos: [f32; 2]) {
     ed.mouse_moved(pos);
-    ed.mouse_button(ElementState::Pressed, MouseButton::Left);
-    ed.mouse_button(ElementState::Released, MouseButton::Left);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
+    ed.mouse_button(ButtonState::Released, MouseButton::Left);
 }

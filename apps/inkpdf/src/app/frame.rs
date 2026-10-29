@@ -3,11 +3,11 @@
 use std::time::{Duration, Instant};
 
 use crate::gpu::{Drawn, InkScene};
+use crate::input::InputEvent;
 use crate::tiles::{self, Key};
-use crate::win_pointer;
 
-use super::State;
 use super::bench::FrameParts;
+use super::{State, ink_layer, paint};
 
 const BACKGROUND: [f64; 4] = [0.93, 0.936, 0.947, 1.0];
 /// Texture memory kept for page tiles and previews.
@@ -26,21 +26,47 @@ impl State {
     pub(super) fn redraw(&mut self) {
         // A frame can be asked for again from inside a dialog's message loop; that one is skipped
         // (it would wait for the swap-chain image this frame is holding).
-        if std::mem::replace(&mut self.drawing, true) {
+        if self.timing.suspended || std::mem::replace(&mut self.timing.drawing, true) {
             return;
         }
         self.draw_frame();
-        self.drawing = false;
+        self.timing.drawing = false;
     }
 
     /// Handle the pen and touch messages Windows has queued. What they ask of the shell (a
     /// dialog, a save) waits until the frame is done: a dialog runs its own message loop, which
     /// must never happen while a frame is half drawn.
     fn take_pointer_input(&mut self) {
-        if self.pointer_layer {
-            for ev in win_pointer::drain() {
-                self.ed.pointer_event(ev);
+        if let Some(pointer) = &mut self.pointer {
+            // (The buffers are kept from frame to frame, and the source's queue keeps its room: no allocation in a steady stream.)
+            let (mut pointers, mut others) = (std::mem::take(&mut self.timing.pointer_buf), std::mem::take(&mut self.timing.other_buf));
+            pointer.drain_into(&mut pointers);
+            pointer.drain_other_into(&mut others);
+            let events = pointers.drain(..).map(InputEvent::Pointer).chain(others.drain(..));
+            for ev in events {
+                if let Some(recorder) = &mut self.recorder {
+                    recorder.push(&ev);
+                }
+                self.ed.handle(ev);
             }
+            (self.timing.pointer_buf, self.timing.other_buf) = (pointers, others);
+        }
+        self.play_recording();
+    }
+
+    /// Hand the editor what a recording has come to the time of, and close the program a moment after the last of it.
+    fn play_recording(&mut self) {
+        let (due, finished) = match &mut self.player {
+            Some(player) => (player.due(crate::clock::now_ms()), player.finished()),
+            None => return,
+        };
+        for recorded in due {
+            self.feed(recorded.event);
+        }
+        if !finished {
+            self.window.request_redraw();
+        } else if self.timing.exit_at.is_none() {
+            self.timing.exit_at = Some(Instant::now() + Duration::from_millis(500));
         }
     }
 
@@ -48,19 +74,19 @@ impl State {
         // Wait for the display first (that is where a frame waits for the refresh), then read
         // the pen: the ink in this frame carries the newest samples, not ones a refresh old.
         let frame = self.gpu.acquire();
-        if self.pointer_layer {
-            win_pointer::pump();
+        if let Some(pointer) = &mut self.pointer {
+            pointer.pump();
         }
         self.take_pointer_input();
-        if self.print_stats
+        if self.timing.print_stats
             && let Some(t) = self.ed.pending_sample_ms
         {
-            self.read_age_ms.push((crate::clock::now_ms() - t) as f32);
+            self.timing.read_age_ms.push((crate::clock::now_ms() - t) as f32);
         }
         let now = Instant::now();
-        let dt = now.duration_since(self.last_frame).as_secs_f32();
-        self.last_frame = now;
-        self.frame += 1;
+        let dt = now.duration_since(self.timing.last_frame).as_secs_f32();
+        self.timing.last_frame = now;
+        self.timing.frame += 1;
 
         self.drive_bench(dt);
         let animating = self.ed.step_view(dt);
@@ -71,42 +97,42 @@ impl State {
         let pending = self.stream_tiles(settled);
 
         let t_plan = Instant::now();
-        self.sync_texts();
-        let scene = self.scene();
+        self.layers.sync_texts(&mut paint!(self));
+        let scene = self.layers.scene(&paint!(self));
         let t_scene = Instant::now();
         if scene.blank_pages > 0
-            && let Some(bench) = &mut self.bench
+            && let Some(bench) = &mut self.timing.bench
         {
             bench.note_blank_pages();
         }
         for &key in &scene.drawn {
-            self.gpu.touch(key, self.frame);
+            self.gpu.touch(key, self.timing.frame);
         }
 
-        self.sync_committed();
-        self.sync_ui();
-        self.overview_frame();
-        let ranges = self.visible_ink_ranges();
-        let buf = std::mem::take(&mut self.overlay_buf);
-        let overlays = self.overlays(pen_clock, buf);
+        self.layers.sync_committed(&mut paint!(self));
+        self.layers.sync_ui(&mut paint!(self));
+        self.layers.overview_frame(&mut paint!(self));
+        let ranges = self.layers.visible_ink_ranges(&paint!(self));
+        let buf = std::mem::take(&mut self.layers.overlay_buf);
+        let overlays = ink_layer::overlays(&self.ed, pen_clock, buf);
         let ink_scene = InkScene {
             scroll: self.ed.view.scroll,
             zoom: self.ed.view.zoom,
             committed: &ranges,
             overlay_doc: &overlays.doc,
             overlay_screen: &overlays.screen,
-            thumbs: &self.overview.thumbs,
+            thumbs: &self.layers.overview.thumbs,
         };
         if let Some(t) = self.ed.pending_sample_ms.take() {
-            self.latency_ms.push((crate::clock::now_ms() - t) as f32);
+            self.timing.latency_ms.push((crate::clock::now_ms() - t) as f32);
         }
         let t_ink = Instant::now();
-        let result = self.gpu.draw(frame, &scene.quads, &self.overview.quads, &ink_scene, BACKGROUND);
+        let result = self.gpu.draw(frame, &scene.quads, &self.layers.overview.quads, &ink_scene, BACKGROUND);
         let t_draw = Instant::now();
         // Keep the buffers (and their room) for the next frame.
-        self.overlay_buf = overlays;
-        self.gpu.evict(TEXTURE_BUDGET, self.frame);
-        if let Some(bench) = &mut self.bench {
+        self.layers.overlay_buf = overlays;
+        self.gpu.evict(TEXTURE_BUDGET, self.timing.frame);
+        if let Some(bench) = &mut self.timing.bench {
             let us = |a: Instant, b: Instant| b.duration_since(a).as_secs_f64() * 1e6;
             bench.note_parts(FrameParts {
                 plan_upload: us(now, t_plan),
@@ -119,28 +145,28 @@ impl State {
 
         self.update_title();
         match result {
-            Drawn::Skipped => self.wake_at = Some(now + RETRY_AFTER),
-            Drawn::Presented if animating || fading || !settled || pending > 0 || self.bench.is_some() => self.window.request_redraw(),
+            Drawn::Skipped => self.timing.wake_at = Some(now + RETRY_AFTER),
+            Drawn::Presented if animating || fading || !settled || pending > 0 || self.timing.bench.is_some() => self.window.request_redraw(),
             Drawn::Presented => {}
         }
-        if self.exit_at.is_some_and(|t| now >= t) {
-            self.exit = true;
+        if self.timing.exit_at.is_some_and(|t| now >= t) {
+            self.timing.exit = true;
         }
     }
 
     /// Note a zoom change, and say whether the zoom has held still long enough for sharp tiles.
     fn zoom_settled(&mut self, now: Instant) -> bool {
-        if (self.ed.view.zoom - self.last_zoom).abs() > f32::EPSILON {
-            self.last_zoom = self.ed.view.zoom;
-            self.last_zoom_change = now;
+        if (self.ed.view.zoom - self.timing.last_zoom).abs() > f32::EPSILON {
+            self.timing.last_zoom = self.ed.view.zoom;
+            self.timing.last_zoom_change = now;
         }
-        !self.ed.view.zoom_animating() && !self.ed.pinching() && now.duration_since(self.last_zoom_change) >= ZOOM_SETTLE
+        !self.ed.view.zoom_animating() && !self.ed.pinching() && now.duration_since(self.timing.last_zoom_change) >= ZOOM_SETTLE
     }
 
     /// Ask the render pool for the tiles the view needs and upload the ones it has finished.
     /// Returns how many tiles are still wanted.
     fn stream_tiles(&mut self, settled: bool) -> usize {
-        let Some(doc) = &mut self.doc else { return 0 };
+        let Some(doc) = &mut self.session.doc else { return 0 };
         let mut pending = 0;
         // Ask for what the view needs, unless the zoom is still moving: its level would change
         // every frame.
@@ -150,9 +176,9 @@ impl State {
         let to_file = |page: u32| doc.render_page(page as usize);
         let plan = if overview.is_some() { tiles::Plan::default() } else { tiles::plan(&self.ed.layout, &self.ed.view).mapped(to_file) };
         // Pages that were added are blank: there is nothing to render, so nothing to wait for.
-        self.visible = plan.visible.iter().copied().filter(|&k| doc.renders(k)).collect();
+        self.layers.visible = plan.visible.iter().copied().filter(|&k| doc.renders(k)).collect();
         if settled {
-            let (gpu, failed) = (&self.gpu, &self.failed);
+            let (gpu, failed) = (&self.gpu, &self.session.failed);
             let have = |k: Key| !doc.renders(k) || gpu.has(k) || failed.contains(&k);
             let queue = match &overview {
                 Some(pages) => pages.clone().filter_map(|p| to_file(p as u32)).map(|p| Key::Thumb { page: p }).filter(|&k| !have(k)).collect(),
@@ -161,8 +187,8 @@ impl State {
             pending = queue.len();
             doc.set_queue(&queue);
         }
-        if let Some(bench) = &mut self.bench
-            && self.visible.iter().any(|&k| !self.gpu.has(k))
+        if let Some(bench) = &mut self.timing.bench
+            && self.layers.visible.iter().any(|&k| !self.gpu.has(k))
         {
             bench.note_missing_tiles();
         }
@@ -174,9 +200,9 @@ impl State {
             match &page.error {
                 Some(e) => {
                     eprintln!("render failed for {key:?}: {e}");
-                    self.failed.insert(key);
+                    self.session.failed.insert(key);
                 }
-                None => self.gpu.upload(key, page.width, page.height, page.rgba.as_ref(), self.frame),
+                None => self.gpu.upload(key, page.width, page.height, page.rgba.as_ref(), self.timing.frame),
             }
             if started.elapsed() > budget {
                 break;
@@ -186,7 +212,7 @@ impl State {
     }
 
     fn update_title(&mut self) {
-        let Some(doc) = &self.doc else { return };
+        let Some(doc) = &self.session.doc else { return };
         let page = self.ed.view.current_page(&self.ed.layout) + 1;
         let percent = (self.ed.view.zoom / self.ed.actual_size_zoom() * 100.0).round();
         let mark = if self.ed.ink.is_dirty() { "● " } else { "" };

@@ -77,31 +77,8 @@ pub struct PageEvent<'a> {
     pub pen: PenButtons,
 }
 
-/// An arrow key.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Dir {
-    Left,
-    Right,
-    Up,
-    Down,
-}
-
-/// What the keyboard does to a tool that takes it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Key<'a> {
-    /// Characters typed (a new line is `"\n"`).
-    Text(&'a str),
-    Backspace,
-    Delete,
-    Escape,
-    /// An arrow, with whether Shift is held.
-    Arrow(Dir, bool),
-    /// Home or End, with whether Shift is held.
-    Home(bool),
-    End(bool),
-    /// A letter pressed with Ctrl (the ones that work on text being edited: a, c, x, v).
-    Chord(char),
-}
+// (The keyboard's vocabulary is the program's input vocabulary: see `input::Key`.)
+pub use crate::input::{Dir, Key};
 
 pub trait Tool {
     /// Which devices the tool listens to in `mode`.

@@ -1,6 +1,5 @@
 //! Native Windows pieces: error boxes, opening web addresses, and the text clipboard.
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use windows_sys::Win32::Foundation::{GlobalFree, HWND};
@@ -10,11 +9,10 @@ use windows_sys::Win32::System::Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock,
 use windows_sys::Win32::UI::Shell::ShellExecuteW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MessageBoxW, SPI_GETCLIENTAREAANIMATION, SW_SHOWNORMAL, SystemParametersInfoW};
 use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
-use winit::window::Window;
 
 use crate::clipboard::TextClipboard;
 
-fn hwnd_of(window: &Window) -> Option<HWND> {
+fn hwnd_of(window: &dyn HasWindowHandle) -> Option<HWND> {
     match window.window_handle().ok()?.as_raw() {
         RawWindowHandle::Win32(h) => Some(h.hwnd.get() as HWND),
         _ => None,
@@ -63,11 +61,9 @@ pub fn motion_prefs() -> crate::motion::Prefs {
     crate::motion::Prefs { reduced: known && animations == 0 }
 }
 
-/// Open a web address in the system's default program for it (a browser, or a mail app). The
-/// address is checked again here: only a plain http, https or mailto address is ever handed over.
+/// Open a web address in the system's default program for it (a browser, or a mail app).
 pub fn open_url(url: &str) {
-    let Some(url) = crate::links::safe_url(url) else { return };
-    let (verb, target) = (wide("open"), wide(&url));
+    let (verb, target) = (wide("open"), wide(url));
     // SAFETY: both strings are NUL-terminated and live across the call; no owner window or
     // working directory is passed.
     unsafe { ShellExecuteW(std::ptr::null_mut(), verb.as_ptr(), target.as_ptr(), std::ptr::null(), std::ptr::null(), SW_SHOWNORMAL) };
@@ -84,7 +80,7 @@ pub struct SystemClipboard {
 
 impl SystemClipboard {
     /// The clipboard as `window` uses it.
-    pub fn new(window: &Window) -> Option<Self> {
+    pub fn new(window: &dyn HasWindowHandle) -> Option<Self> {
         Some(Self { owner: hwnd_of(window)? })
     }
 }
@@ -145,8 +141,20 @@ impl TextClipboard for SystemClipboard {
     }
 }
 
+/// The folder a user's application data goes in: `%APPDATA%`.
+pub fn config_dir() -> Option<std::path::PathBuf> {
+    std::env::var_os("APPDATA").map(std::path::PathBuf::from)
+}
+
+/// Arial, from the Windows fonts folder: its letters are as wide as Helvetica's, which other PDF readers use for the text this
+/// app saves.
+pub fn system_font() -> Option<Vec<u8>> {
+    let dir = std::env::var_os("WINDIR").map_or_else(|| std::path::PathBuf::from(r"C:\Windows"), std::path::PathBuf::from).join("Fonts");
+    std::fs::read(dir.join("arial.ttf")).ok()
+}
+
 /// Tell the user something went wrong.
-pub fn error_box(window: &Arc<Window>, text: &str) {
+pub fn error_box(window: &dyn HasWindowHandle, text: &str) {
     let Some(hwnd) = hwnd_of(window) else { return };
     let (text, caption) = (wide(text), wide("InkPDF"));
     // SAFETY: both strings are NUL-terminated and live across the call.

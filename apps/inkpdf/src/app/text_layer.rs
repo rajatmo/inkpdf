@@ -13,7 +13,7 @@ use crate::text;
 use crate::tiles;
 use crate::toolbar::Image;
 
-use super::State;
+use super::{Paint, UiLayers};
 
 /// Text bitmaps kept on the GPU beyond the ones in view.
 const KEEP_BITMAPS: usize = 256;
@@ -64,15 +64,15 @@ fn ensure(gpu: &mut Gpu, text: &str, size: f32, rgba: [u8; 4], level: i16) -> u6
     key
 }
 
-impl State {
+impl UiLayers {
     /// Work out which text boxes to draw this frame and have their bitmaps ready.
-    pub(super) fn sync_texts(&mut self) {
+    pub(super) fn sync_texts(&mut self, cx: &mut Paint) {
         self.text_draws.clear();
-        let ed = &self.ed;
+        let ed = &cx.ed;
         self.text_index.refresh(ed);
-        if !text::available() || (self.text_index.at.is_empty() && ed.text_edit().is_none()) {
+        if self.text_index.at.is_empty() && ed.text_edit().is_none() {
             // No text boxes, but the pages overview's text is bitmaps too (a page number each): kept only as long as it is shown.
-            self.gpu.trim_texts(&self.overview.keys, KEEP_BITMAPS);
+            cx.gpu.trim_texts(&self.overview.keys, KEEP_BITMAPS);
             return;
         }
         let (top, bottom) = ed.view.visible_y();
@@ -90,7 +90,7 @@ impl State {
                 continue;
             }
             let moved = if ed.selection.contains(&s.id) { shift } else { [0.0, 0.0] };
-            let key = ensure(&mut self.gpu, &block.text, block.size, s.style.rgba, level);
+            let key = ensure(cx.gpu, &block.text, block.size, s.style.rgba, level);
             used.insert(key);
             self.text_draws.push(TextDraw {
                 page: s.page,
@@ -102,49 +102,49 @@ impl State {
         if let Some(edit) = ed.text_edit()
             && visible.contains(&(edit.page as usize))
         {
-            let key = ensure(&mut self.gpu, &edit.text, edit.size, edit.rgba, level);
+            let key = ensure(cx.gpu, &edit.text, edit.size, edit.rgba, level);
             used.insert(key);
             self.text_draws.push(TextDraw { page: edit.page, key, top_left: edit.top_left, size: text::measure(&edit.text, edit.size) });
         }
         used.extend(self.overview.keys.iter().copied());
-        self.gpu.trim_texts(&used, KEEP_BITMAPS);
+        cx.gpu.trim_texts(&used, KEEP_BITMAPS);
     }
 
     /// The quads of the text boxes on `page`.
-    pub(super) fn text_quads(&self, page: usize, out: &mut Vec<Quad>) {
+    pub(super) fn text_quads(&self, cx: &Paint, page: usize, out: &mut Vec<Quad>) {
         for d in self.text_draws.iter().filter(|d| d.page as usize == page) {
-            if let Some(rect) = self.text_rect(d) {
+            if let Some(rect) = self.text_rect(cx, d) {
                 out.push(Quad::text(d.key, rect));
             }
         }
     }
 
     /// Where on the screen a text box's bitmap goes: the box, and the margin the bitmap has around it.
-    fn text_rect(&self, d: &TextDraw) -> Option<[f32; 4]> {
-        let view = &self.ed.view;
-        bitmap_rect(self.gpu.text_size(d.key)?, d.size, d.top_left, |p| view.doc_to_screen(p))
+    fn text_rect(&self, cx: &Paint, d: &TextDraw) -> Option<[f32; 4]> {
+        let view = &cx.ed.view;
+        bitmap_rect(cx.gpu.text_size(d.key)?, d.size, d.top_left, |p| view.doc_to_screen(p))
     }
 
     /// The quads of the text boxes on the page of `image`, its small picture in the pages overview, as that shows them:
     /// `scale` is its pixels to a point, and what is outside the part of the picture that is in view is cut off. The keys
     /// of the bitmaps used are added to `keys`, to be kept.
-    pub(super) fn thumb_text_quads(&mut self, image: &Image, scale: f32, keys: &mut HashSet<u64>, out: &mut Vec<Quad>) {
-        if !text::available() || self.text_index.at.is_empty() {
+    pub(super) fn thumb_text_quads(&mut self, cx: &mut Paint, image: &Image, scale: f32, keys: &mut HashSet<u64>, out: &mut Vec<Quad>) {
+        if self.text_index.at.is_empty() {
             return;
         }
         let (page, origin, shown, alpha) = (image.page, [image.full[0], image.full[1]], image.shown, image.alpha);
-        let Some(at) = self.ed.layout.page(page as usize).map(|r| [r.x, r.y]) else { return };
+        let Some(at) = cx.ed.layout.page(page as usize).map(|r| [r.x, r.y]) else { return };
         // The bitmaps are made at the size they are shown, so that they are crisp and small.
         let level = tiles::level_for(scale);
-        let strokes = self.ed.ink.strokes();
+        let strokes = cx.ed.ink.strokes();
         for s in self.text_index.at.iter().filter_map(|&i| strokes.get(i)) {
             let (Some(block), Some(&corner)) = (&s.text, s.pts.first()) else { continue };
             if s.page != page {
                 continue;
             }
-            let key = ensure(&mut self.gpu, &block.text, block.size, s.style.rgba, level);
+            let key = ensure(cx.gpu, &block.text, block.size, s.style.rgba, level);
             keys.insert(key);
-            let Some(size) = self.gpu.text_size(key) else { continue };
+            let Some(size) = cx.gpu.text_size(key) else { continue };
             let map = |p: P| [origin[0] + (p[0] - at[0]) * scale, origin[1] + (p[1] - at[1]) * scale];
             if let Some(rect) = bitmap_rect(size, text::measure(&block.text, block.size), corner, map)
                 && let Some(quad) = clipped(key, rect, shown, alpha)

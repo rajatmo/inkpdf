@@ -3,7 +3,7 @@
 //! sources, so a stray `use` in the wrong direction fails the build of the tests, not a review.
 //!
 //! ```text
-//!   adapter   app, gpu, win_pointer, native, posture, doc, ink_io, tiles, thumbnail   (window, GPU, files, OS)
+//!   adapter   app, gpu, platform, doc, ink_io, tiles, thumbnail   (window, GPU, files, OS)
 //!   session   editor            routes input to the tool in use; owns the chrome
 //!   tools     tools             what a press on the page does; one file each
 //!   ui        toolbar           where the buttons are, how they look
@@ -20,11 +20,37 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 /// Every `.rs` file under `dir`.
+/// The modules a directory's parent file declares for tests only (`#[cfg(test)] mod name;`): they are not part of the program.
+fn test_only_modules(dir: &Path) -> Vec<String> {
+    let mut found = Vec::new();
+    for parent in [dir.join("mod.rs"), dir.with_extension("rs")] {
+        let Ok(text) = std::fs::read_to_string(parent) else { continue };
+        let lines: Vec<&str> = text.lines().map(str::trim).collect();
+        for (i, line) in lines.iter().enumerate() {
+            if *line != "#[cfg(test)]" {
+                continue;
+            }
+            // (Past any more attributes, to the item: `mod name;` or `pub(crate) mod name;`.)
+            let Some(item) = lines[i + 1..].iter().find(|l| !l.starts_with("#[")) else { continue };
+            let item = item.trim_start_matches("pub(crate) ").trim_start_matches("pub ");
+            if let Some(name) = item.strip_prefix("mod ").and_then(|r| r.strip_suffix(';')) {
+                found.push(name.to_string());
+            }
+        }
+    }
+    found
+}
+
 fn sources(dir: &Path) -> Vec<PathBuf> {
     let mut found = Vec::new();
     let Ok(entries) = std::fs::read_dir(dir) else { return found };
+    let skipped = test_only_modules(dir);
     for entry in entries.flatten() {
         let path = entry.path();
+        let stem = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+        if skipped.contains(&stem) {
+            continue;
+        }
         if path.is_dir() {
             // (Tests are the code that looks at the layers from outside.)
             if path.file_name().is_some_and(|n| n != "tests") {
@@ -121,7 +147,7 @@ enum Layer {
 }
 
 /// Every top-level module of the program, and its layer. A new module is placed here or the test fails.
-const LAYERS: [(&str, Layer); 35] = [
+const LAYERS: [(&str, Layer); 38] = [
     ("plane", Layer::Base),
     ("motion", Layer::Base),
     ("scene", Layer::Base),
@@ -139,21 +165,24 @@ const LAYERS: [(&str, Layer); 35] = [
     ("links", Layer::Model),
     ("outline", Layer::Model),
     ("pages", Layer::Model),
+    ("page_table", Layer::Model),
     ("tool", Layer::Domain),
+    ("browse", Layer::Domain),
     ("input", Layer::Domain),
     ("requests", Layer::Domain),
     ("workspace", Layer::Domain),
     ("selection", Layer::Domain),
     ("settings", Layer::Domain),
+    ("store", Layer::Domain),
     ("toolbar", Layer::Ui),
     ("tools", Layer::Tools),
     ("editor", Layer::Session),
     ("app", Layer::Adapter),
     ("gpu", Layer::Adapter),
-    ("win_pointer", Layer::Adapter),
-    ("native", Layer::Adapter),
-    ("posture", Layer::Adapter),
+    ("platform", Layer::Adapter),
     ("doc", Layer::Adapter),
+    ("path_store", Layer::Adapter),
+    ("pdf_read", Layer::Adapter),
     ("ink_io", Layer::Adapter),
     ("tiles", Layer::Adapter),
     ("thumbnail", Layer::Adapter),
@@ -174,7 +203,7 @@ fn modules() -> BTreeSet<String> {
         let path = entry.path();
         let name = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
         let is_module = path.is_dir() || path.extension().is_some_and(|e| e == "rs");
-        if is_module && !matches!(name.as_str(), "main" | "bin" | "stress" | "architecture" | "testutil") {
+        if is_module && !matches!(name.as_str(), "main" | "lib" | "bin" | "stress" | "architecture" | "testutil") {
             found.insert(name);
         }
     }
@@ -266,13 +295,12 @@ fn what_looks_at_the_sources_sees_what_the_program_is_made_of_and_not_what_only_
     assert_eq!(kept, ["use a;", "fn real() {", "    use crate::x;", "}", "fn also_real() {}"]);
 }
 /// Windowing, GPU and OS-input crates, and the shell's modules.
-const ADAPTERS: [&str; 8] = ["winit", "wgpu", "crate::app", "crate::gpu", "crate::win_pointer", "crate::native", "crate::thumbnail", "crate::tiles"];
+const ADAPTERS: [&str; 7] = ["winit", "wgpu", "crate::app", "crate::gpu", "crate::platform", "crate::thumbnail", "crate::tiles"];
 
 #[test]
 fn the_domain_knows_nothing_of_tools_the_session_or_the_shell() {
     let domain = [
         "ink",
-        "figure",
         "figure.rs",
         "geometry.rs",
         "smooth.rs",
@@ -287,6 +315,7 @@ fn the_domain_knows_nothing_of_tools_the_session_or_the_shell() {
         "workspace.rs",
         "selection.rs",
         "clipboard.rs",
+        "browse.rs",
         "requests.rs",
     ];
     let domain: Vec<&str> = domain.iter().copied().filter(|p| src().join(p).exists()).collect();
@@ -316,11 +345,34 @@ fn tools_know_neither_each_other_nor_the_session_nor_the_shell() {
 }
 
 #[test]
+fn nothing_below_the_adapters_touches_the_disk_the_environment_or_an_operating_system() {
+    // The inner layers are pure: the same input gives the same output on every machine. What they need from the world (a font,
+    // a settings folder, a clock's source) is handed to them by the adapters, which ask `platform`.
+    let forbidden =
+        ["std::fs", "std::env", "std::process", "std::net", "windows_sys", "cfg(windows)", "cfg(not(windows))", "cfg(unix", "cfg(target_os", "cfg(not(target_os", "pdfcraft_", "wgpu", "winit"];
+    let inner: Vec<String> = LAYERS
+        .iter()
+        .filter(|(_, layer)| *layer != Layer::Adapter)
+        .flat_map(|(module, _)| {
+            // (A module can be a file, a directory, or a file with a directory beside it for its parts.)
+            let mut paths = Vec::new();
+            if src().join(format!("{module}.rs")).exists() {
+                paths.push(format!("{module}.rs"));
+            }
+            if src().join(module).is_dir() && !sources(&src().join(module)).is_empty() {
+                paths.push((*module).to_string());
+            }
+            paths
+        })
+        .collect();
+    assert_free_of(&inner.iter().map(String::as_str).collect::<Vec<_>>(), &forbidden);
+}
+
+#[test]
 fn the_session_knows_nothing_of_the_shell() {
-    // (It does speak winit's event types, ElementState and the like, as the vocabulary of input; what it
-    // never touches is the window, the GPU, the files or the OS's pointer layer.)
-    let forbidden: Vec<&str> = ADAPTERS.iter().copied().filter(|a| *a != "winit" && *a != "crate::win_pointer").collect();
-    assert_free_of(&["editor"], &forbidden);
+    // (Not even winit: the session speaks the program's own input vocabulary, `input::InputEvent`, which the shell translates
+    // into, so any host can drive it.)
+    assert_free_of(&["editor"], &ADAPTERS);
 }
 
 #[test]

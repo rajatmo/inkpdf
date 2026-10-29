@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- InkPDF as a NativeActivity with no Java code: the activity loads libinkpdf_android.so and calls its android_main. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="app.inkpdf.test">
+    <!-- Vulkan 1.0: the only graphics API the app draws with on Android. -->
+    <uses-feature android:name="android.hardware.vulkan.version" android:version="0x400003" android:required="true" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="true" />
+
+    <application
+        android:label="InkPDF"
+        android:hasCode="false"
+        android:allowBackup="false"
+        android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+        <activity
+            android:name="android.app.NativeActivity"
+            android:label="InkPDF"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density|uiMode|colorMode|locale|layoutDirection|fontScale">
+            <meta-data android:name="android.app.lib_name" android:value="inkpdf_android" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

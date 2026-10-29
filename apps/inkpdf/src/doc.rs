@@ -1,8 +1,6 @@
 //! An open PDF: its page layout, the pool that renders its tiles, and saving.
 
-use std::collections::HashMap;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -14,43 +12,24 @@ use crate::ink::{InkStore, PageStroke};
 use crate::ink_io;
 use crate::links::Link;
 use crate::outline::OutlineItem;
+pub use crate::page_table::BLANK_PAGE;
+use crate::page_table::PageTable;
 use crate::pages::PageEdit;
+#[cfg(test)]
+use crate::path_store::PathStore;
+use crate::store::{DocId, FileStore};
 use crate::tiles::{self, Key};
 use crate::view::Layout;
 
-/// The page size a blank document falls back to when the display is not known, in points (A4).
-pub const BLANK_PAGE: [f32; 2] = [595.0, 842.0];
 /// Smallest and largest side of a page, in points.
 const PAGE_SIDE: [f32; 2] = [72.0, 14_400.0];
 /// What a document with no file yet is called.
 pub const UNTITLED: &str = "Untitled";
 
-/// Where one page of the document comes from.
-#[derive(Clone, Copy, Debug)]
-struct Slot {
-    /// Which page of the renderer's file draws it; `None` for a page that was added, which is blank
-    /// and never rendered.
-    render: Option<usize>,
-    /// Which page of the file as last saved it is; `None` for a page that was added since.
-    file: Option<usize>,
-    /// For a page that is a copy of one: which page of the file as last saved it is a copy of (so that saving can make
-    /// the copy from it); `None` for a page that is not a copy.
-    dup_of: Option<usize>,
-}
-
-/// A page that was deleted, kept until the deletion can no longer be undone.
-struct Buried {
-    slot: Slot,
-    geom: PageGeom,
-}
-
 pub struct Doc {
-    /// Where it is saved; `None` for a new document that has not been saved yet.
-    pub path: Option<PathBuf>,
+    /// Which file it is saved in; `None` for a new document that has not been saved yet.
+    pub id: Option<DocId>,
     pub name: String,
-    /// Displayed size of each page in points.
-    pub sizes: Vec<[f32; 2]>,
-    pub geoms: Vec<PageGeom>,
     /// Links on the pages as the file had them, in document space, for the editor to take (see [`Doc::take_links`]).
     links: Vec<Link>,
     /// The table of contents as the file had it, for the editor to take (see [`Doc::take_outline`]).
@@ -58,27 +37,31 @@ pub struct Doc {
     pub open_millis: u128,
     /// The file as last read or saved: saving appends to it.
     base: Arc<Vec<u8>>,
-    /// Each page, in order: where it renders from and which page of `base` it is. Pages can be added and
-    /// deleted anywhere, so these are kept for every page.
-    slots: Vec<Slot>,
-    /// How many pages of `base` the slots stood for when it was read or saved: the pages of the file that were
-    /// deleted are those of these with no slot (pages beyond what the app can show are neither shown nor
-    /// deleted).
-    file_pages: usize,
+    /// Each page: its size, and where it renders from and which page of `base` it is.
+    pages: PageTable,
     /// The size of each page of the file the renderer has, in points (what its pictures are made for).
     render_sizes: Vec<[f32; 2]>,
     pool: RenderPool,
     queued: Vec<RenderRequest>,
-    /// The pages deleted since the file was last written, each deletion under the name the editor gave it.
-    graves: HashMap<u64, Vec<Buried>>,
 }
 
 impl Doc {
-    /// Open a PDF. Also returns the ink this app saved in it earlier.
+    /// Open a PDF from the file system. Also returns the ink this app saved in it earlier. (The program opens through its
+    /// platform's store; the tests, which use the file system, through this.)
+    #[cfg(test)]
     pub fn open(path: &Path) -> Result<(Doc, Vec<PageStroke>), String> {
-        let bytes = fs::read(path).map_err(|e| format!("could not read {}: {e}", path.display()))?;
-        let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
-        Self::from_bytes(Arc::new(bytes), Some(path.to_path_buf()), name)
+        Self::open_from(&PathStore, &DocId::Path(path.to_path_buf()))
+    }
+
+    /// Open the PDF `id` names in `files`. Also returns the ink this app saved in it earlier.
+    pub fn open_from(files: &dyn FileStore, id: &DocId) -> Result<(Doc, Vec<PageStroke>), String> {
+        let bytes = files.read(id)?;
+        Self::from_bytes(Arc::new(bytes), Some(id.clone()), id.name())
+    }
+
+    /// The file's path, if it is kept by path and has been saved.
+    pub fn path(&self) -> Option<&Path> {
+        self.id.as_ref().and_then(DocId::as_path)
     }
 
     /// A new document of one blank page `size` points across, with no file yet: where you can just
@@ -90,7 +73,7 @@ impl Doc {
         Self::from_bytes(Arc::new(bytes), None, UNTITLED.into()).map(|(doc, _)| doc)
     }
 
-    fn from_bytes(bytes: Arc<Vec<u8>>, path: Option<PathBuf>, name: String) -> Result<(Doc, Vec<PageStroke>), String> {
+    fn from_bytes(bytes: Arc<Vec<u8>>, id: Option<DocId>, name: String) -> Result<(Doc, Vec<PageStroke>), String> {
         let started = Instant::now();
         let info = inspect(bytes.clone(), None).map_err(|e| e.to_string())?;
         if info.pages.is_empty() {
@@ -98,7 +81,7 @@ impl Doc {
         }
         let pages = info.pages.iter().take(tiles::MAX_PAGES);
         let sizes: Vec<[f32; 2]> = pages.clone().map(|p| [p.width, p.height]).collect();
-        let geoms: Vec<PageGeom> = pages.map(PageGeom::from_info).collect();
+        let geoms: Vec<PageGeom> = pages.map(crate::pdf_read::page_geom).collect();
         let layout = Layout::new(&sizes);
         // A file this app inked earlier shows that ink from the ink layer, not the page raster.
         let (strokes, mut links, mut outline, render_bytes) = match ink_io::load(&bytes, &geoms, &layout) {
@@ -113,39 +96,33 @@ impl Doc {
         crate::links::limit_to(&mut links, sizes.len());
         let pool = RenderPool::new(render_bytes.clone(), render_threads(), RenderConfig::default());
         let sizes_of_file = sizes.clone();
-        let slots = (0..sizes.len()).map(|i| Slot { render: Some(i), file: Some(i), dup_of: None }).collect();
-        let file_pages = sizes.len();
         let doc = Doc {
-            path,
+            id,
             name,
-            sizes,
-            geoms,
+            pages: PageTable::of_file(sizes, geoms),
             links,
             outline,
             open_millis: started.elapsed().as_millis(),
             base: bytes,
-            slots,
-            file_pages,
             render_sizes: sizes_of_file,
             pool,
             queued: Vec::new(),
-            graves: HashMap::new(),
         };
         Ok((doc, strokes))
     }
 
     pub fn page_count(&self) -> usize {
-        self.sizes.len()
+        self.pages.len()
     }
 
     #[cfg(test)]
     pub fn page_size(&self, page: u32) -> [f32; 2] {
-        self.sizes.get(page as usize).copied().unwrap_or(BLANK_PAGE)
+        self.pages.sizes().get(page as usize).copied().unwrap_or(BLANK_PAGE)
     }
 
     /// Where each page is laid out, as the editor lays it out.
     pub fn layout(&self) -> Layout {
-        Layout::new(&self.sizes)
+        Layout::new(self.pages.sizes())
     }
 
     /// The links the file had, for the editor, which keeps them from then on.
@@ -161,88 +138,28 @@ impl Doc {
     /// Add a blank page after the last one, the same size as it.
     #[cfg(test)]
     pub fn add_blank_page(&mut self) -> Option<usize> {
-        let size = self.sizes.last().copied().unwrap_or(BLANK_PAGE);
-        let at = self.sizes.len();
+        let size = self.pages.sizes().last().copied().unwrap_or(BLANK_PAGE);
+        let at = self.pages.len();
         self.apply(&PageEdit::Insert { at, size }).then_some(at)
     }
 
     /// The pages kept for these deletions can go: the deletions can no longer be undone.
     pub fn forget_graves(&mut self, graves: &[u64]) {
-        for grave in graves {
-            self.graves.remove(grave);
-        }
+        self.pages.forget_graves(graves);
     }
 
     /// Do an edit of the pages (see [`PageEdit`]): the page table follows, and the file is changed when the document is
     /// saved. `false`, and nothing done, if the edit cannot be done to this document, or puts back pages that are no
     /// longer kept. The editor does the same edit to everything it keeps by page.
     pub fn apply(&mut self, edit: &PageEdit) -> bool {
-        let count = self.sizes.len();
-        if edit.order(count).is_none() {
-            return false;
-        }
-        let mut raised: Vec<Buried> = Vec::new();
-        match edit {
-            PageEdit::Restore { grave, pages } => match self.graves.remove(grave) {
-                Some(found) if found.len() == pages.len() => raised = found,
-                Some(found) => {
-                    self.graves.insert(*grave, found);
-                    return false;
-                }
-                None => return false,
-            },
-            PageEdit::Delete { pages, grave } if *grave != 0 => {
-                let mut gone = pages.clone();
-                gone.sort_unstable();
-                gone.dedup();
-                let kept = gone.iter().map(|&p| Buried { slot: self.slots[p], geom: self.geoms[p] }).collect();
-                self.graves.insert(*grave, kept);
-            }
-            _ => {}
-        }
-        let news = edit.new_page_sizes();
-        let blank_size = {
-            let mut next = news.into_iter();
-            move || next.next().unwrap_or(BLANK_PAGE)
-        };
-        let mut sizes = blank_size.clone();
-        edit.apply_with(&mut self.sizes, |source| source.copied().unwrap_or_else(&mut sizes));
-        let mut back = raised.iter().map(|b| b.geom);
-        let mut sizes = blank_size;
-        edit.apply_with(&mut self.geoms, |source| match (source, back.next()) {
-            (Some(geom), _) => *geom,
-            (None, Some(geom)) => geom,
-            (None, None) => {
-                let size = sizes();
-                PageGeom { width: size[0], height: size[1], crop: [0.0, 0.0, size[0], size[1]], rotation: 0 }
-            }
-        });
-        let mut back = raised.iter().map(|b| b.slot);
-        edit.apply_with(&mut self.slots, |source| match (source, back.next()) {
-            // A copy draws from the page it copies, and is made from the file's page when the file is written.
-            (Some(slot), _) => Slot { render: slot.render, file: None, dup_of: slot.file.or(slot.dup_of) },
-            (None, Some(slot)) => slot,
-            (None, None) => Slot { render: None, file: None, dup_of: None },
-        });
-        true
-    }
-
-    /// For each page of the file as last saved, which page of the document it is now (`None`: it was deleted).
-    fn doc_of_file(&self) -> Vec<Option<usize>> {
-        let mut map = vec![None; self.file_pages];
-        for (page, slot) in self.slots.iter().enumerate() {
-            if let Some(entry) = slot.file.and_then(|f| map.get_mut(f)) {
-                *entry = Some(page);
-            }
-        }
-        map
+        self.pages.apply(edit)
     }
 
     /// The page of the file the renderer has that draws page `page` of the document, if there is one (not for a page that
     /// was added). A picture is kept under this number, not the page's own: it stays the right one when pages are moved,
     /// deleted, copied or brought back, and a copy shares its original's.
     pub fn render_page(&self, page: usize) -> Option<u32> {
-        self.slots.get(page).and_then(|s| s.render).map(|r| r as u32)
+        self.pages.render_page(page)
     }
 
     /// Whether the renderer has a page for `key` (whose page is one of the file's, see [`Doc::render_page`]).
@@ -270,40 +187,48 @@ impl Doc {
         self.pool.try_recv()
     }
 
-    /// Write the ink (and any added pages) into the file. `Err` for a document with no file yet:
-    /// use [`Doc::save_as`].
-    pub fn save(&mut self, store: &InkStore) -> Result<(), String> {
-        let path = self.path.clone().ok_or("this document has not been saved anywhere yet")?;
-        self.write_to(&path, store)
+    /// Write the ink (and any added pages) into the file, in `files`. `Err` for a document with no file yet: use
+    /// [`Doc::save_as_to`].
+    pub fn save_to(&mut self, files: &dyn FileStore, store: &InkStore) -> Result<(), String> {
+        let id = self.id.clone().ok_or("this document has not been saved anywhere yet")?;
+        self.write_to(files, &id, store)
     }
 
-    /// Save to `path`, which becomes where the document lives.
+    /// [`Doc::save_to`] on the file system.
+    #[cfg(test)]
+    pub fn save(&mut self, store: &InkStore) -> Result<(), String> {
+        self.save_to(&PathStore, store)
+    }
+
+    /// Save to `path` on the file system, which becomes where the document lives.
+    #[cfg(test)]
     pub fn save_as(&mut self, path: &Path, store: &InkStore) -> Result<(), String> {
-        self.write_to(path, store)?;
-        self.name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
-        self.path = Some(path.to_path_buf());
+        self.save_as_to(&PathStore, &DocId::Path(path.to_path_buf()), store)
+    }
+
+    /// Save as the file `id` names in `files`, which becomes where the document lives.
+    pub fn save_as_to(&mut self, files: &dyn FileStore, id: &DocId, store: &InkStore) -> Result<(), String> {
+        self.write_to(files, id, store)?;
+        self.name = id.name();
+        self.id = Some(id.clone());
         Ok(())
     }
 
-    /// The new file is written beside the old one and swapped in, so a failure part-way leaves the
-    /// original as it was.
-    fn write_to(&mut self, path: &Path, store: &InkStore) -> Result<(), String> {
-        let copies: Vec<(usize, usize)> = self.slots.iter().enumerate().filter_map(|(page, s)| s.dup_of.filter(|_| s.file.is_none()).map(|from| (page, from))).collect();
-        let bytes = ink_io::save(&self.base, store, &self.geoms, &self.layout(), store.dirty_pages(), &self.doc_of_file(), &copies)?;
-        let dir = path.parent().filter(|d| !d.as_os_str().is_empty()).map_or_else(|| PathBuf::from("."), Path::to_path_buf);
-        let file = path.file_name().map_or_else(|| "document.pdf".into(), |n| n.to_string_lossy().into_owned());
-        let tmp = dir.join(format!(".{file}.inkpdf-saving"));
-        fs::write(&tmp, &bytes).map_err(|e| format!("could not write {}: {e}", tmp.display()))?;
-        if let Err(e) = fs::rename(&tmp, path) {
-            let _ = fs::remove_file(&tmp);
-            return Err(format!("could not replace {}: {e}", path.display()));
-        }
+    /// The new file is written whole or not at all (see [`FileStore::write_atomic`]), so a failure part-way leaves the original as
+    /// it was.
+    fn write_to(&mut self, files: &dyn FileStore, id: &DocId, store: &InkStore) -> Result<(), String> {
+        let bytes = ink_io::save(
+            &self.base,
+            store,
+            self.pages.geoms(),
+            &self.layout(),
+            store.dirty_pages(),
+            &self.pages.doc_of_file(),
+            &self.pages.copies(),
+        )?;
+        files.write_atomic(id, &bytes)?;
         self.base = Arc::new(bytes);
-        // The file now has exactly these pages, in this order.
-        self.slots.iter_mut().enumerate().for_each(|(i, s)| (s.file, s.dup_of) = (Some(i), None));
-        self.file_pages = self.slots.len();
-        // The deleted pages are out of the file: they cannot come back.
-        self.graves.clear();
+        self.pages.written();
         Ok(())
     }
 }
@@ -314,6 +239,9 @@ fn render_threads() -> usize {
 }
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::path::PathBuf;
+
     use super::*;
     use crate::ink::Style;
     use crate::pages::Remap;
@@ -408,7 +336,7 @@ mod tests {
         let mut doc = Doc::blank(BLANK_PAGE).expect("blank");
         assert_eq!(doc.page_count(), 1);
         assert_eq!(doc.page_size(0), [595.0, 842.0], "A4");
-        assert_eq!((doc.path.as_ref(), doc.name.as_str()), (None, UNTITLED));
+        assert_eq!((doc.path(), doc.name.as_str()), (None, UNTITLED));
         assert!(doc.take_links().is_empty());
     }
 
@@ -423,7 +351,7 @@ mod tests {
 
         let path = dir.join("notes.pdf");
         doc.save_as(&path, &store).expect("save as");
-        assert_eq!((doc.path.as_deref(), doc.name.as_str()), (Some(path.as_path()), "notes.pdf"));
+        assert_eq!((doc.path(), doc.name.as_str()), (Some(path.as_path()), "notes.pdf"));
         store.mark_clean();
 
         let (reopened, strokes) = Doc::open(&path).expect("reopen");

@@ -12,7 +12,7 @@ use crate::toolbar::{self, ContextState, Look, PanelView, PromptLayout, PromptVi
 use crate::tools::Painter;
 use crate::tools::paint::CURVE_STEP;
 
-use super::State;
+use super::{Paint, UiLayers};
 
 const ACCENT: [u8; 4] = [64, 132, 255, 255];
 
@@ -122,24 +122,24 @@ impl Painter for Overlays {
     }
 }
 
-impl State {
+impl UiLayers {
     /// Bring the GPU's committed-ink buffer up to date with the ink, the selection and the strokes
     /// being erased. Selected strokes are left out: they are drawn as an overlay.
-    pub(super) fn sync_committed(&mut self) {
-        let now = InkStamp::of(&self.ed);
-        match plan_refresh(&self.ink_built, &now, &self.ed.ink, self.ink_pages.len()) {
+    pub(super) fn sync_committed(&mut self, cx: &mut Paint) {
+        let now = InkStamp::of(cx.ed);
+        match plan_refresh(&self.ink_built, &now, &cx.ed.ink, self.ink_pages.len()) {
             Refresh::Current => return,
-            Refresh::Append { from } if self.append_committed(from) => {}
-            Refresh::Append { .. } | Refresh::Rebuild => self.rebuild_committed(),
+            Refresh::Append { from } if self.append_committed(cx, from) => {}
+            Refresh::Append { .. } | Refresh::Rebuild => self.rebuild_committed(cx),
         }
         self.ink_built = now;
     }
 
     /// Add the strokes from index `from` on to the end of the buffer. `false` when they do not fit
     /// (the buffer is then rebuilt, with room to spare).
-    fn append_committed(&mut self, from: usize) -> bool {
-        let Some(new) = self.ed.ink.strokes().get(from..) else { return false };
-        let base = self.gpu.committed_len();
+    fn append_committed(&mut self, cx: &mut Paint, from: usize) -> bool {
+        let Some(new) = cx.ed.ink.strokes().get(from..) else { return false };
+        let base = cx.gpu.committed_len();
         let mut capsules = Vec::new();
         let mut ranges: Vec<(u32, Range<u32>)> = Vec::new();
         for s in new {
@@ -147,7 +147,7 @@ impl State {
             stroke_capsules(s, [0.0, 0.0], &mut capsules);
             push_range(&mut ranges, s.page, start..base + capsules.len() as u32);
         }
-        if !self.gpu.append_committed(&capsules) {
+        if !cx.gpu.append_committed(&capsules) {
             return false;
         }
         for (page, range) in ranges {
@@ -158,8 +158,8 @@ impl State {
 
     /// Rebuild the buffer from scratch: the visible strokes grouped by page (so a page's ink is one
     /// range), in drawing order within each page.
-    fn rebuild_committed(&mut self) {
-        let ed = &self.ed;
+    fn rebuild_committed(&mut self, cx: &mut Paint) {
+        let ed = &cx.ed;
         let hidden: HashSet<u64> = if ed.overview_open() { HashSet::new() } else { ed.selection.iter().chain(&ed.erasing).copied().collect() };
         let mut shown: Vec<&Stroke> = ed.ink.strokes().iter().filter(|s| !hidden.contains(&s.id)).collect();
         shown.sort_by_key(|s| s.page);
@@ -170,23 +170,26 @@ impl State {
             stroke_capsules(s, [0.0, 0.0], &mut all);
             push_range(&mut self.ink_pages, s.page, start..all.len() as u32);
         }
-        self.gpu.set_committed(&all);
+        cx.gpu.set_committed(&all);
     }
     /// The ranges of the committed-ink buffer for the pages on screen.
-    pub(super) fn visible_ink_ranges(&self) -> Vec<Range<u32>> {
-        let (top, bottom) = self.ed.view.visible_y();
-        let pages = self.ed.layout.pages_in(top, bottom);
+    pub(super) fn visible_ink_ranges(&self, cx: &Paint) -> Vec<Range<u32>> {
+        let (top, bottom) = cx.ed.view.visible_y();
+        let pages = cx.ed.layout.pages_in(top, bottom);
         self.ink_pages.iter().filter(|(p, _)| pages.contains(&(*p as usize))).map(|(_, r)| r.clone()).collect()
     }
 
     /// Rebuild the toolbars and pen panel on the GPU when their look has changed: a different state,
     /// window, scale or panel. Otherwise they stay as they are and cost nothing per frame.
-    pub(super) fn sync_ui(&mut self) {
+    pub(super) fn sync_ui(&mut self, cx: &mut Paint) {
         // The pages overview takes over the window: the interface steps out of the way.
-        if self.sync_overview_ui() {
+        if self.sync_overview_ui(cx) {
             return;
         }
-        let ed = &self.ed;
+        if self.sync_save_as_ui(cx) {
+            return;
+        }
+        let ed = &cx.ed;
         let state = ed.toolbar_state();
         let [w, h] = ed.view.viewport.map(f32::to_bits);
         // (What comes and goes is drawn as far in as it is: how far is part of what the interface was built from.)
@@ -231,21 +234,21 @@ impl State {
         if let Some((view, bits)) = stamp.prompt {
             PromptLayout::new(ed.view.viewport, ed.dpr).draw_with(view, f32::from_bits(bits), &mut ui);
         }
-        self.gpu.set_ui(&ui.panels, &ui.lines);
+        cx.gpu.set_ui(&ui.panels, &ui.lines);
         self.ui_built = Some(stamp);
     }
-    /// Line work drawn over the committed ink, as `(document space, screen pixels)`; `now_ms` is
-    /// the pen clock, for the laser's fading trail.
-    pub(super) fn overlays(&self, now_ms: f64, mut out: Overlays) -> Overlays {
-        let ed = &self.ed;
-        out.doc.clear();
-        out.screen.clear();
-        out.now_ms = now_ms;
-        selection_overlay(ed, &mut out);
-        ed.tools.get(ed.tool).paint(ed, &mut out);
-        pull_overlay(ed, &mut out);
-        out
-    }
+}
+
+/// Line work drawn over the committed ink, as `(document space, screen pixels)`; `now_ms` is
+/// the pen clock, for the laser's fading trail.
+pub(super) fn overlays(ed: &Editor, now_ms: f64, mut out: Overlays) -> Overlays {
+    out.doc.clear();
+    out.screen.clear();
+    out.now_ms = now_ms;
+    selection_overlay(ed, &mut out);
+    ed.tools.get(ed.tool).paint(ed, &mut out);
+    pull_overlay(ed, &mut out);
+    out
 }
 
 /// One interface pixel in document points: lines of constant on-screen thickness.

@@ -124,7 +124,7 @@ pub fn pump() {
     // SAFETY: MSG is plain data, for which all zeros is a valid value.
     let mut msg: MSG = unsafe { std::mem::zeroed() };
     // Bounded, so a flood of input cannot hold the frame.
-    for _ in 0..512 {
+    for _ in 0..super::super::MAX_EVENTS_PER_PUMP {
         // SAFETY: `msg` is a valid out-pointer and `hwnd` is this thread's window.
         let got = unsafe { PeekMessageW(&mut msg, hwnd as HWND, WM_POINTERUPDATE, POINTER_MSG_LAST, PM_REMOVE) };
         if got == 0 {

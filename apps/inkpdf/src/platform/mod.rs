@@ -27,6 +27,11 @@ use winit::window::Window;
 
 use crate::input::PointerEvent;
 
+#[cfg(test)]
+mod contract;
+#[cfg(test)]
+pub(crate) mod fake;
+
 #[cfg(target_os = "android")]
 mod android;
 #[cfg(not(windows))]
@@ -48,6 +53,11 @@ pub use os::{
 };
 #[cfg(target_os = "android")]
 pub use os::{android_app_started, welcome_document};
+
+/// The most events one [`PointerSource::pump`] brings in: a flood of input must not hold the frame, so what is left waits for
+/// the next one (and is not lost).
+#[cfg_attr(not(any(windows, test)), allow(dead_code, reason = "the readers for the other platforms will take it"))]
+pub const MAX_EVENTS_PER_PUMP: usize = 512;
 
 /// A pen, touch and posture reader that is the OS's own: the one place input is taken from before winit sees it.
 pub trait PointerSource {

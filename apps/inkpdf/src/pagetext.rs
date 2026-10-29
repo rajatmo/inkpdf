@@ -18,10 +18,10 @@ pub trait PageTextView: Send + Sync {
     /// The glyph nearest to a point, if the page has any.
     fn nearest(&self, x: f32, y: f32) -> Option<usize>;
 
-    /// The word the glyph is in, as a range of glyph numbers (`start`, `end` exclusive).
+    /// The word the glyph is in, as its first and last glyph (both included).
     fn word_at(&self, glyph: usize) -> Option<(usize, usize)>;
 
-    /// The line the glyph is on, as a range of glyph numbers (`start`, `end` exclusive).
+    /// The line the glyph is on, as its first and last glyph (both included).
     fn line_at(&self, glyph: usize) -> Option<(usize, usize)>;
 
     /// The boxes (`[x0, y0, x1, y1]`) that cover a range of glyphs, one per line, to draw a selection with.

@@ -9,6 +9,9 @@
 
 mod pdfcraft;
 
+#[cfg(test)]
+mod contract;
+
 use std::sync::{Arc, OnceLock};
 
 use crate::coords::PageGeom;
@@ -188,7 +191,7 @@ pub trait PdfDocument {
     fn delete_annotation(&mut self, page: usize, index: usize) -> Result<(), String>;
     fn add_annotation(&mut self, new: &NewAnnotation) -> Result<(), String>;
     fn delete_pages(&mut self, pages: &[usize]) -> Result<(), OrganizeError>;
-    /// Copy pages to `at` (the end if `None`).
+    /// Copy pages to `at` (the program always says where; with `None` each copy goes right after the page it copies).
     fn duplicate_pages(&mut self, pages: &[usize], at: Option<usize>) -> Result<(), String>;
     fn insert_blank_page(&mut self, at: usize, size: [f32; 2]) -> Result<(), String>;
     fn move_pages(&mut self, pages: &[usize], to: usize) -> Result<(), String>;

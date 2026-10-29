@@ -1,7 +1,6 @@
 # InkPDF architecture
 
-A fast, pen-first PDF annotator for Windows (Linux and Android are being added on the `linux-android-port` branch, see
-`docs/PORTING.md`; everything below the adapters is shared). The application layer was rewritten in 0.2.0 from the plan
+A fast, pen-first PDF annotator for Windows, Linux and Android (see `docs/PORTING.md`; everything below the adapters is shared). The application layer was rewritten in 0.2.0 from the plan
 below; the 0.1.11 source is in this repository's history. The layering rule and the tool contract are
 enforced by tests (`src/architecture.rs`, `src/editor/tests/contract.rs`).
 

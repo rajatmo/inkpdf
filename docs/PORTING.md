@@ -1,6 +1,6 @@
 # Porting InkPDF to Linux and Android
 
-Branch `linux-android-port`. `main` is untouched and still the Windows app. Written 2026-10-29.
+Linux and Android live on `main` beside Windows (merged 2026-10-29). Written 2026-10-29.
 
 **One idea:** every OS gets its own small *pointer source*; everything above it is shared and unchanged.
 

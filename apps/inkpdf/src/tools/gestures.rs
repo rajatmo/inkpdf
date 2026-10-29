@@ -2,7 +2,7 @@
 //! drag of a selection, the eraser, the lasso.
 
 use crate::ink::{self, P, dist2};
-use crate::input::{Device, Intent, Role, Sample, role};
+use crate::input::{Device, Intent, Role, Sample};
 use crate::workspace::Workspace;
 
 use super::PageEvent;
@@ -175,7 +175,7 @@ impl Pick {
     /// `p` is on what is selected, as the tool judges it (a shape by its outline, ink and text by their box).
     pub fn begin(ws: &mut Workspace, ev: &PageEvent<'_>, p: P, on_selection: bool) -> Option<Pick> {
         // Select was chosen on screen, rather than asked for with the barrel button.
-        let chosen = role(&ev.pen) == Role::Draw && ws.intent == Intent::Select;
+        let chosen = ev.pen.role() == Role::Draw && ws.intent == Intent::Select;
         match ws.role(&ev.pen) {
             Role::Draw => None,
             Role::Erase => {

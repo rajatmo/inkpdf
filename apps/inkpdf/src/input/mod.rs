@@ -70,21 +70,15 @@ pub struct PenButtons {
     pub barrel: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PenTool {
-    Draw,
-    Erase,
-    Lasso,
-}
-
 impl PenButtons {
-    pub fn tool(&self) -> PenTool {
+    /// What a press with these buttons does: the eraser end erases, the barrel button lassos, the tip draws.
+    pub fn role(&self) -> Role {
         if self.eraser {
-            PenTool::Erase
+            Role::Erase
         } else if self.barrel {
-            PenTool::Lasso
+            Role::Lasso
         } else {
-            PenTool::Draw
+            Role::Draw
         }
     }
 }
@@ -134,15 +128,6 @@ pub enum Role {
     Lasso,
 }
 
-/// What a stylus press does.
-pub fn role(pen: &PenButtons) -> Role {
-    match pen.tool() {
-        PenTool::Draw => Role::Draw,
-        PenTool::Erase => Role::Erase,
-        PenTool::Lasso => Role::Lasso,
-    }
-}
-
 /// What the plain tip of the stylus (or the left mouse button) does, as chosen on screen: the way for a device with
 /// no eraser end, no barrel button and no right button to draw, to select and to erase. The stylus's own buttons
 /// and the mouse's other buttons are shortcuts for the same two things.
@@ -169,7 +154,7 @@ impl Intent {
 
 /// What a press does: the pen's own buttons if one is held, else what was chosen on screen.
 pub fn role_with(pen: &PenButtons, intent: Intent) -> Role {
-    match role(pen) {
+    match pen.role() {
         Role::Draw => intent.role(),
         held => held,
     }
@@ -198,12 +183,12 @@ mod tests {
 
     #[test]
     fn pen_roles_follow_the_hardware() {
-        assert_eq!(role(&pen(false, false)), Role::Draw);
-        assert_eq!(role(&pen(true, false)), Role::Erase);
-        assert_eq!(role(&pen(false, true)), Role::Lasso);
+        assert_eq!(pen(false, false).role(), Role::Draw);
+        assert_eq!(pen(true, false).role(), Role::Erase);
+        assert_eq!(pen(false, true).role(), Role::Lasso);
         // The eraser end wins over the barrel button.
-        assert_eq!(role(&pen(true, true)), Role::Erase);
+        assert_eq!(pen(true, true).role(), Role::Erase);
         // Hovering with the button down is already a lasso.
-        assert_eq!(PenButtons { in_range: true, contact: false, eraser: false, barrel: true }.tool(), PenTool::Lasso);
+        assert_eq!(PenButtons { in_range: true, contact: false, eraser: false, barrel: true }.role(), Role::Lasso);
     }
 }

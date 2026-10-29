@@ -34,8 +34,9 @@ impl InkStamp {
         Self {
             revision: ed.ink.revision(),
             strokes: ed.ink.strokes().len(),
-            selection: hash_ids(ed.selection.iter(), 0x9E37_79B9_7F4A_7C15),
-            erasing: hash_ids(ed.erasing.iter(), 0xC2B2_AE3D_27D4_EB4F),
+            // (With the pages overview up the document is not seen, and its pictures show every stroke: none is hidden.)
+            selection: if ed.overview_open() { 0 } else { hash_ids(ed.selection.iter(), 0x9E37_79B9_7F4A_7C15) },
+            erasing: if ed.overview_open() { 0 } else { hash_ids(ed.erasing.iter(), 0xC2B2_AE3D_27D4_EB4F) },
         }
     }
 }
@@ -155,7 +156,7 @@ impl State {
     /// range), in drawing order within each page.
     fn rebuild_committed(&mut self) {
         let ed = &self.ed;
-        let hidden: HashSet<u64> = ed.selection.iter().chain(&ed.erasing).copied().collect();
+        let hidden: HashSet<u64> = if ed.overview_open() { HashSet::new() } else { ed.selection.iter().chain(&ed.erasing).copied().collect() };
         let mut shown: Vec<&Stroke> = ed.ink.strokes().iter().filter(|s| !hidden.contains(&s.id)).collect();
         shown.sort_by_key(|s| s.page);
         let mut all = Vec::with_capacity(shown.len() * 32);

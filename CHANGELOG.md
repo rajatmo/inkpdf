@@ -19,6 +19,12 @@ finger (which scrolls, and uses the bar to move pages), and at a desk Ctrl+A, Ct
   (`editor/pages.rs`) and tells the shell once (`Request::PagesEdited`); the layout is no longer kept twice. The UI can
   now draw text and small pictures of pages (a layer between the interface's panels and lines), and the ink in them.
   A new storm drives the overview with hostile input.
+- The overview is smoother: the wheel and the keys glide the pages and the table of contents to where they go (a finger
+  and a dragged page still follow at once), the card fades in, and in edit mode a page that is not chosen has an open
+  ring to tick in its top right corner (it was a white circle on white paper, laid over the page's title).
+- The pictures of the pages in the overview show what is on the pages: typed text (before, only strokes and shapes),
+  the strokes that were chosen when it was opened (they were left out), and everything on a page that was added or
+  whose picture is still being made (before, those showed nothing at all: an empty page however much was drawn on it).
 - Quicker and lighter: pictures of pages are kept under the page of the file that draws them, so adding, deleting,
   moving or undoing pages no longer throws the rendered pages away and renders them again; the table of contents rows
   are built once, not on every pointer move; the pages kept for deletions go as soon as the history lets go of them

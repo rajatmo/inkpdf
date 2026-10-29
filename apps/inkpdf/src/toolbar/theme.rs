@@ -63,6 +63,25 @@ pub struct Ui {
 }
 
 impl Ui {
+    /// Everything drawn `f` (0 to 1) as opaque as it was: the interface coming into view. (Labels are bitmaps drawn as
+    /// quads, which are faded where they are drawn, not here.)
+    pub fn fade(&mut self, f: f32) {
+        if f >= 1.0 {
+            return;
+        }
+        let f = f.clamp(0.0, 1.0);
+        let scale = |a: u8| (f32::from(a) * f).round() as u8;
+        for p in &mut self.panels {
+            p.color[3] = scale(p.color[3]);
+        }
+        for c in &mut self.lines {
+            c.color[3] = scale(c.color[3]);
+        }
+        for i in &mut self.images {
+            i.alpha *= f;
+        }
+    }
+
     /// A filled circle of `diameter`.
     pub fn disc(&mut self, centre: [f32; 2], diameter: f32, color: [u8; 4]) {
         self.lines.push(Capsule::new(centre, centre, diameter, color));

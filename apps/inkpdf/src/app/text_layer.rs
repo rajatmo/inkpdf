@@ -11,6 +11,7 @@ use crate::gpu::{Gpu, Quad};
 use crate::ink::P;
 use crate::text;
 use crate::tiles;
+use crate::toolbar::Image;
 
 use super::State;
 
@@ -120,17 +121,64 @@ impl State {
 
     /// Where on the screen a text box's bitmap goes: the box, and the margin the bitmap has around it.
     fn text_rect(&self, d: &TextDraw) -> Option<[f32; 4]> {
-        let [bw, bh] = self.gpu.text_size(d.key)?;
-        let inner = |side: u32| side as f32 - 2.0 * text::PAD;
-        let [w, h] = d.size;
-        if inner(bw) < 1.0 || inner(bh) < 1.0 || w <= 0.0 || h <= 0.0 {
-            return None;
-        }
-        // The margin in points: the bitmap's own pixels are `w / inner(bw)` points wide.
-        let (mx, my) = (text::PAD * w / inner(bw), text::PAD * h / inner(bh));
         let view = &self.ed.view;
-        let [x0, y0] = view.doc_to_screen([d.top_left[0] - mx, d.top_left[1] - my]);
-        let [x1, y1] = view.doc_to_screen([d.top_left[0] + w + mx, d.top_left[1] + h + my]);
-        Some([x0, y0, x1, y1])
+        bitmap_rect(self.gpu.text_size(d.key)?, d.size, d.top_left, |p| view.doc_to_screen(p))
     }
+
+    /// The quads of the text boxes on the page of `image`, its small picture in the pages overview, as that shows them:
+    /// `scale` is its pixels to a point, and what is outside the part of the picture that is in view is cut off. The keys
+    /// of the bitmaps used are added to `keys`, to be kept.
+    pub(super) fn thumb_text_quads(&mut self, image: &Image, scale: f32, keys: &mut HashSet<u64>, out: &mut Vec<Quad>) {
+        if !text::available() || self.text_index.at.is_empty() {
+            return;
+        }
+        let (page, origin, shown, alpha) = (image.page, [image.full[0], image.full[1]], image.shown, image.alpha);
+        let Some(at) = self.ed.layout.page(page as usize).map(|r| [r.x, r.y]) else { return };
+        // The bitmaps are made at the size they are shown, so that they are crisp and small.
+        let level = tiles::level_for(scale);
+        let strokes = self.ed.ink.strokes();
+        for s in self.text_index.at.iter().filter_map(|&i| strokes.get(i)) {
+            let (Some(block), Some(&corner)) = (&s.text, s.pts.first()) else { continue };
+            if s.page != page {
+                continue;
+            }
+            let key = ensure(&mut self.gpu, &block.text, block.size, s.style.rgba, level);
+            keys.insert(key);
+            let Some(size) = self.gpu.text_size(key) else { continue };
+            let map = |p: P| [origin[0] + (p[0] - at[0]) * scale, origin[1] + (p[1] - at[1]) * scale];
+            if let Some(rect) = bitmap_rect(size, text::measure(&block.text, block.size), corner, map)
+                && let Some(quad) = clipped(key, rect, shown, alpha)
+            {
+                out.push(quad);
+            }
+        }
+    }
+}
+
+/// Where a text bitmap of `bitmap` pixels goes for a box of `size` points at `top_left`: the box and the margin the
+/// bitmap has around it, put where `map` takes document points to.
+fn bitmap_rect(bitmap: [u32; 2], size: [f32; 2], top_left: P, map: impl Fn(P) -> [f32; 2]) -> Option<[f32; 4]> {
+    let inner = |side: u32| side as f32 - 2.0 * text::PAD;
+    let [w, h] = size;
+    if inner(bitmap[0]) < 1.0 || inner(bitmap[1]) < 1.0 || w <= 0.0 || h <= 0.0 {
+        return None;
+    }
+    // The margin in points: the bitmap's own pixels are `w / inner(bw)` points wide.
+    let (mx, my) = (text::PAD * w / inner(bitmap[0]), text::PAD * h / inner(bitmap[1]));
+    let [x0, y0] = map([top_left[0] - mx, top_left[1] - my]);
+    let [x1, y1] = map([top_left[0] + w + mx, top_left[1] + h + my]);
+    Some([x0, y0, x1, y1])
+}
+
+/// The quad of a text bitmap in `rect`, cut off at `bounds` (the part of the bitmap that is left is what it shows), `alpha`
+/// as opaque; none when nothing is left.
+fn clipped(key: u64, rect: [f32; 4], bounds: [f32; 4], alpha: f32) -> Option<Quad> {
+    let cut = [rect[0].max(bounds[0]), rect[1].max(bounds[1]), rect[2].min(bounds[2]), rect[3].min(bounds[3])];
+    let (w, h) = (rect[2] - rect[0], rect[3] - rect[1]);
+    if cut[2] <= cut[0] || cut[3] <= cut[1] || w <= 0.0 || h <= 0.0 {
+        return None;
+    }
+    let uv = [(cut[0] - rect[0]) / w, (cut[1] - rect[1]) / h, (cut[2] - rect[0]) / w, (cut[3] - rect[1]) / h];
+    let a = alpha.clamp(0.0, 1.0);
+    Some(Quad { uv, color: [a; 4], ..Quad::text(key, cut) })
 }

@@ -4,7 +4,7 @@
 #   .\tools\e2e\run.ps1             everything
 #   .\tools\e2e\run.ps1 -Only smoke just that script
 param([string[]]$Only)
-$scripts = if ($Only) { $Only } else { "smoke", "modes", "overview" }
+$scripts = if ($Only) { $Only } else { "smoke", "modes", "overview", "thumbs" }
 $clock = [Diagnostics.Stopwatch]::StartNew()
 $passed = 0; $failed = 0
 foreach ($s in $scripts) {
@@ -18,4 +18,5 @@ foreach ($s in $scripts) {
 }
 "total: $passed ok, $failed failed, in {0:N0} s" -f $clock.Elapsed.TotalSeconds
 exit ([int]($failed -gt 0))
+
 

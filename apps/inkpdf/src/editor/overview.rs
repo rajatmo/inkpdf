@@ -24,6 +24,10 @@ use super::Editor;
 
 /// How far a pointer must move before a press is a drag, in logical pixels.
 const DRAG_PX: f32 = 6.0;
+/// How long the pages and the table of contents take to settle where the wheel or a key sent them (the time in which
+/// they cover nine tenths of the way), and how long the overview takes to come into view, in seconds.
+const GLIDE_SECONDS: f32 = 0.11;
+const APPEAR_SECONDS: f32 = 0.16;
 /// What one notch of a wheel scrolls, in units of the overview's interface.
 const WHEEL_UNITS: f32 = 2.4;
 /// How near the edge of the pages a dragged page is held to scroll them, and how fast, in units.
@@ -54,12 +58,23 @@ struct Drag {
     slot: usize,
 }
 
+/// A slow start and a soft stop for a motion that goes from 0 to 1.
+fn ease(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
 /// The overview's own state, while it is open.
 #[derive(Default)]
 pub struct OverviewState {
     /// How far the pages are scrolled, and the table of contents, in pixels.
     pub scroll: f32,
     pub toc_scroll: f32,
+    /// Where a wheel turn or a key sent them, which they glide to; `None` when they are where they were put.
+    goal: Option<f32>,
+    toc_goal: Option<f32>,
+    /// How much of the way into view the overview is, 0 to 1.
+    appear: f32,
     /// The entries of the table of contents that are folded closed, by their index in the outline.
     folded: HashSet<usize>,
     /// The rows of the table that are shown, made when first wanted and again when an entry is folded or unfolded (an
@@ -115,7 +130,8 @@ impl Editor {
         self.chrome.act = super::Act::Idle;
         self.chrome.panel = None;
         self.chrome.hover = None;
-        let mut state = OverviewState::default();
+        // (Under the tests' clocks, which do not run, it is simply there.)
+        let mut state = OverviewState { appear: if cfg!(test) { 1.0 } else { 0.0 }, ..OverviewState::default() };
         let current = self.ws.view.current_page(&self.ws.layout);
         let layout = self.overview_layout_for(false);
         state.scroll = layout.show(current, self.ws.layout.len(), 0.0);
@@ -166,9 +182,43 @@ impl Editor {
             let row = layout.toc_row(k, state.toc_scroll);
             if row[1] < layout.toc_rows[1] || row[3] > layout.toc_rows[3] {
                 let wanted = state.toc_scroll + row[1] - layout.toc_rows[1] - (layout.toc_rows[3] - layout.toc_rows[1]) / 3.0;
+                state.toc_goal = None;
                 state.toc_scroll = layout.clamp_toc_scroll(wanted, count);
             }
         }
+    }
+
+    /// One frame of the overview's own motion: the pages and the table of contents glide to where they were sent, and it
+    /// comes into view. Whether it is still moving.
+    pub(super) fn step_overview(&mut self, dt: f32) -> bool {
+        let Some(state) = &mut self.chrome.overview else { return false };
+        // The share of the way covered in this step, for a motion that covers nine tenths in `seconds`.
+        let share = |seconds: f32| 1.0 - (-dt.max(0.0) * std::f32::consts::LN_10 / seconds).exp();
+        let mut moving = false;
+        for (at, goal) in [(&mut state.scroll, &mut state.goal), (&mut state.toc_scroll, &mut state.toc_goal)] {
+            if let Some(to) = *goal {
+                *at += (to - *at) * share(GLIDE_SECONDS);
+                if (to - *at).abs() < 0.5 {
+                    *at = to;
+                    *goal = None;
+                } else {
+                    moving = true;
+                }
+            }
+        }
+        if state.appear < 1.0 {
+            state.appear = (state.appear + dt.max(0.0) / APPEAR_SECONDS).min(1.0);
+            moving = true;
+        }
+        if moving {
+            self.ws.redraw = true;
+        }
+        moving
+    }
+
+    /// How much of the way into view the overview is, 0 to 1.
+    pub fn overview_appear(&self) -> f32 {
+        self.chrome.overview.as_ref().map_or(1.0, |o| ease(o.appear))
     }
 
     /// Which of the bar's actions can be done now, in the order of [`Action::ALL`].
@@ -215,6 +265,7 @@ impl Editor {
             menu_enabled: [true, true, self.ws.layout.len() < MAX_PAGES, self.ws.layout.len() > 1],
         };
         toolbar::draw_overview(&view, &layout, ui);
+        ui.fade(ease(state.appear));
     }
 
     /// The pages whose pictures the overview shows now, with a row more on each side so that scrolling finds them ready.
@@ -352,6 +403,7 @@ impl Editor {
             0.0
         };
         if let Some(state) = &mut self.chrome.overview {
+            state.goal = None;
             state.scroll = layout.clamp_scroll(state.scroll + toward * speed, count);
             let slot = layout.slot_at(pos, count, state.scroll);
             if let Some(drag) = &mut state.drag {
@@ -380,9 +432,28 @@ impl Editor {
         if let Some(state) = &mut self.chrome.overview {
             state.menu = None;
             if toc {
+                state.toc_goal = None;
                 state.toc_scroll = layout.clamp_toc_scroll(state.toc_scroll + dy, rows);
             } else {
+                state.goal = None;
                 state.scroll = layout.clamp_scroll(state.scroll + dy, pages);
+            }
+        }
+        self.ws.redraw = true;
+    }
+
+    /// Send the pages (or the table of contents) `dy` pixels further than they are going: they glide there.
+    fn glide_overview_by(&mut self, dy: f32, toc: bool) {
+        let layout = self.overview_layout();
+        let (pages, rows) = (self.ws.layout.len(), self.toc_rows().len());
+        if let Some(state) = &mut self.chrome.overview {
+            state.menu = None;
+            if toc {
+                let to = layout.clamp_toc_scroll(state.toc_goal.unwrap_or(state.toc_scroll) + dy, rows);
+                state.toc_goal = Some(to);
+            } else {
+                let to = layout.clamp_scroll(state.goal.unwrap_or(state.scroll) + dy, pages);
+                state.goal = Some(to);
             }
         }
         self.ws.redraw = true;
@@ -396,7 +467,7 @@ impl Editor {
             MouseScrollDelta::PixelDelta(p) => -(p.y as f32),
         };
         let over_toc = self.overview_layout().toc.is_some_and(|t| crate::ink::rect_contains(t, self.cursor));
-        self.scroll_overview_by(dy, over_toc);
+        self.glide_overview_by(dy, over_toc);
     }
 
     /// The mouse left the window: nothing is under it.
@@ -442,15 +513,15 @@ impl Editor {
                     return false;
                 }
             }
-            Key::Home(_) => self.scroll_overview_by(f32::MIN / 2.0, false),
-            Key::End(_) => self.scroll_overview_by(f32::MAX / 2.0, false),
+            Key::Home(_) => self.glide_overview_by(f32::MIN / 2.0, false),
+            Key::End(_) => self.glide_overview_by(f32::MAX / 2.0, false),
             Key::Arrow(dir, _) => {
                 let step = match dir {
                     crate::tools::Dir::Up => -0.5,
                     crate::tools::Dir::Down => 0.5,
                     _ => return false,
                 };
-                self.scroll_overview_by(step * page, false);
+                self.glide_overview_by(step * page, false);
             }
             _ => return false,
         }
@@ -627,6 +698,7 @@ impl Editor {
         let layout = self.overview_layout();
         let count = self.ws.layout.len();
         if let Some(state) = &mut self.chrome.overview {
+            state.goal = None;
             state.scroll = layout.show(page, count, state.scroll);
         }
     }
@@ -646,6 +718,8 @@ impl Editor {
         let layout = self.overview_layout();
         let (pages, rows) = (self.ws.layout.len(), self.toc_rows().len());
         if let Some(state) = &mut self.chrome.overview {
+            state.goal = state.goal.map(|g| layout.clamp_scroll(g, pages));
+            state.toc_goal = state.toc_goal.map(|g| layout.clamp_toc_scroll(g, rows));
             state.scroll = layout.clamp_scroll(state.scroll, pages);
             state.toc_scroll = layout.clamp_toc_scroll(state.toc_scroll, rows);
             state.selected.retain(|&p| p < pages);

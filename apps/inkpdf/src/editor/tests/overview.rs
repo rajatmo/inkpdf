@@ -10,6 +10,7 @@ use crate::ink::Style;
 use crate::toolbar::{OverviewControl, OverviewHover};
 
 use super::*;
+use crate::scene::Capsule;
 
 /// An editor on a document of `n` pages, 612 x 792 each, in a 1200 x 900 window.
 fn many(n: usize) -> Editor {
@@ -39,6 +40,11 @@ fn with_outline(mut ed: Editor) -> Editor {
 
 fn pages_button(ed: &Editor) -> [f32; 2] {
     ed.toolbar().centre_of(Item::Pages)
+}
+
+/// Let the overview's pages and table of contents finish gliding to where the wheel or a key sent them.
+fn glide_done(ed: &mut Editor) {
+    ed.step_view(10.0);
 }
 
 fn scroll_of(ed: &Editor) -> f32 {
@@ -209,16 +215,26 @@ fn the_wheel_a_drag_and_the_keys_scroll_the_pages_and_never_past_their_ends() {
     let max = ed.overview_layout().max_scroll(120);
     ed.mouse_moved([ed.overview_layout().grid[0] + 200.0, ed.overview_layout().grid[1] + 200.0]);
     ed.wheel(MouseScrollDelta::LineDelta(0.0, -3.0));
+    glide_done(&mut ed);
     assert!(scroll_of(&ed) > 0.0, "the wheel scrolls down");
     ed.wheel(MouseScrollDelta::LineDelta(0.0, 1000.0));
+    glide_done(&mut ed);
     assert_eq!(scroll_of(&ed), 0.0, "and not above the first row");
     ed.wheel(MouseScrollDelta::LineDelta(0.0, -1.0e6));
+    glide_done(&mut ed);
     assert_eq!(scroll_of(&ed), max, "nor below the last");
     ed.wheel(MouseScrollDelta::PixelDelta(winit::dpi::PhysicalPosition::new(0.0, 5000.0)));
+    glide_done(&mut ed);
     assert_eq!(scroll_of(&ed), 0.0, "a touchpad too");
-    assert!(ed.press(Key::End(false)) && scroll_of(&ed) == max, "End");
-    assert!(ed.press(Key::Home(false)) && scroll_of(&ed) == 0.0, "Home");
-    assert!(ed.press(Key::Arrow(crate::tools::Dir::Down, false)) && scroll_of(&ed) > 0.0, "the arrow");
+    assert!(ed.press(Key::End(false)));
+    glide_done(&mut ed);
+    assert_eq!(scroll_of(&ed), max, "End");
+    assert!(ed.press(Key::Home(false)));
+    glide_done(&mut ed);
+    assert_eq!(scroll_of(&ed), 0.0, "Home");
+    assert!(ed.press(Key::Arrow(crate::tools::Dir::Down, false)));
+    glide_done(&mut ed);
+    assert!(scroll_of(&ed) > 0.0, "the arrow");
     assert_eq!(ed.overview_layout().max_scroll(120), max);
 }
 
@@ -300,10 +316,12 @@ fn a_document_with_no_outline_has_no_table_and_the_table_scrolls_on_its_own() {
     let toc = layout.toc.expect("a table");
     ed.mouse_moved([(toc[0] + toc[2]) / 2.0, (toc[1] + toc[3]) / 2.0]);
     ed.wheel(MouseScrollDelta::LineDelta(0.0, -4.0));
+    glide_done(&mut ed);
     let moved = ed.chrome.overview.as_ref().map_or(0.0, |o| o.toc_scroll);
     assert!(moved > 0.0, "the wheel over the table scrolls it");
     assert_eq!(scroll_of(&ed), 0.0, "and not the pages");
     ed.wheel(MouseScrollDelta::LineDelta(0.0, -1.0e6));
+    glide_done(&mut ed);
     let end = ed.chrome.overview.as_ref().map_or(0.0, |o| o.toc_scroll);
     assert_eq!(end, layout.toc_max_scroll(80), "as far as it goes");
 }
@@ -347,6 +365,7 @@ fn the_overview_follows_edits_of_the_pages_made_while_it_is_up() {
     let mut ed = many(60);
     open(&mut ed, Press::Mouse);
     ed.press(Key::End(false));
+    glide_done(&mut ed);
     let before = scroll_of(&ed);
     assert!(before > 0.0);
     // Most of the pages go: what is left fits, and the scroll is back in range.
@@ -398,7 +417,7 @@ fn hovering_lights_what_is_under_the_pointer_and_a_press_that_slides_off_does_no
     assert_eq!(ed.view.current_page(&ed.layout), 0);
 }
 
-// ── edit mode ────────────────────────────────────────────────────────────────────────────────
+// â”€â”€ edit mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// A document of `n` pages with a stroke on each, whose ids say which page is which.
 fn with_ink(n: usize) -> (Editor, Vec<u64>) {
@@ -752,7 +771,7 @@ fn the_title_says_how_many_are_chosen_and_the_bar_takes_room_from_the_pages_only
     assert!(ui.labels.iter().any(|l| l.text == "Select all"));
 }
 
-// ── the menu of a page ───────────────────────────────────────────────────────────────────────
+// â”€â”€ the menu of a page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 fn number_centre(ed: &Editor, page: usize) -> [f32; 2] {
     let r = ed.overview_layout().number_row(page, scroll_of(ed));
@@ -804,6 +823,7 @@ fn a_tap_on_a_pages_number_opens_its_menu_and_a_tap_anywhere_else_only_puts_it_a
     assert!(menu_open_for(&ed).is_none() && ed.overview_open(), "Escape puts the menu away first");
     tap(&mut ed, Press::Mouse, at);
     ed.wheel(MouseScrollDelta::LineDelta(0.0, -1.0));
+    glide_done(&mut ed);
     assert!(menu_open_for(&ed).is_none(), "scrolling does too");
 }
 
@@ -860,4 +880,73 @@ fn a_page_with_ink_is_duplicated_with_it_from_the_menu_and_the_last_page_cannot_
     for text in ["Add page before", "Add page after", "Duplicate", "Delete"] {
         assert!(ui.labels.iter().any(|l| l.text == text), "{text} is shown");
     }
+}
+
+#[test]
+fn the_wheel_sends_the_pages_gliding_and_they_arrive_without_overshooting_and_a_finger_moves_them_at_once() {
+    let mut ed = many(120);
+    open(&mut ed, Press::Mouse);
+    let layout = ed.overview_layout();
+    ed.mouse_moved([layout.grid[0] + 200.0, layout.grid[1] + 200.0]);
+    ed.wheel(MouseScrollDelta::LineDelta(0.0, -3.0));
+    assert_eq!(scroll_of(&ed), 0.0, "the wheel has not moved them yet: they glide");
+    let mut last = 0.0;
+    let mut frames = 0;
+    while ed.step_view(1.0 / 60.0) && frames < 120 {
+        let now = scroll_of(&ed);
+        assert!(now >= last, "never backwards");
+        last = now;
+        frames += 1;
+    }
+    let arrived = scroll_of(&ed);
+    assert!(arrived > 0.0 && frames > 3 && frames < 60, "a short glide, not a jump and not a crawl: {frames} frames");
+    // Two turns in a row go the sum of both, wherever the first had got to.
+    ed.wheel(MouseScrollDelta::LineDelta(0.0, -1.0));
+    ed.step_view(1.0 / 60.0);
+    ed.wheel(MouseScrollDelta::LineDelta(0.0, -1.0));
+    glide_done(&mut ed);
+    let unit = ed.overview_layout().unit() * 2.4;
+    assert!((scroll_of(&ed) - arrived - 2.0 * unit).abs() < 1.0, "{} from {arrived}", scroll_of(&ed));
+    // A turn the other way before it arrived turns it round from where it was heading, never past the ends.
+    ed.wheel(MouseScrollDelta::LineDelta(0.0, 1.0e6));
+    glide_done(&mut ed);
+    assert_eq!(scroll_of(&ed), 0.0);
+}
+
+#[test]
+fn the_overview_comes_into_view_over_a_moment_and_is_there_for_good_after() {
+    let mut ed = many(4);
+    open(&mut ed, Press::Mouse);
+    assert!(ed.overview_open());
+    // (Under test the overview is up at once; a real one starts clear and is faded in by the frames.)
+    assert_eq!(ed.overview_appear(), 1.0);
+    let mut ui = crate::toolbar::Ui::default();
+    ed.draw_overview(&mut ui);
+    let faded = {
+        let mut half = crate::toolbar::Ui::default();
+        ed.draw_overview(&mut half);
+        half.fade(0.5);
+        half
+    };
+    assert_eq!(ui.panels.len(), faded.panels.len(), "fading changes no shapes");
+    assert!(faded.panels.iter().zip(&ui.panels).all(|(f, p)| f.color[3] <= p.color[3]));
+    assert!(faded.panels.iter().zip(&ui.panels).any(|(f, p)| f.color[3] < p.color[3]), "and does make them clearer");
+    assert!(faded.images.iter().zip(&ui.images).all(|(f, p)| (f.alpha - p.alpha * 0.5).abs() < 1e-6));
+}
+
+#[test]
+fn in_edit_mode_a_page_not_chosen_has_a_visible_ring_to_tick() {
+    let mut ed = many(4);
+    open(&mut ed, Press::Mouse);
+    let mut plain = crate::toolbar::Ui::default();
+    ed.draw_overview(&mut plain);
+    ed.chrome.overview.as_mut().expect("open").edit = true;
+    let mut editing = crate::toolbar::Ui::default();
+    ed.draw_overview(&mut editing);
+    // A ring that can be seen on white paper is made of grey lines (and the page shows through it: no disc under it).
+    let (grey, solid) = (|c: &Capsule| c.color[0] < 200 && c.color[3] == 255, |c: &Capsule| c.a == c.b);
+    let (before, after) = (plain.lines.iter().filter(|c| grey(c)).count(), editing.lines.iter().filter(|c| grey(c)).count());
+    assert!(after >= before + 4 * 12, "{after} against {before}: a ring for each of the pages whole in view");
+    let covering = |ui: &crate::toolbar::Ui| ui.lines.iter().filter(|c| solid(c) && c.color[0] > 250 && c.color[3] > 0).count();
+    assert_eq!(covering(&editing), covering(&plain), "no white disc is laid over the page");
 }

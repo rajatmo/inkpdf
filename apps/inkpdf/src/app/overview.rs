@@ -64,6 +64,7 @@ impl State {
             return;
         }
         let viewport = self.ed.view.viewport;
+        let appear = self.ed.overview_appear();
         let mut used = HashSet::new();
         for label in &self.overview.labels {
             let key = label_key(label);
@@ -81,32 +82,42 @@ impl State {
                 Align::Centre => label.at[0] - width / 2.0,
             };
             let (x, y) = ((left - text::PAD).round(), (label.at[1] - height / 2.0 - text::PAD).round());
-            self.overview.quads.push(Quad::text(key, [x, y, x + bw as f32, y + bh as f32]));
+            self.overview.quads.push(Quad { color: [appear; 4], ..Quad::text(key, [x, y, x + bw as f32, y + bh as f32]) });
         }
         self.overview.keys = used;
-        for image in &self.overview.images {
-            // (The picture is kept under the page of the file that draws the page.)
-            let Some(file_page) = self.doc.as_ref().and_then(|d| d.render_page(image.page as usize)) else { continue };
-            let key = Key::Thumb { page: file_page };
-            if !self.gpu.has(key) {
-                continue;
-            }
-            self.gpu.touch(key, self.frame);
+        let mut thumb_keys = HashSet::new();
+        let mut thumb_texts = Vec::new();
+        // (Taken for the loop, which needs the shell for the bitmaps of the text, and put back.)
+        let images = std::mem::take(&mut self.overview.images);
+        for image in &images {
             let (full, shown) = (image.full, image.shown);
             let (w, h) = ((full[2] - full[0]).max(1.0), (full[3] - full[1]).max(1.0));
-            let uv = [(shown[0] - full[0]) / w, (shown[1] - full[1]) / h, (shown[2] - full[0]) / w, (shown[3] - full[1]) / h];
-            let a = image.alpha.clamp(0.0, 1.0);
-            self.overview.quads.push(Quad { uv, color: [a; 4], ..Quad::page(key, shown) });
-            let ranges: Vec<_> = self.ink_pages.iter().filter(|(p, _)| *p == image.page).map(|(_, r)| r.clone()).collect();
+            // The picture of the page the file draws it from, once it is there: not for a page that was added (it is
+            // blank), nor yet for one that is still being rendered. What is drawn on the page shows either way.
+            // (It is kept under the page of the file that draws the page.)
+            let key = self.doc.as_ref().and_then(|d| d.render_page(image.page as usize)).map(|p| Key::Thumb { page: p });
+            if let Some(key) = key.filter(|&k| self.gpu.has(k)) {
+                self.gpu.touch(key, self.frame);
+                let uv = [(shown[0] - full[0]) / w, (shown[1] - full[1]) / h, (shown[2] - full[0]) / w, (shown[3] - full[1]) / h];
+                let a = image.alpha.clamp(0.0, 1.0);
+                self.overview.quads.push(Quad { uv, color: [a; 4], ..Quad::page(key, shown) });
+            }
             let Some(page) = self.ed.layout.page(image.page as usize) else { continue };
-            if ranges.is_empty() || page.w <= 0.0 {
+            if page.w <= 0.0 {
                 continue;
             }
             let scale = w / page.w;
+            // The typed text on the page (bitmaps, like the labels), over its picture.
+            self.thumb_text_quads(image, scale, &mut thumb_keys, &mut thumb_texts);
+            let ranges: Vec<_> = self.ink_pages.iter().filter(|(p, _)| *p == image.page).map(|(_, r)| r.clone()).collect();
+            if ranges.is_empty() {
+                continue;
+            }
             let clip_x0 = shown[0].floor().max(0.0);
             let clip_y0 = shown[1].floor().max(0.0);
             let clip = [clip_x0, clip_y0, shown[2].ceil().min(viewport[0]) - clip_x0, shown[3].ceil().min(viewport[1]) - clip_y0];
-            if clip[2] > 0.0 && clip[3] > 0.0 {
+            // (The ink in a picture is drawn once the overview is fully there: it cannot be faded with it.)
+            if clip[2] > 0.0 && clip[3] > 0.0 && appear >= 1.0 {
                 self.overview.thumbs.push(InkThumb {
                     ranges,
                     origin: [page.x - full[0] / scale, page.y - full[1] / scale],
@@ -115,5 +126,8 @@ impl State {
                 });
             }
         }
+        self.overview.images = images;
+        self.overview.quads.append(&mut thumb_texts);
+        self.overview.keys.extend(thumb_keys);
     }
 }

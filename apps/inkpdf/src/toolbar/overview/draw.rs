@@ -11,7 +11,7 @@ use super::super::theme::{ACCENT, ACCENT_WASH, Align, HOVER_WASH, INK, INK_DIM, 
 use super::layout::{Action, Control, MenuItem, OverviewLayout, TocHit, TocRow};
 
 const SCRIM: [u8; 4] = [16, 20, 44, 120];
-const PAPER: [u8; 4] = [250, 249, 244, 255];
+const PAPER: [u8; 4] = [255, 255, 255, 255];
 const PRESSED_WASH: [u8; 4] = [20, 24, 40, 30];
 const DANGER: [u8; 4] = [214, 52, 62, 255];
 
@@ -102,6 +102,19 @@ fn outline_rect(ui: &mut Ui, r: [f32; 4], width: f32, color: [u8; 4]) {
     let (x0, y0, x1, y1) = (r[0] - half, r[1] - half, r[2] + half, r[3] + half);
     for (a, b) in [([x0, y0], [x1, y0]), ([x1, y0], [x1, y1]), ([x1, y1], [x0, y1]), ([x0, y1], [x0, y0])] {
         ui.line(a, b, width, color);
+    }
+}
+
+/// The outline of a circle of `diameter`, drawn as short lines (its inside is left as it is).
+fn ring(ui: &mut Ui, centre: [f32; 2], diameter: f32, width: f32, color: [u8; 4]) {
+    const SIDES: usize = 20;
+    let r = diameter / 2.0;
+    let at = |k: usize| {
+        let t = k as f32 / SIDES as f32 * std::f32::consts::TAU;
+        [centre[0] + r * t.cos(), centre[1] + r * t.sin()]
+    };
+    for k in 0..SIDES {
+        ui.line(at(k), at(k + 1), width, color);
     }
 }
 
@@ -274,15 +287,17 @@ fn pages(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
                 outline_rect(ui, [thumb[0] - 3.0 * px, thumb[1] - 3.0 * px, thumb[2] + 3.0 * px, thumb[3] + 3.0 * px], 2.5 * px, ACCENT);
             }
             if view.edit {
-                // A circle to tick in the corner: filled once the page is chosen.
-                let centre = [thumb[0] + 0.55 * u, thumb[1] + 0.55 * u];
+                // A circle to tick in the top right corner (where a page has the least on it): filled once the page is chosen.
+                let centre = [thumb[2] - 0.55 * u, thumb[1] + 0.55 * u];
                 if selected(i) {
                     ui.disc(centre, 0.8 * u, ACCENT);
                     ui.line([centre[0] - 0.2 * u, centre[1] + 0.02 * u], [centre[0] - 0.05 * u, centre[1] + 0.18 * u], 2.0 * px, [255, 255, 255, 255]);
                     ui.line([centre[0] - 0.05 * u, centre[1] + 0.18 * u], [centre[0] + 0.24 * u, centre[1] - 0.16 * u], 2.0 * px, [255, 255, 255, 255]);
                 } else {
-                    ui.disc(centre, 0.8 * u, [255, 255, 255, 230]);
-                    ui.disc(centre, 0.62 * u, [255, 255, 255, 255]);
+                    // An open ring (the page shows through it) that shows on white paper, with a pale one round it
+                    // so that it shows on dark pages too.
+                    ring(ui, centre, 0.7 * u, 3.6 * px, [255, 255, 255, 200]);
+                    ring(ui, centre, 0.7 * u, 1.8 * px, INK_DIM);
                 }
             }
         }

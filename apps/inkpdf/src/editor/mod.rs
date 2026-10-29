@@ -239,7 +239,8 @@ impl Editor {
 
     /// One frame of the view's glide and zoom animation: whether it is still moving.
     pub fn step_view(&mut self, dt: f32) -> bool {
-        self.ws.step_view(dt)
+        let overview = self.step_overview(dt);
+        self.ws.step_view(dt) || overview
     }
 
     /// The window changed size: the view follows it.

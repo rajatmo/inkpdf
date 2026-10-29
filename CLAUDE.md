@@ -4,7 +4,7 @@ InkPDF is a pen-first PDF annotator in Rust, Windows first (see `README.md`, `ap
 runs on Linux and builds as an Android app (`apps/inkpdf-android`): read `docs/PORTING.md` before touching `platform/` or anything
 per-OS.
 
-- **The plan lives in `ROADMAP.md`.** Read its sections 1 to 3 first, then do one task from section 6 (for example "do task F1").
+- **The plan lives in `ROADMAP.md`.** Read its sections 1 to 3 first, then do one task from section 6 (for example "do task F3" or "do task K1").
 - Verification is the GitHub Actions run (jobs `check` on `windows-latest`, then `linux`, `android` and the portable builds):
   `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`. Work on a branch, keep changes small, read the CI log. The same
   checks run on Linux here (`cargo test -p inkpdf --lib`, `cargo clippy -p inkpdf --all-targets -- -D warnings`), and Windows and

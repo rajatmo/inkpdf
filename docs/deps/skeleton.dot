@@ -1,6 +1,6 @@
 digraph G {
 rankdir=BT; newrank=true; compound=true; splines=true; nodesep=0.35; ranksep=0.9; pad=0.4;
-label=<<b>InkPDF essential skeleton (transitive reduction: 59 of 130 edges)</b>>; labelloc=t; fontsize=22; fontname="Helvetica";
+label=<<b>InkPDF essential skeleton (transitive reduction: 62 of 133 edges)</b>>; labelloc=t; fontsize=22; fontname="Helvetica";
 node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=13, margin="0.14,0.07", color="#888888"];
 edge [arrowsize=0.6];
 subgraph cluster_Base { label="base — plain data and arithmetic"; labeljust=l; fontname="Helvetica"; fontsize=14; style="rounded,filled"; fillcolor="#e8f1fb55"; color="#4a7fb5";
@@ -22,6 +22,7 @@ subgraph cluster_Model { label="model — what a drawing is made of"; labeljust=
   "laser" [fillcolor="white"];
   "links" [fillcolor="white"];
   "outline" [fillcolor="white"];
+  "page_table" [fillcolor="white"];
   "pages" [fillcolor="white"];
 }
 subgraph cluster_Domain { label="domain — what devices and tools mean"; labeljust=l; fontname="Helvetica"; fontsize=14; style="rounded,filled"; fillcolor="#fdf3d655"; color="#b8860b";
@@ -59,6 +60,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "app" -> "gpu" [color="#55555599", penwidth=1.60, tooltip="5 uses"];
 "app" -> "platform" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "doc" -> "ink_io" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
+"doc" -> "page_table" [color="#55555599", penwidth=1.60, tooltip="2 uses"];
 "doc" -> "store" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "doc" -> "tiles" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "editor" -> "clock" [color="#6a5acd99", penwidth=1.60, tooltip="1 uses"];
@@ -78,6 +80,8 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "laser" -> "plane" [color="#3a8f5c99", penwidth=1.60, tooltip="1 uses"];
 "links" -> "ink" [color="#3a8f5c99", penwidth=1.60, tooltip="1 uses"];
 "outline" -> "pages" [color="#3a8f5c99", penwidth=1.60, tooltip="1 uses"];
+"page_table" -> "coords" [color="#3a8f5c99", penwidth=1.60, tooltip="1 uses"];
+"page_table" -> "pages" [color="#3a8f5c99", penwidth=1.60, tooltip="1 uses"];
 "pages" -> "view" [color="#3a8f5c99", penwidth=1.60, tooltip="1 uses"];
 "path_store" -> "store" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "pdf_read" -> "coords" [color="#55555599", penwidth=1.60, tooltip="1 uses"];

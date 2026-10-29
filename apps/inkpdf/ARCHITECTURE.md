@@ -59,7 +59,7 @@ ones below; no two modules may reach each other, directly or through others.
 | tools | `tools` |
 | ui | `toolbar` |
 | domain | `tool`, `browse`, `input`, `requests`, `workspace`, `selection`, `settings`, `store` |
-| model | `figure`, `ink`, `laser`, `links`, `outline`, `pages` |
+| model | `figure`, `ink`, `laser`, `links`, `outline`, `pages`, `page_table` |
 | base | `plane`, `motion`, `scene`, `clock`, `geometry`, `colour`, `coords`, `view`, `text`, `smooth`, `clipboard` |
 
 * `plane` holds the point type `P` and the plane arithmetic (distances, polygon tests, simplify, thin, `clamp_into`)

@@ -26,6 +26,7 @@ mod laser;
 mod links;
 mod motion;
 mod outline;
+mod page_table;
 mod pages;
 mod path_store;
 mod pdf_read;

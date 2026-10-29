@@ -79,3 +79,99 @@ impl PointerSource for FakeSource {
         self.os.borrow_mut().queue.clear();
     }
 }
+
+/// A whole platform that does nothing real: folders are fixed, the "pen" is a [`FakeSource`], and what the shell tells the
+/// user is kept. With it the shell's platform calls run in a test with no OS and no window.
+pub struct FakePlatform {
+    pub injector: Injector,
+    pub shown: RefCell<Vec<String>>,
+    source: RefCell<Option<FakeSource>>,
+}
+
+impl FakePlatform {
+    pub fn new() -> Self {
+        let (source, injector) = FakeSource::new();
+        Self { injector, shown: RefCell::new(Vec::new()), source: RefCell::new(Some(source)) }
+    }
+}
+
+impl super::Platform for FakePlatform {
+    fn documents_dir(&self) -> std::path::PathBuf {
+        "/fake/Documents".into()
+    }
+
+    fn places(&self) -> Vec<crate::browse::Place> {
+        vec![crate::browse::Place { label: "Documents".into(), path: "/fake/Documents".into() }]
+    }
+
+    fn detect_mode(&self) -> crate::input::Mode {
+        crate::input::Mode::Tablet
+    }
+
+    fn motion_prefs(&self) -> crate::motion::Prefs {
+        crate::motion::Prefs::FULL
+    }
+
+    fn open_url(&self, url: &str) {
+        self.shown.borrow_mut().push(format!("open {url}"));
+    }
+
+    fn error_box(&self, _window: &dyn winit::raw_window_handle::HasWindowHandle, text: &str) {
+        self.shown.borrow_mut().push(text.to_string());
+    }
+
+    fn set_text_input(&self, _active: bool) {}
+
+    fn clipboard(&self, _window: &dyn winit::raw_window_handle::HasWindowHandle) -> Option<Box<dyn crate::clipboard::TextClipboard>> {
+        None
+    }
+
+    fn install_pointer(&self, _window: &dyn winit::raw_window_handle::HasWindowHandle, wake: super::Waker) -> Result<Box<dyn PointerSource>, String> {
+        wake();
+        self.source.borrow_mut().take().map(|s| Box::new(s) as Box<dyn PointerSource>).ok_or_else(|| "already installed".to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle, WebWindowHandle, WindowHandle};
+
+    use super::*;
+    use crate::platform::Platform;
+
+    /// A window handle that points at nothing: the fake platform never looks.
+    struct NoWindow;
+
+    impl HasWindowHandle for NoWindow {
+        fn window_handle(&self) -> Result<WindowHandle<'_>, winit::raw_window_handle::HandleError> {
+            // SAFETY: a web handle is only an id; nothing dereferences it.
+            Ok(unsafe { WindowHandle::borrow_raw(RawWindowHandle::Web(WebWindowHandle::new(1))) })
+        }
+    }
+
+    #[test]
+    fn the_shell_can_be_given_a_platform_that_is_not_an_os() {
+        let fake = FakePlatform::new();
+        let injector = fake.injector.clone();
+        let platform: Box<dyn Platform> = Box::new(fake);
+        let woken = Arc::new(AtomicUsize::new(0));
+        let count = woken.clone();
+        let mut pointer = platform
+            .install_pointer(
+                &NoWindow,
+                Arc::new(move || {
+                    count.fetch_add(1, Ordering::Relaxed);
+                }),
+            )
+            .expect("a source");
+        assert_eq!(woken.load(Ordering::Relaxed), 1, "it can wake the loop");
+        assert!(!pointer.pending() && injector.waiting() == 0);
+        pointer.uninstall();
+        assert!(platform.install_pointer(&NoWindow, Arc::new(|| {})).is_err(), "and there is one reader");
+        platform.error_box(&NoWindow, "could not save");
+        assert_eq!(platform.documents_dir(), std::path::PathBuf::from("/fake/Documents"));
+    }
+}

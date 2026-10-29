@@ -594,7 +594,7 @@
 <!-- app&#45;&gt;platform -->
 <g id="edge3" class="edge">
 <title>app&#45;&gt;platform</title>
-<g id="a_edge3"><a xlink:title="2 uses">
+<g id="a_edge3"><a xlink:title="1 uses">
 <path fill="none" stroke="#555555" stroke-width="1.6" stroke-opacity="0.600000" d="M1277.83,-75.24C1262.9,-91.85 1240.26,-117.04 1224.05,-135.07"/>
 <polygon fill="#555555" fill-opacity="0.600000" stroke="#555555" stroke-width="1.6" stroke-opacity="0.600000" points="1222.11,-134.09 1219.66,-139.95 1225.23,-136.9 1222.11,-134.09"/>
 </a>

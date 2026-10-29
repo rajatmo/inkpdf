@@ -1,8 +1,6 @@
 //! What every non-Windows platform does the same way, so that `linux` and `android` hold only what differs.
 
-use std::sync::Arc;
-
-use winit::window::Window;
+use winit::raw_window_handle::HasWindowHandle;
 
 use crate::clipboard::TextClipboard;
 
@@ -28,7 +26,7 @@ pub fn motion_prefs() -> crate::motion::Prefs {
 }
 
 /// Tell the user something went wrong. Until each platform has a dialog of its own, on the terminal.
-pub fn error_box(_window: &Arc<Window>, text: &str) {
+pub fn error_box(_window: &dyn HasWindowHandle, text: &str) {
     eprintln!("{text}");
 }
 
@@ -38,7 +36,7 @@ pub fn error_box(_window: &Arc<Window>, text: &str) {
 pub enum SystemClipboard {}
 
 impl SystemClipboard {
-    pub fn new(_window: &Window) -> Option<Self> {
+    pub fn new(_window: &dyn HasWindowHandle) -> Option<Self> {
         None
     }
 }

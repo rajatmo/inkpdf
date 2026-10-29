@@ -6,11 +6,9 @@ mod native;
 mod pointer;
 mod posture;
 
-use std::sync::Arc;
+use winit::raw_window_handle::HasWindowHandle;
 
-use winit::window::Window;
-
-use super::PointerSource;
+use super::{PointerSource, Waker};
 use crate::input::{Mode, PointerEvent};
 
 pub use folders::{documents_dir, places};
@@ -27,12 +25,12 @@ pub fn detect_mode() -> Mode {
 /// The pointer layer is a subclass of the window procedure, with its queue held per thread (the window procedure
 /// runs on the thread that made the window), so this handle only remembers the window to take the subclass off.
 struct WindowsPointer {
-    window: Arc<Window>,
+    hwnd: isize,
 }
 
-pub fn install_pointer(window: &Arc<Window>) -> Result<Box<dyn PointerSource>, String> {
-    pointer::install(window)?;
-    Ok(Box::new(WindowsPointer { window: window.clone() }))
+pub fn install_pointer(window: &dyn HasWindowHandle, wake: Waker) -> Result<Box<dyn PointerSource>, String> {
+    let hwnd = pointer::install(window, wake)?;
+    Ok(Box::new(WindowsPointer { hwnd }))
 }
 
 impl PointerSource for WindowsPointer {
@@ -53,6 +51,6 @@ impl PointerSource for WindowsPointer {
     }
 
     fn uninstall(&mut self) {
-        pointer::uninstall(&self.window);
+        pointer::uninstall(self.hwnd);
     }
 }

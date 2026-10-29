@@ -2,15 +2,15 @@
 //! reader lands (`docs/PORTING.md`, step A2: `MotionEvent` with its historical samples, tool type and pressure).
 
 use std::path::PathBuf;
-use std::sync::{Arc, OnceLock};
+use std::sync::OnceLock;
 
 use winit::platform::android::activity::AndroidApp;
-use winit::window::Window;
+use winit::raw_window_handle::HasWindowHandle;
 
 mod reader;
 
-use super::PointerSource;
 use super::generic::{existing_places, first_folder, home_dir};
+use super::{PointerSource, Waker};
 use crate::browse::Place;
 use crate::input::Mode;
 
@@ -90,7 +90,7 @@ pub fn open_url(url: &str) {
 }
 
 /// The pen, touch and key reader: it shares the activity's input queue with the toolkit and reads it first (see `reader`).
-pub fn install_pointer(_window: &Arc<Window>) -> Result<Box<dyn PointerSource>, String> {
+pub fn install_pointer(_window: &dyn HasWindowHandle, _wake: Waker) -> Result<Box<dyn PointerSource>, String> {
     let app = APP.get().ok_or("the activity has not been handed over")?.clone();
     Ok(Box::new(reader::AndroidPointer::new(app)))
 }

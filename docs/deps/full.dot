@@ -59,7 +59,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "app" -> "ink" [color="#55555599", penwidth=1.80, tooltip="3 uses"];
 "app" -> "input" [color="#55555599", penwidth=1.80, tooltip="3 uses"];
 "app" -> "pages" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
-"app" -> "platform" [color="#55555599", penwidth=1.59, tooltip="2 uses"];
+"app" -> "platform" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "app" -> "requests" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "app" -> "scene" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "app" -> "settings" [color="#55555599", penwidth=1.59, tooltip="2 uses"];
@@ -116,13 +116,13 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "links" -> "view" [color="#3a8f5c99", penwidth=1.30, tooltip="1 uses"];
 "outline" -> "pages" [color="#3a8f5c99", penwidth=1.30, tooltip="1 uses"];
 "pages" -> "view" [color="#3a8f5c99", penwidth=1.30, tooltip="1 uses"];
-"platform" -> "browse" [color="#55555599", penwidth=1.96, tooltip="4 uses"];
-"platform" -> "clipboard" [color="#55555599", penwidth=1.59, tooltip="2 uses"];
+"platform" -> "browse" [color="#55555599", penwidth=2.30, tooltip="7 uses"];
+"platform" -> "clipboard" [color="#55555599", penwidth=1.96, tooltip="4 uses"];
 "platform" -> "clock" [color="#55555599", penwidth=1.59, tooltip="2 uses"];
 "platform" -> "editor" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
-"platform" -> "input" [color="#55555599", penwidth=2.65, tooltip="12 uses"];
+"platform" -> "input" [color="#55555599", penwidth=2.75, tooltip="14 uses"];
 "platform" -> "links" [color="#55555599", penwidth=1.80, tooltip="3 uses"];
-"platform" -> "motion" [color="#55555599", penwidth=2.30, tooltip="7 uses"];
+"platform" -> "motion" [color="#55555599", penwidth=2.53, tooltip="10 uses"];
 "platform" -> "view" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "requests" -> "pages" [color="#b8860b99", penwidth=1.30, tooltip="1 uses"];
 "selection" -> "ink" [color="#b8860b99", penwidth=1.30, tooltip="1 uses"];

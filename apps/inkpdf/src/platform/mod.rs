@@ -21,11 +21,44 @@
 //!
 //! A new OS therefore adds one `PointerSource`; it changes nothing above this module.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
-use winit::window::Window;
+use winit::raw_window_handle::HasWindowHandle;
 
-use crate::input::PointerEvent;
+use crate::browse::Place;
+use crate::clipboard::TextClipboard;
+use crate::input::{Mode, PointerEvent};
+use crate::motion::Prefs;
+
+/// Asks the event loop for a frame from any thread (a native input callback uses it to wake a sleeping loop).
+pub type Waker = Arc<dyn Fn() + Send + Sync>;
+
+/// What the shell asks of the operating system, as one object built once at start (see [`native`]). The window comes in as a
+/// raw handle, so nothing here names the windowing toolkit; a test builds its own `Platform`, and a new OS or backend is one
+/// `impl`. (Only [`PointerSource`] is on the pen's path, and it was already a trait object, so this costs the frame nothing.)
+pub trait Platform {
+    /// Where a new document is first offered a place to be saved.
+    fn documents_dir(&self) -> PathBuf;
+    /// The places the save dialog offers in one press.
+    fn places(&self) -> Vec<Place>;
+    /// The mode the machine's posture calls for.
+    fn detect_mode(&self) -> Mode;
+    /// What the user has asked of motion.
+    fn motion_prefs(&self) -> Prefs;
+    /// Open a web address in the default program for it (only plain http, https or mailto addresses are handed over).
+    fn open_url(&self, url: &str);
+    /// Tell the user something went wrong, over `window`.
+    fn error_box(&self, window: &dyn HasWindowHandle, text: &str);
+    /// Show or hide an on-screen keyboard.
+    fn set_text_input(&self, active: bool);
+    /// The system clipboard for the text of text boxes, if there is one.
+    fn clipboard(&self, window: &dyn HasWindowHandle) -> Option<Box<dyn TextClipboard>>;
+    /// Start the OS's own pen and touch reader for `window`. An `Err` is not fatal: the shell falls back to the basic mouse
+    /// and touch the toolkit reports (no pressure, eraser or buttons for a pen), and says why on the terminal. `wake` asks
+    /// the event loop for a frame.
+    fn install_pointer(&self, window: &dyn HasWindowHandle, wake: Waker) -> Result<Box<dyn PointerSource>, String>;
+}
 
 #[cfg(test)]
 mod contract;
@@ -48,11 +81,55 @@ use linux as os;
 #[cfg(windows)]
 use windows as os;
 
-pub use os::{
-    SystemClipboard, attach_parent_console, detect_mode, documents_dir, error_box, motion_prefs, open_url, places, report_fatal, set_text_input,
-};
 #[cfg(target_os = "android")]
 pub use os::{android_app_started, welcome_document};
+pub use os::{attach_parent_console, report_fatal};
+
+/// This build's operating system as a [`Platform`]: each fact is the one the OS's own module names.
+struct Native;
+
+impl Platform for Native {
+    fn documents_dir(&self) -> PathBuf {
+        os::documents_dir()
+    }
+
+    fn places(&self) -> Vec<Place> {
+        os::places()
+    }
+
+    fn detect_mode(&self) -> Mode {
+        os::detect_mode()
+    }
+
+    fn motion_prefs(&self) -> Prefs {
+        os::motion_prefs()
+    }
+
+    fn open_url(&self, url: &str) {
+        os::open_url(url);
+    }
+
+    fn error_box(&self, window: &dyn HasWindowHandle, text: &str) {
+        os::error_box(window, text);
+    }
+
+    fn set_text_input(&self, active: bool) {
+        os::set_text_input(active);
+    }
+
+    fn clipboard(&self, window: &dyn HasWindowHandle) -> Option<Box<dyn TextClipboard>> {
+        os::SystemClipboard::new(window).map(|c| Box::new(c) as Box<dyn TextClipboard>)
+    }
+
+    fn install_pointer(&self, window: &dyn HasWindowHandle, wake: Waker) -> Result<Box<dyn PointerSource>, String> {
+        os::install_pointer(window, wake)
+    }
+}
+
+/// The platform this program was built for.
+pub fn native() -> Box<dyn Platform> {
+    Box::new(Native)
+}
 
 /// The most events one [`PointerSource::pump`] brings in: a flood of input must not hold the frame, so what is left waits for
 /// the next one (and is not lost).
@@ -91,10 +168,4 @@ pub trait PointerSource {
 
     /// Stop receiving; called when the app exits.
     fn uninstall(&mut self);
-}
-
-/// Start the OS's own pen and touch reader for `window`. An `Err` is not fatal: the shell falls back to the basic
-/// mouse and touch winit reports (no pressure, eraser or buttons for a pen), and says why on the terminal.
-pub fn install_pointer(window: &Arc<Window>) -> Result<Box<dyn PointerSource>, String> {
-    os::install_pointer(window)
 }

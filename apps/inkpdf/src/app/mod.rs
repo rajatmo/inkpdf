@@ -36,7 +36,7 @@ use crate::doc::Doc;
 use crate::editor::Editor;
 use crate::gpu::{Gpu, GpuChoice};
 use crate::input::{InputEvent, Mode};
-use crate::platform::{self, PointerSource};
+use crate::platform::{self, Platform, PointerSource};
 use crate::settings;
 use crate::tiles::Key;
 use bench::Bench;
@@ -91,6 +91,8 @@ pub struct State {
     pub exit: bool,
     /// The OS's own pen and touch reader (see `platform`); `None` when it could not be installed, and winit's basic input is used.
     pointer: Option<Box<dyn PointerSource>>,
+    /// What this operating system provides (folders, clipboard, error boxes, the pen reader); built once at start.
+    platform: Box<dyn Platform>,
     print_stats: bool,
     /// Milliseconds from a pen sample's timestamp to the frame carrying it being handed to the GPU.
     latency_ms: Vec<f32>,
@@ -136,7 +138,12 @@ impl State {
         let window = Arc::new(el.create_window(attrs).map_err(|e| format!("could not create a window: {e}"))?);
         let gpu = Gpu::new(window.clone(), &opts.gpu)?;
         eprintln!("GPU: {} ({}, {})", gpu.adapter_name, gpu.backend, gpu.device_type);
-        let pointer = match platform::install_pointer(&window) {
+        let platform = platform::native();
+        let wake = {
+            let window = window.clone();
+            Arc::new(move || window.request_redraw())
+        };
+        let pointer = match platform.install_pointer(&*window, wake) {
             Ok(pointer) => Some(pointer),
             Err(e) => {
                 eprintln!("pen and touch fall back to basic input: {e}");
@@ -162,6 +169,7 @@ impl State {
             exit_at: opts.exit_after.map(|d| now + d),
             exit: false,
             pointer,
+            platform,
             print_stats: opts.stats,
             latency_ms: Vec::new(),
             read_age_ms: Vec::new(),
@@ -182,12 +190,12 @@ impl State {
             modifiers: ModifiersState::empty(),
         };
         state.ed.apply_settings(&settings::load());
-        state.ed.motions.set_prefs(platform::motion_prefs());
+        state.ed.motions.set_prefs(state.platform.motion_prefs());
         // Text copied from a box can be pasted anywhere, and text copied anywhere into a box.
-        if let Some(clipboard) = platform::SystemClipboard::new(&state.window) {
-            state.ed.set_text_clipboard(Box::new(clipboard));
+        if let Some(clipboard) = state.platform.clipboard(&*state.window) {
+            state.ed.set_text_clipboard(clipboard);
         }
-        state.set_mode(opts.mode.unwrap_or_else(platform::detect_mode));
+        state.set_mode(opts.mode.unwrap_or_else(|| state.platform.detect_mode()));
         if let Some(smoothing) = opts.smoothing {
             state.ed.set_smoothing(smoothing);
         }
@@ -251,7 +259,7 @@ impl State {
             WindowEvent::CursorLeft { .. } => self.ed.handle(InputEvent::MouseLeft),
             WindowEvent::Focused(false) => self.ed.handle(InputEvent::FocusLost),
             // (What was asked of motion in Windows' settings is read again when the window is come back to.)
-            WindowEvent::Focused(true) => self.ed.motions.set_prefs(platform::motion_prefs()),
+            WindowEvent::Focused(true) => self.ed.motions.set_prefs(self.platform.motion_prefs()),
             WindowEvent::ModifiersChanged(m) => self.modifiers = m.state(),
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => self.ed.handle(InputEvent::ScaleChanged(scale_factor as f32)),
             WindowEvent::RedrawRequested => self.redraw(),
@@ -313,7 +321,7 @@ impl State {
         }
         // A convertible was turned into a tablet, or back.
         if self.pointer.as_mut().is_some_and(|p| p.take_posture_change()) && !self.mode_forced {
-            self.set_mode(platform::detect_mode());
+            self.set_mode(self.platform.detect_mode());
         }
         // `--exit-after` must fire even when the window is idle and nothing is redrawing.
         if self.exit_at.is_some_and(|t| Instant::now() >= t) {

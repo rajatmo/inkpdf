@@ -1,6 +1,5 @@
 //! Native Windows pieces: error boxes, opening web addresses, and the text clipboard.
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use windows_sys::Win32::Foundation::{GlobalFree, HWND};
@@ -10,11 +9,10 @@ use windows_sys::Win32::System::Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock,
 use windows_sys::Win32::UI::Shell::ShellExecuteW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MessageBoxW, SPI_GETCLIENTAREAANIMATION, SW_SHOWNORMAL, SystemParametersInfoW};
 use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
-use winit::window::Window;
 
 use crate::clipboard::TextClipboard;
 
-fn hwnd_of(window: &Window) -> Option<HWND> {
+fn hwnd_of(window: &dyn HasWindowHandle) -> Option<HWND> {
     match window.window_handle().ok()?.as_raw() {
         RawWindowHandle::Win32(h) => Some(h.hwnd.get() as HWND),
         _ => None,
@@ -84,7 +82,7 @@ pub struct SystemClipboard {
 
 impl SystemClipboard {
     /// The clipboard as `window` uses it.
-    pub fn new(window: &Window) -> Option<Self> {
+    pub fn new(window: &dyn HasWindowHandle) -> Option<Self> {
         Some(Self { owner: hwnd_of(window)? })
     }
 }
@@ -146,7 +144,7 @@ impl TextClipboard for SystemClipboard {
 }
 
 /// Tell the user something went wrong.
-pub fn error_box(window: &Arc<Window>, text: &str) {
+pub fn error_box(window: &dyn HasWindowHandle, text: &str) {
     let Some(hwnd) = hwnd_of(window) else { return };
     let (text, caption) = (wide(text), wide("InkPDF"));
     // SAFETY: both strings are NUL-terminated and live across the call.

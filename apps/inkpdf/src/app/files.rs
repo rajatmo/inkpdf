@@ -8,7 +8,6 @@ use crate::doc::{Doc, UNTITLED};
 use crate::editor::Request;
 use crate::ink::PageStroke;
 use crate::pages::PageEdit;
-use crate::platform;
 use crate::requests::Choice;
 use crate::settings;
 
@@ -97,7 +96,7 @@ impl State {
             Ok((doc, strokes)) => self.install(doc, strokes),
             Err(e) => {
                 eprintln!("could not open {}: {e}", path.display());
-                platform::error_box(&self.window, &format!("Could not open {}:\n{e}", path.display()));
+                self.platform.error_box(&*self.window, &format!("Could not open {}:\n{e}", path.display()));
             }
         }
     }
@@ -128,9 +127,9 @@ impl State {
         self.ed.settle();
         self.save_then = then;
         let file = self.doc.as_ref().and_then(|d| d.path.clone());
-        let dir = file.as_deref().and_then(Path::parent).filter(|p| p.is_dir()).map_or_else(platform::documents_dir, Path::to_path_buf);
+        let dir = file.as_deref().and_then(Path::parent).filter(|p| p.is_dir()).map_or_else(|| self.platform.documents_dir(), Path::to_path_buf);
         let name = file.as_deref().and_then(Path::file_name).map_or_else(|| format!("{UNTITLED}.pdf"), |n| n.to_string_lossy().into_owned());
-        self.ed.ask_save_as(dir, &name, platform::places());
+        self.ed.ask_save_as(dir, &name, self.platform.places());
         self.window.request_redraw();
     }
 
@@ -188,7 +187,7 @@ impl State {
             }
             Err(e) => {
                 eprintln!("save failed: {e}");
-                platform::error_box(&self.window, &format!("Could not save:\n{e}"));
+                self.platform.error_box(&*self.window, &format!("Could not save:\n{e}"));
                 false
             }
         }
@@ -267,14 +266,14 @@ impl State {
                         doc.forget_graves(&graves);
                     }
                 }
-                Request::OpenUrl(url) => platform::open_url(&url),
+                Request::OpenUrl(url) => self.platform.open_url(&url),
             }
         }
         // The on-screen keyboard (a phone or tablet has none) is there while something wants typed text.
         let typing = self.ed.is_typing();
         if typing != self.keyboard_shown {
             self.keyboard_shown = typing;
-            platform::set_text_input(typing);
+            self.platform.set_text_input(typing);
         }
         if self.ed.take_redraw() {
             self.window.request_redraw();

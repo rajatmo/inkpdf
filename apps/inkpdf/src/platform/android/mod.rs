@@ -14,7 +14,7 @@ use super::{PointerSource, Waker};
 use crate::browse::Place;
 use crate::input::Mode;
 
-pub use super::generic::{SystemClipboard, attach_parent_console, error_box, motion_prefs, report_fatal};
+pub use super::generic::{SystemClipboard, system_font, attach_parent_console, error_box, motion_prefs, report_fatal};
 
 /// The activity, kept for what only it can say: where the app's own folders are, and the soft keyboard.
 static APP: OnceLock<AndroidApp> = OnceLock::new();
@@ -74,6 +74,11 @@ pub fn documents_dir() -> PathBuf {
 pub fn places() -> Vec<Place> {
     let shared = PathBuf::from(SHARED);
     existing_places(vec![("Documents", shared.join("Documents")), ("Downloads", shared.join("Download")), ("Storage", shared)], |p| p.is_dir())
+}
+
+/// What the app remembers is kept in its private folder (no other app, and no file manager, sees it).
+pub fn config_dir() -> Option<PathBuf> {
+    APP.get()?.internal_data_path()
 }
 
 /// A phone or tablet in the hand is a tablet; `--mode desktop` (or the toolbar's mode button) says otherwise for a

@@ -143,6 +143,18 @@ impl TextClipboard for SystemClipboard {
     }
 }
 
+/// The folder a user's application data goes in: `%APPDATA%`.
+pub fn config_dir() -> Option<std::path::PathBuf> {
+    std::env::var_os("APPDATA").map(std::path::PathBuf::from)
+}
+
+/// Arial, from the Windows fonts folder: its letters are as wide as Helvetica's, which other PDF readers use for the text this
+/// app saves.
+pub fn system_font() -> Option<Vec<u8>> {
+    let dir = std::env::var_os("WINDIR").map_or_else(|| std::path::PathBuf::from(r"C:\Windows"), std::path::PathBuf::from).join("Fonts");
+    std::fs::read(dir.join("arial.ttf")).ok()
+}
+
 /// Tell the user something went wrong.
 pub fn error_box(window: &dyn HasWindowHandle, text: &str) {
     let Some(hwnd) = hwnd_of(window) else { return };

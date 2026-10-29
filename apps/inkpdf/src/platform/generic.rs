@@ -25,6 +25,12 @@ pub fn motion_prefs() -> crate::motion::Prefs {
     }
 }
 
+/// Text is set in the program's own Liberation Sans, which is as wide as Arial: a desktop's fonts differ, and saved text-box
+/// geometry must not.
+pub fn system_font() -> Option<Vec<u8>> {
+    None
+}
+
 /// Tell the user something went wrong. Until each platform has a dialog of its own, on the terminal.
 pub fn error_box(_window: &dyn HasWindowHandle, text: &str) {
     eprintln!("{text}");
@@ -49,6 +55,13 @@ impl TextClipboard for SystemClipboard {
     fn set(&mut self, _text: &str) {
         match *self {}
     }
+}
+
+/// The user's configuration folder on a desktop: `$XDG_CONFIG_HOME`, else `~/.config`.
+#[cfg_attr(target_os = "android", allow(dead_code, reason = "Android keeps its settings in the app's own folder"))]
+pub fn xdg_config_dir() -> Option<std::path::PathBuf> {
+    let non_empty = |name: &str| std::env::var_os(name).filter(|v| !v.is_empty()).map(std::path::PathBuf::from);
+    non_empty("XDG_CONFIG_HOME").or_else(|| non_empty("HOME").map(|home| home.join(".config")))
 }
 
 // ── known folders (Linux and Android) ────────────────────────────────────────────────────────

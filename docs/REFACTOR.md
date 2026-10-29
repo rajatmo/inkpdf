@@ -101,7 +101,9 @@ read-only check). Android hands out `content://` URIs; sandboxes forbid paths.
 `DocId::{Path, Uri}`; `Doc` already keeps its bytes (`base: Arc<Vec<u8>>`), so it becomes bytes in, bytes out. `PathStore` keeps today's behaviour and
 tests; `Request::SaveTo(DocId)`; the Save As listing goes through the same port. *Effect.* Android's picker and storage are one `impl`. *Risk.* The atomic-save and permission rules must move whole; the existing `doc` tests cover them.
 
-### R5. No I/O in the inner layers; one font everywhere  *(small, low risk)*
+### R5. No I/O in the inner layers; one font everywhere  *(small, low risk; done)*
+
+*Done.* `settings` only parses and prints; `app/config.rs` reads and writes the file in `Platform::config_dir()` (portable mode kept). `text::set_font(bytes)` takes Arial from `Platform::system_font()` on Windows, and every other OS uses the built-in Liberation Sans (`assets/fonts/`, OFL, as wide as Arial). `clock` is `Instant` only; Windows converts its counter stamps in `platform/windows/counter.rs` with an offset measured once. The layering test `nothing_below_the_adapters_touches_the_disk_the_environment_or_an_operating_system` enforces it. Left as they are, on purpose: the GPU backend choice (`gpu/device.rs`, an adapter by nature) and `doc`'s read-only check (moves with R4).
 
 *Problem.* `settings` (domain) and `text` (base) touch the disk and the environment; five modules carry `cfg`.
 *Change.* `Settings` keeps its data and `to_text/parse`; `load/save` move to an adapter that asks `platform` for the config

@@ -1,6 +1,7 @@
 //! Windows: pen and touch from `WM_POINTER*` messages (with the history Windows batches between messages), message
 //! boxes, `ShellExecute`, the clipboard, animation settings and the convertible's posture. The only module with Win32.
 
+mod counter;
 mod folders;
 mod native;
 mod pointer;
@@ -12,7 +13,7 @@ use super::{PointerSource, Waker};
 use crate::input::{Mode, PointerEvent};
 
 pub use folders::{documents_dir, places};
-pub use native::{SystemClipboard, attach_parent_console, error_box, motion_prefs, open_url, report_fatal};
+pub use native::{SystemClipboard, config_dir, system_font, attach_parent_console, error_box, motion_prefs, open_url, report_fatal};
 
 /// An on-screen keyboard is the system's to show on Windows (a touch keyboard comes up by itself): nothing to do.
 pub fn set_text_input(_active: bool) {}

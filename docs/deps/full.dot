@@ -62,9 +62,9 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "app" -> "platform" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "app" -> "requests" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "app" -> "scene" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
-"app" -> "settings" [color="#55555599", penwidth=1.59, tooltip="2 uses"];
+"app" -> "settings" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "app" -> "smooth" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
-"app" -> "text" [color="#55555599", penwidth=1.59, tooltip="2 uses"];
+"app" -> "text" [color="#55555599", penwidth=1.80, tooltip="3 uses"];
 "app" -> "tiles" [color="#55555599", penwidth=2.09, tooltip="5 uses"];
 "app" -> "toolbar" [color="#55555599", penwidth=1.80, tooltip="3 uses"];
 "app" -> "tools" [color="#55555599", penwidth=1.59, tooltip="2 uses"];
@@ -118,7 +118,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "pages" -> "view" [color="#3a8f5c99", penwidth=1.30, tooltip="1 uses"];
 "platform" -> "browse" [color="#55555599", penwidth=2.30, tooltip="7 uses"];
 "platform" -> "clipboard" [color="#55555599", penwidth=1.96, tooltip="4 uses"];
-"platform" -> "clock" [color="#55555599", penwidth=1.59, tooltip="2 uses"];
+"platform" -> "clock" [color="#55555599", penwidth=1.80, tooltip="3 uses"];
 "platform" -> "editor" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "platform" -> "input" [color="#55555599", penwidth=2.75, tooltip="14 uses"];
 "platform" -> "links" [color="#55555599", penwidth=1.80, tooltip="3 uses"];

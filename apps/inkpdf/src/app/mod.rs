@@ -10,6 +10,7 @@
 //! - `bench`: `--bench` and `--stats`.
 
 mod bench;
+mod config;
 mod files;
 mod folders;
 mod frame;
@@ -37,7 +38,7 @@ use crate::editor::Editor;
 use crate::gpu::{Gpu, GpuChoice};
 use crate::input::{InputEvent, Mode};
 use crate::platform::{self, Platform, PointerSource};
-use crate::settings;
+use crate::text;
 use crate::tiles::Key;
 use bench::Bench;
 use ink_layer::{InkStamp, UiStamp};
@@ -139,6 +140,9 @@ impl State {
         let gpu = Gpu::new(window.clone(), &opts.gpu)?;
         eprintln!("GPU: {} ({}, {})", gpu.adapter_name, gpu.backend, gpu.device_type);
         let platform = platform::native();
+        if let Some(font) = platform.system_font() {
+            text::set_font(font);
+        }
         let wake = {
             let window = window.clone();
             Arc::new(move || window.request_redraw())
@@ -189,7 +193,7 @@ impl State {
             mode_forced: opts.mode.is_some(),
             modifiers: ModifiersState::empty(),
         };
-        state.ed.apply_settings(&settings::load());
+        state.ed.apply_settings(&config::load(state.platform.config_dir()));
         state.ed.motions.set_prefs(state.platform.motion_prefs());
         // Text copied from a box can be pasted anywhere, and text copied anywhere into a box.
         if let Some(clipboard) = state.platform.clipboard(&*state.window) {

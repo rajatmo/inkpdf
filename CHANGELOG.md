@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Text boxes are set in Arial where Windows has it and in a built-in copy of Liberation Sans (as wide as Arial) everywhere else,
+  so a text box takes the same room on every machine. Settings are kept in the platform's configuration folder (on Android, the
+  app's private one), through the platform layer.
 - Palm rejection follows the pen's hover, as note-taking apps do: touch is off for as long as the pen is above the screen or
   touching it, and fingers already down when it arrives are given up cleanly (before, they could stay stuck as a phantom
   finger). A pen whose screen does not report hover no longer locks touch out after a stroke: it gets a short grace instead.

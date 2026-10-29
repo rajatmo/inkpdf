@@ -70,7 +70,7 @@ impl State {
         self.text_draws.clear();
         let ed = &self.ed;
         self.text_index.refresh(ed);
-        if !text::available() || (self.text_index.at.is_empty() && ed.text_edit().is_none()) {
+        if self.text_index.at.is_empty() && ed.text_edit().is_none() {
             // No text boxes, but the pages overview's text is bitmaps too (a page number each): kept only as long as it is shown.
             self.gpu.trim_texts(&self.overview.keys, KEEP_BITMAPS);
             return;
@@ -129,7 +129,7 @@ impl State {
     /// `scale` is its pixels to a point, and what is outside the part of the picture that is in view is cut off. The keys
     /// of the bitmaps used are added to `keys`, to be kept.
     pub(super) fn thumb_text_quads(&mut self, image: &Image, scale: f32, keys: &mut HashSet<u64>, out: &mut Vec<Quad>) {
-        if !text::available() || self.text_index.at.is_empty() {
+        if self.text_index.at.is_empty() {
             return;
         }
         let (page, origin, shown, alpha) = (image.page, [image.full[0], image.full[1]], image.shown, image.alpha);

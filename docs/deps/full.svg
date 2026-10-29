@@ -918,9 +918,9 @@
 <!-- app&#45;&gt;text -->
 <g id="edge14" class="edge">
 <title>app&#45;&gt;text</title>
-<g id="a_edge14"><a xlink:title="2 uses">
-<path fill="none" stroke="#555555" stroke-width="1.59" stroke-opacity="0.600000" d="M823.99,-64.45C809.99,-67.73 792.61,-71.7 777,-75 627.75,-106.53 573.29,-65.83 440,-140 377.61,-174.72 331,-186.6 331,-258 331,-258 331,-258 331,-462 331,-530.57 371.67,-603.7 394.65,-639.55"/>
-<polygon fill="#555555" fill-opacity="0.600000" stroke="#555555" stroke-width="1.59" stroke-opacity="0.600000" points="393.14,-641.09 398.17,-644.98 396.66,-638.8 393.14,-641.09"/>
+<g id="a_edge14"><a xlink:title="3 uses">
+<path fill="none" stroke="#555555" stroke-width="1.8" stroke-opacity="0.600000" d="M823.99,-64.45C809.99,-67.73 792.61,-71.7 777,-75 627.75,-106.53 573.29,-65.83 440,-140 377.61,-174.72 331,-186.6 331,-258 331,-258 331,-258 331,-462 331,-530.57 371.67,-603.7 394.65,-639.55"/>
+<polygon fill="#555555" fill-opacity="0.600000" stroke="#555555" stroke-width="1.8" stroke-opacity="0.600000" points="393.14,-641.09 398.17,-644.98 396.66,-638.8 393.14,-641.09"/>
 </a>
 </g>
 </g>
@@ -972,9 +972,9 @@
 <!-- app&#45;&gt;settings -->
 <g id="edge12" class="edge">
 <title>app&#45;&gt;settings</title>
-<g id="a_edge12"><a xlink:title="2 uses">
-<path fill="none" stroke="#555555" stroke-width="1.59" stroke-opacity="0.600000" d="M878.15,-57.83C1113.4,-56.71 2798,-55.71 2798,-258 2798,-258 2798,-258 2798,-361 2798,-413.99 2803.66,-431.11 2781,-479 2769.69,-502.91 2748.98,-524.73 2732.18,-539.84"/>
-<polygon fill="#555555" fill-opacity="0.600000" stroke="#555555" stroke-width="1.59" stroke-opacity="0.600000" points="2730.67,-538.38 2727.56,-543.92 2733.45,-541.52 2730.67,-538.38"/>
+<g id="a_edge12"><a xlink:title="1 uses">
+<path fill="none" stroke="#555555" stroke-width="1.3" stroke-opacity="0.600000" d="M878.15,-57.83C1113.4,-56.71 2798,-55.71 2798,-258 2798,-258 2798,-258 2798,-361 2798,-413.99 2803.66,-431.11 2781,-479 2769.69,-502.91 2748.98,-524.73 2732.18,-539.84"/>
+<polygon fill="#555555" fill-opacity="0.600000" stroke="#555555" stroke-width="1.3" stroke-opacity="0.600000" points="2730.67,-538.38 2727.56,-543.92 2733.45,-541.52 2730.67,-538.38"/>
 </a>
 </g>
 </g>
@@ -1236,9 +1236,9 @@
 <!-- platform&#45;&gt;clock -->
 <g id="edge68" class="edge">
 <title>platform&#45;&gt;clock</title>
-<g id="a_edge68"><a xlink:title="2 uses">
-<path fill="none" stroke="#555555" stroke-width="1.59" stroke-opacity="0.600000" d="M696.14,-175.37C677.13,-184.26 654.45,-196.25 636,-210 585.67,-247.53 538.86,-305.25 515.17,-336.7"/>
-<polygon fill="#555555" fill-opacity="0.600000" stroke="#555555" stroke-width="1.59" stroke-opacity="0.600000" points="513.21,-335.82 511.3,-341.88 516.57,-338.33 513.21,-335.82"/>
+<g id="a_edge68"><a xlink:title="3 uses">
+<path fill="none" stroke="#555555" stroke-width="1.8" stroke-opacity="0.600000" d="M696.14,-175.37C677.13,-184.26 654.45,-196.25 636,-210 585.67,-247.53 538.86,-305.25 515.17,-336.7"/>
+<polygon fill="#555555" fill-opacity="0.600000" stroke="#555555" stroke-width="1.8" stroke-opacity="0.600000" points="513.21,-335.82 511.3,-341.88 516.57,-338.33 513.21,-335.82"/>
 </a>
 </g>
 </g>

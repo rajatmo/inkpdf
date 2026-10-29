@@ -104,12 +104,20 @@ impl super::Platform for FakePlatform {
         vec![crate::browse::Place { label: "Documents".into(), path: "/fake/Documents".into() }]
     }
 
+    fn config_dir(&self) -> Option<std::path::PathBuf> {
+        None
+    }
+
     fn detect_mode(&self) -> crate::input::Mode {
         crate::input::Mode::Tablet
     }
 
     fn motion_prefs(&self) -> crate::motion::Prefs {
         crate::motion::Prefs::FULL
+    }
+
+    fn system_font(&self) -> Option<Vec<u8>> {
+        None
     }
 
     fn open_url(&self, url: &str) {

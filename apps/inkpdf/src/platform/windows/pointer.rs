@@ -19,7 +19,8 @@ use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use super::super::Waker;
-use crate::clock::{counter_ms, now_ms};
+use super::counter::{calibrate, counter_ms};
+use crate::clock::now_ms;
 
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::ClientToScreen;
@@ -62,6 +63,7 @@ fn trace_enabled() -> bool {
 /// Start receiving pen and touch for `window`. Fails if the window has no Win32 handle.
 pub fn install(window: &dyn HasWindowHandle, wake: Waker) -> Result<isize, String> {
     let hwnd = hwnd_of(window)?;
+    calibrate();
     HWND_OF_APP.with(|h| h.set(hwnd as isize));
     WAKE.with(|w| *w.borrow_mut() = Some(wake));
     // SAFETY: `hwnd` is this thread's live window; `subclass_proc` has the required signature

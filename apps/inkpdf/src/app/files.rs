@@ -9,7 +9,7 @@ use crate::editor::Request;
 use crate::ink::PageStroke;
 use crate::pages::PageEdit;
 use crate::requests::Choice;
-use crate::settings;
+use super::config;
 
 use super::{InkStamp, State, folders};
 
@@ -236,7 +236,7 @@ impl State {
     }
 
     fn save_settings(&self) {
-        if let Err(e) = settings::save(&self.ed.settings()) {
+        if let Err(e) = config::save(self.platform.config_dir(), &self.ed.settings()) {
             eprintln!("could not save settings: {e}");
         }
     }

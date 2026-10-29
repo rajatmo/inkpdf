@@ -1,14 +1,14 @@
 //! Typed text: measuring it and drawing it into a bitmap.
 //!
-//! The font is a system one (Arial, whose letters are as wide as Helvetica's, which is what other
-//! PDF readers use for the text this app saves). Its outlines are read with `skrifa` and filled by a
-//! small anti-aliased scanline rasterizer, so text is sharp at any zoom. If there is no font
-//! to be found, text still measures (at a typical letter width) and is saved, but draws nothing.
+//! The font is Arial where the system has it (see [`set_font`]), else Liberation Sans, which is built into the program and whose
+//! letters are exactly as wide as Arial's (and so as Helvetica's, which is what other PDF readers use for the text this app
+//! saves): text measures the same on every machine, and nothing here reads a file. Its outlines are read with `skrifa` and
+//! filled by a small anti-aliased scanline rasterizer, so text is sharp at any zoom.
 //!
 //! Sizes are in points; a line is [`LINE_HEIGHT`] times the size tall; `\n` starts a new line.
 
 use std::collections::HashMap;
-use std::sync::{LazyLock, Mutex};
+use std::sync::{Mutex, OnceLock};
 
 use skrifa::outline::{DrawSettings, OutlinePen};
 use skrifa::prelude::*;
@@ -27,12 +27,8 @@ pub const PAD: f32 = 2.0;
 const MAX_SIDE: f32 = 4096.0;
 /// Rows of samples per pixel row.
 const SUBROWS: usize = 4;
-/// Which font files to look for, best first: Arial, then what is built to be as wide as it.
-#[cfg(windows)]
-const FONT_FILES: [&str; 4] = ["arial.ttf", "segoeui.ttf", "calibri.ttf", "tahoma.ttf"];
-#[cfg(not(windows))]
-const FONT_FILES: [&str; 7] =
-    ["arial.ttf", "liberationsans-regular.ttf", "dejavusans.ttf", "notosans-regular.ttf", "roboto-regular.ttf", "droidsans.ttf", "freesans.ttf"];
+/// Liberation Sans Regular (SIL Open Font License; see `assets/fonts/LICENSE-LiberationFonts.txt`), the font when the system gives none.
+const BUNDLED_FONT: &[u8] = include_bytes!("../assets/fonts/LiberationSans-Regular.ttf");
 
 /// A segment of an outline, in em units (y up).
 #[derive(Clone, Copy, Debug)]
@@ -100,52 +96,33 @@ struct Face {
     glyphs: Mutex<HashMap<char, Glyph>>,
 }
 
-/// Where the font called `name` (one of [`FONT_FILES`]) is, if this machine has it: in the Windows fonts folder.
-#[cfg(windows)]
-fn font_path(name: &str) -> Option<std::path::PathBuf> {
-    let dir = std::env::var_os("WINDIR").map_or_else(|| std::path::PathBuf::from(r"C:\Windows"), std::path::PathBuf::from).join("Fonts");
-    Some(dir.join(name))
+/// The font the system offered, if any (see [`set_font`]).
+static PREFERRED: OnceLock<&'static [u8]> = OnceLock::new();
+
+/// Offer a font to use instead of the built-in one, as the bytes of a TrueType file (the shell finds it with the platform's help).
+/// Heard only before any text is first measured or drawn, and only if it can be read; returns whether it will be used.
+pub fn set_font(bytes: Vec<u8>) -> bool {
+    if FACE.get().is_some() || FontRef::new(&bytes).is_err() {
+        return false;
+    }
+    // The bytes live as long as the program: the parser borrows them.
+    PREFERRED.set(Box::leak(bytes.into_boxed_slice())).is_ok()
 }
 
-/// The same on Linux and Android: the font files under the usual folders, found once by their lower-cased names, so
-/// that `LiberationSans-Regular.ttf` answers to `liberationsans-regular.ttf` wherever the distribution put it.
-#[cfg(not(windows))]
-fn font_path(name: &str) -> Option<std::path::PathBuf> {
-    static INSTALLED: LazyLock<HashMap<String, std::path::PathBuf>> = LazyLock::new(|| {
-        let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
-        let mut folders: Vec<std::path::PathBuf> =
-            ["/system/fonts", "/usr/share/fonts", "/usr/local/share/fonts"].iter().map(std::path::PathBuf::from).collect();
-        folders.extend(home.into_iter().flat_map(|h| [h.join(".local/share/fonts"), h.join(".fonts")]));
-        let mut found = HashMap::new();
-        // (A few levels is how deep distributions go: `truetype/liberation/…`.)
-        let mut todo: Vec<(std::path::PathBuf, u8)> = folders.into_iter().map(|f| (f, 0)).collect();
-        while let Some((dir, depth)) = todo.pop() {
-            for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    if depth < 5 {
-                        todo.push((path, depth + 1));
-                    }
-                } else if let Some(file) = path.file_name().and_then(|n| n.to_str()) {
-                    found.entry(file.to_ascii_lowercase()).or_insert(path);
-                }
-            }
-        }
-        found
-    });
-    INSTALLED.get(name).cloned()
+fn face_from(bytes: &'static [u8]) -> Option<Face> {
+    let font = FontRef::new(bytes).ok()?;
+    let metrics = font.metrics(Size::unscaled(), LocationRef::default());
+    let upem = f32::from(metrics.units_per_em).max(1.0);
+    Some(Face { font, upem, ascent: metrics.ascent / upem, descent: -metrics.descent / upem, glyphs: Mutex::new(HashMap::new()) })
 }
 
-static FACE: LazyLock<Option<Face>> = LazyLock::new(|| {
-    FONT_FILES.iter().find_map(|name| {
-        // The bytes live as long as the program: the parser borrows them.
-        let bytes: &'static [u8] = Box::leak(std::fs::read(font_path(name)?).ok()?.into_boxed_slice());
-        let font = FontRef::new(bytes).ok()?;
-        let metrics = font.metrics(Size::unscaled(), LocationRef::default());
-        let upem = f32::from(metrics.units_per_em).max(1.0);
-        Some(Face { font, upem, ascent: metrics.ascent / upem, descent: -metrics.descent / upem, glyphs: Mutex::new(HashMap::new()) })
+static FACE: OnceLock<Face> = OnceLock::new();
+
+fn face() -> &'static Face {
+    FACE.get_or_init(|| {
+        PREFERRED.get().and_then(|bytes| face_from(bytes)).or_else(|| face_from(BUNDLED_FONT)).expect("the built-in font is a valid font")
     })
-});
+}
 
 impl Face {
     fn glyph(&self, ch: char) -> Glyph {
@@ -169,17 +146,9 @@ impl Face {
     }
 }
 
-/// Whether a font was found, so text can be drawn.
-pub fn available() -> bool {
-    FACE.is_some()
-}
-
 /// A character's advance in ems.
 fn advance(ch: char) -> f32 {
-    match &*FACE {
-        Some(face) => face.glyph(ch).advance,
-        None => 0.55,
-    }
+    face().glyph(ch).advance
 }
 
 /// The characters to show for typed text: tabs become spaces, other control characters go, and it
@@ -390,13 +359,13 @@ pub struct Bitmap {
     pub pixels: Vec<u8>,
 }
 
-/// The text drawn at `scale` pixels per point in `rgba`. `None` if there is no font, nothing to
-/// draw, or the size is nonsense. The scale is reduced if the bitmap would be too big.
+/// The text drawn at `scale` pixels per point in `rgba`. `None` if there is nothing to
+/// draw or the size is nonsense. The scale is reduced if the bitmap would be too big.
 pub fn raster(text: &str, size: f32, scale: f32, rgba: [u8; 4]) -> Option<Bitmap> {
-    let face = FACE.as_ref()?;
     if !(size.is_finite() && scale.is_finite() && size > 0.0 && scale > 0.0) || text.chars().all(|c| c.is_whitespace()) {
         return None;
     }
+    let face = face();
     let [w, h] = measure(text, size);
     let pad = PAD;
     let scale = scale.min((MAX_SIDE - 2.0 * pad) / w.max(1.0)).min((MAX_SIDE - 2.0 * pad) / h.max(1.0));
@@ -602,8 +571,11 @@ mod tests {
     }
 
     #[test]
-    fn there_is_a_font_on_this_machine() {
-        assert!(available(), "no system font was found (Windows: its fonts folder; Linux: a package such as fonts-liberation)");
+    fn the_built_in_font_measures_like_arial_and_draws() {
+        // Arial's "Hello" is 0.722 + 0.556 + 0.222 + 0.222 + 0.556 ems wide; Liberation Sans keeps those widths.
+        let w = measure("Hello", 1000.0)[0];
+        assert!((w - 2278.0).abs() < 20.0, "{w}");
+        assert!(raster("Hello", 12.0, 2.0, [0, 0, 0, 255]).is_some());
     }
 
     #[test]

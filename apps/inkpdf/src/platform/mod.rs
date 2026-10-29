@@ -42,10 +42,15 @@ pub trait Platform {
     fn documents_dir(&self) -> PathBuf;
     /// The places the save dialog offers in one press.
     fn places(&self) -> Vec<Place>;
+    /// The folder the app keeps what it remembers in (the user's configuration folder), if there is one.
+    fn config_dir(&self) -> Option<PathBuf>;
     /// The mode the machine's posture calls for.
     fn detect_mode(&self) -> Mode;
     /// What the user has asked of motion.
     fn motion_prefs(&self) -> Prefs;
+    /// The bytes of the font the system draws text in, if its widths are the ones PDF readers use (Arial). Without one the program's
+    /// own Liberation Sans is used, which is as wide.
+    fn system_font(&self) -> Option<Vec<u8>>;
     /// Open a web address in the default program for it (only plain http, https or mailto addresses are handed over).
     fn open_url(&self, url: &str);
     /// Tell the user something went wrong, over `window`.
@@ -97,12 +102,20 @@ impl Platform for Native {
         os::places()
     }
 
+    fn config_dir(&self) -> Option<PathBuf> {
+        os::config_dir()
+    }
+
     fn detect_mode(&self) -> Mode {
         os::detect_mode()
     }
 
     fn motion_prefs(&self) -> Prefs {
         os::motion_prefs()
+    }
+
+    fn system_font(&self) -> Option<Vec<u8>> {
+        os::system_font()
     }
 
     fn open_url(&self, url: &str) {

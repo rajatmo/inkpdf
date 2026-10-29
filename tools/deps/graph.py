@@ -116,7 +116,7 @@ files=[]
 for root,_,fs in os.walk(f'{SRC}/platform'):
     for f in fs:
         if f.endswith('.rs'): files.append(os.path.relpath(os.path.join(root,f),f'{SRC}/platform'))
-files.sort()
+files = [f for f in sorted(files) if f not in ('contract.rs', 'fake.rs')]  # (test-only: no backend of the program)
 # the cfg labels below are written by hand: fail if platform/mod.rs does not declare the modules they name
 mod_rs=open(f'{SRC}/platform/mod.rs').read()
 for name in ('android','generic','linux','windows'):

@@ -1,6 +1,6 @@
 digraph G {
 rankdir=BT; newrank=true; compound=true; splines=true; nodesep=0.35; ranksep=0.9; pad=0.4;
-label=<<b>InkPDF module dependencies (all 116 edges; arrows point at what is used; line weight = uses)</b>>; labelloc=t; fontsize=22; fontname="Helvetica";
+label=<<b>InkPDF module dependencies (all 118 edges; arrows point at what is used; line weight = uses)</b>>; labelloc=t; fontsize=22; fontname="Helvetica";
 node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=13, margin="0.14,0.07", color="#888888"];
 edge [arrowsize=0.6];
 subgraph cluster_Base { label="base — plain data and arithmetic"; labeljust=l; fontname="Helvetica"; fontsize=14; style="rounded,filled"; fillcolor="#e8f1fb55"; color="#4a7fb5";
@@ -119,9 +119,11 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "platform" -> "browse" [color="#55555599", penwidth=1.96, tooltip="4 uses"];
 "platform" -> "clipboard" [color="#55555599", penwidth=1.59, tooltip="2 uses"];
 "platform" -> "clock" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
-"platform" -> "input" [color="#55555599", penwidth=2.20, tooltip="6 uses"];
+"platform" -> "editor" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
+"platform" -> "input" [color="#55555599", penwidth=2.38, tooltip="8 uses"];
 "platform" -> "links" [color="#55555599", penwidth=1.80, tooltip="3 uses"];
 "platform" -> "motion" [color="#55555599", penwidth=2.30, tooltip="7 uses"];
+"platform" -> "view" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "requests" -> "pages" [color="#b8860b99", penwidth=1.30, tooltip="1 uses"];
 "selection" -> "ink" [color="#b8860b99", penwidth=1.30, tooltip="1 uses"];
 "selection" -> "plane" [color="#b8860b99", penwidth=1.30, tooltip="1 uses"];

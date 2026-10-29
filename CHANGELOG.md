@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.0
 
 Pages overview (the candidate for 1.0): a card over the document, opened from the new pages button at the end of the left
 toolbar, with a picture of every page (the ink drawn on it), its number, and the PDF's table of contents on the left when it

@@ -31,6 +31,9 @@ Branch `linux-android-port`. `main` is untouched and still the Windows app. Writ
 Not verified by me, because the container has no pen, no touch screen and no Windows: any real pen input, and the
 Windows tests *running* (they only build here). CI on `windows-latest` is still the arbiter for Windows.
 
+The picture of all this, generated from the code: `docs/deps/platform.svg` (routing per OS) and `docs/deps/skeleton.svg`
+(the module graph); regenerate with `python3 tools/deps/graph.py`.
+
 ## What changed (and what did not)
 
 * `win_pointer`, `native`, `posture` moved, unchanged apart from paths, to `platform/windows/` (git sees renames).

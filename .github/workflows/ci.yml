@@ -47,6 +47,8 @@ jobs:
         run: cargo test -p inkpdf --bin inkpdf
       - name: Build
         run: cargo build -p inkpdf --bin inkpdf --bin inkpdf-gen
+      - name: Dependency graphs are up to date
+        run: python3 tools/deps/graph.py --check
       - name: Window smoke test (virtual display)
         run: tools/e2e/linux-smoke.sh
 

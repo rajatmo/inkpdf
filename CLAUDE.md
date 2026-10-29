@@ -9,6 +9,7 @@ touching `platform/` or anything per-OS.
   (`cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`). Work on a branch, keep changes small, read the CI log.
   On the port branch Linux runs the same checks, and Windows can be cross-checked from Linux
   (`cargo clippy -p inkpdf --all-targets --target x86_64-pc-windows-msvc`).
-- Layering is enforced by `apps/inkpdf/src/architecture.rs`: a new module goes in its `LAYERS` table and in `ARCHITECTURE.md`.
+- Layering is enforced by `apps/inkpdf/src/architecture.rs`: a new module goes in its `LAYERS` table and in `ARCHITECTURE.md`,
+  and `python3 tools/deps/graph.py` redraws `docs/deps/` (CI runs it with `--check`).
 - Input promise: every tool works with only the left mouse button and keyboard (desktop) or the stylus tip (tablet).
 - Do not bump the version, push to `main`, or touch the pinned pdfcraft revision unless the task says so.

@@ -7,8 +7,8 @@ use winit::window::Fullscreen;
 use crate::doc::{Doc, UNTITLED};
 use crate::editor::Request;
 use crate::ink::PageStroke;
-use crate::native;
 use crate::pages::PageEdit;
+use crate::platform;
 use crate::requests::Choice;
 use crate::settings;
 
@@ -87,7 +87,7 @@ impl State {
             Ok((doc, strokes)) => self.install(doc, strokes),
             Err(e) => {
                 eprintln!("could not open {}: {e}", path.display());
-                native::error_box(&self.window, &format!("Could not open {}:\n{e}", path.display()));
+                platform::error_box(&self.window, &format!("Could not open {}:\n{e}", path.display()));
             }
         }
     }
@@ -111,7 +111,7 @@ impl State {
 
     /// Where to save a new document, asked for with the system's save window. `None` if cancelled.
     fn save_dialog(&self) -> Option<PathBuf> {
-        let mut path = rfd::FileDialog::new().add_filter("PDF", &["pdf"]).set_file_name(format!("{UNTITLED}.pdf")).save_file()?;
+        let mut path = platform::save_file_dialog(&format!("{UNTITLED}.pdf"))?;
         if path.extension().is_none() {
             path.set_extension("pdf");
         }
@@ -148,7 +148,7 @@ impl State {
             }
             Err(e) => {
                 eprintln!("save failed: {e}");
-                native::error_box(&self.window, &format!("Could not save:\n{e}"));
+                platform::error_box(&self.window, &format!("Could not save:\n{e}"));
                 false
             }
         }
@@ -214,7 +214,7 @@ impl State {
                         doc.forget_graves(&graves);
                     }
                 }
-                Request::OpenUrl(url) => native::open_url(&url),
+                Request::OpenUrl(url) => platform::open_url(&url),
             }
         }
         if self.ed.take_redraw() {

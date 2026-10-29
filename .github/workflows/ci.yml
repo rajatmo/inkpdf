@@ -26,3 +26,39 @@ jobs:
         run: cargo test
       - name: Release build (installer and portable inputs)
         run: cargo build --release -p inkpdf -p inkpdf-thumb
+  linux:
+    # The same checks on Linux: the layering, the tools and the storms are platform-free, so they must pass here too,
+    # and a short real-window run (software Vulkan on a virtual X display) proves the window, GPU, mouse and save.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: System packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libxkbcommon-x11-0 libxcb-xinput0 xvfb xdotool fonts-liberation
+      # (Formatting is checked once, by the Windows job above.)
+      - name: Clippy
+        run: cargo clippy -p inkpdf --all-targets -- -D warnings
+      - name: Tests
+        run: cargo test -p inkpdf --bin inkpdf
+      - name: Build
+        run: cargo build -p inkpdf --bin inkpdf --bin inkpdf-gen
+      - name: Window smoke test (virtual display)
+        run: tools/e2e/linux-smoke.sh
+
+  android:
+    # Type-check only for now: it keeps the shared code free of anything Windows- or desktop-only. Running on a device
+    # needs the packaging and the stylus reader (docs/PORTING.md, steps A1 to A3).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - name: Check
+        run: cargo check -p inkpdf --bin inkpdf --target aarch64-linux-android

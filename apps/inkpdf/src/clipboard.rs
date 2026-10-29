@@ -1,5 +1,5 @@
 //! The system's text clipboard, as the editing code sees it: something that holds a string. The shell gives the
-//! workspace the real one (see [`crate::native`]); until it does, and in tests, text is kept in memory.
+//! workspace the real one (see [`crate::platform`]); until it does, and in tests, text is kept in memory.
 
 pub trait TextClipboard {
     /// The text on the clipboard, if there is any.

@@ -154,7 +154,7 @@ pub fn drain() -> Vec<PointerEvent> {
 }
 
 unsafe extern "system" fn subclass_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM, _id: usize, _data: usize) -> LRESULT {
-    if msg == WM_SETTINGCHANGE && crate::posture::is_posture_message(lparam) {
+    if msg == WM_SETTINGCHANGE && super::posture::is_posture_message(lparam) {
         POSTURE_CHANGED.store(true, Ordering::Relaxed);
         WAKE.with(|w| {
             if let Some(window) = w.borrow().as_ref() {

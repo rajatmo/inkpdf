@@ -288,12 +288,25 @@ impl Doc {
     /// The new file is written beside the old one and swapped in, so a failure part-way leaves the
     /// original as it was.
     fn write_to(&mut self, path: &Path, store: &InkStore) -> Result<(), String> {
-        let copies: Vec<(usize, usize)> = self.slots.iter().enumerate().filter_map(|(page, s)| s.dup_of.filter(|_| s.file.is_none()).map(|from| (page, from))).collect();
+        let copies: Vec<(usize, usize)> =
+            self.slots.iter().enumerate().filter_map(|(page, s)| s.dup_of.filter(|_| s.file.is_none()).map(|from| (page, from))).collect();
         let bytes = ink_io::save(&self.base, store, &self.geoms, &self.layout(), store.dirty_pages(), &self.doc_of_file(), &copies)?;
         let dir = path.parent().filter(|d| !d.as_os_str().is_empty()).map_or_else(|| PathBuf::from("."), Path::to_path_buf);
         let file = path.file_name().map_or_else(|| "document.pdf".into(), |n| n.to_string_lossy().into_owned());
         let tmp = dir.join(format!(".{file}.inkpdf-saving"));
+        // Windows will not replace a read-only file, but a rename on Linux does, so a file made read-only is refused here,
+        // and the file that replaces it keeps its permissions.
+        #[cfg(not(windows))]
+        let kept = fs::metadata(path).ok().map(|m| m.permissions());
+        #[cfg(not(windows))]
+        if kept.as_ref().is_some_and(fs::Permissions::readonly) {
+            return Err(format!("could not replace {}: it is read-only", path.display()));
+        }
         fs::write(&tmp, &bytes).map_err(|e| format!("could not write {}: {e}", tmp.display()))?;
+        #[cfg(not(windows))]
+        if let Some(permissions) = kept {
+            let _ = fs::set_permissions(&tmp, permissions);
+        }
         if let Err(e) = fs::rename(&tmp, path) {
             let _ = fs::remove_file(&tmp);
             return Err(format!("could not replace {}: {e}", path.display()));

@@ -4,7 +4,6 @@ use std::time::{Duration, Instant};
 
 use crate::gpu::{Drawn, InkScene};
 use crate::tiles::{self, Key};
-use crate::win_pointer;
 
 use super::State;
 use super::bench::FrameParts;
@@ -37,8 +36,8 @@ impl State {
     /// dialog, a save) waits until the frame is done: a dialog runs its own message loop, which
     /// must never happen while a frame is half drawn.
     fn take_pointer_input(&mut self) {
-        if self.pointer_layer {
-            for ev in win_pointer::drain() {
+        if let Some(pointer) = &mut self.pointer {
+            for ev in pointer.drain() {
                 self.ed.pointer_event(ev);
             }
         }
@@ -48,8 +47,8 @@ impl State {
         // Wait for the display first (that is where a frame waits for the refresh), then read
         // the pen: the ink in this frame carries the newest samples, not ones a refresh old.
         let frame = self.gpu.acquire();
-        if self.pointer_layer {
-            win_pointer::pump();
+        if let Some(pointer) = &mut self.pointer {
+            pointer.pump();
         }
         self.take_pointer_input();
         if self.print_stats

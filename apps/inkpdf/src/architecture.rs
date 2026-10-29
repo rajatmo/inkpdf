@@ -3,7 +3,7 @@
 //! sources, so a stray `use` in the wrong direction fails the build of the tests, not a review.
 //!
 //! ```text
-//!   adapter   app, gpu, win_pointer, native, posture, doc, ink_io, tiles, thumbnail   (window, GPU, files, OS)
+//!   adapter   app, gpu, platform, doc, ink_io, tiles, thumbnail   (window, GPU, files, OS)
 //!   session   editor            routes input to the tool in use; owns the chrome
 //!   tools     tools             what a press on the page does; one file each
 //!   ui        toolbar           where the buttons are, how they look
@@ -121,7 +121,7 @@ enum Layer {
 }
 
 /// Every top-level module of the program, and its layer. A new module is placed here or the test fails.
-const LAYERS: [(&str, Layer); 35] = [
+const LAYERS: [(&str, Layer); 33] = [
     ("plane", Layer::Base),
     ("motion", Layer::Base),
     ("scene", Layer::Base),
@@ -150,9 +150,7 @@ const LAYERS: [(&str, Layer); 35] = [
     ("editor", Layer::Session),
     ("app", Layer::Adapter),
     ("gpu", Layer::Adapter),
-    ("win_pointer", Layer::Adapter),
-    ("native", Layer::Adapter),
-    ("posture", Layer::Adapter),
+    ("platform", Layer::Adapter),
     ("doc", Layer::Adapter),
     ("ink_io", Layer::Adapter),
     ("tiles", Layer::Adapter),
@@ -266,7 +264,7 @@ fn what_looks_at_the_sources_sees_what_the_program_is_made_of_and_not_what_only_
     assert_eq!(kept, ["use a;", "fn real() {", "    use crate::x;", "}", "fn also_real() {}"]);
 }
 /// Windowing, GPU and OS-input crates, and the shell's modules.
-const ADAPTERS: [&str; 8] = ["winit", "wgpu", "crate::app", "crate::gpu", "crate::win_pointer", "crate::native", "crate::thumbnail", "crate::tiles"];
+const ADAPTERS: [&str; 7] = ["winit", "wgpu", "crate::app", "crate::gpu", "crate::platform", "crate::thumbnail", "crate::tiles"];
 
 #[test]
 fn the_domain_knows_nothing_of_tools_the_session_or_the_shell() {
@@ -319,7 +317,7 @@ fn tools_know_neither_each_other_nor_the_session_nor_the_shell() {
 fn the_session_knows_nothing_of_the_shell() {
     // (It does speak winit's event types, ElementState and the like, as the vocabulary of input; what it
     // never touches is the window, the GPU, the files or the OS's pointer layer.)
-    let forbidden: Vec<&str> = ADAPTERS.iter().copied().filter(|a| *a != "winit" && *a != "crate::win_pointer").collect();
+    let forbidden: Vec<&str> = ADAPTERS.iter().copied().filter(|a| *a != "winit").collect();
     assert_free_of(&["editor"], &forbidden);
 }
 

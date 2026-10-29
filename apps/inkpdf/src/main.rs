@@ -25,11 +25,10 @@ mod input;
 mod laser;
 mod links;
 mod motion;
-mod native;
 mod outline;
 mod pages;
 mod plane;
-mod posture;
+mod platform;
 mod requests;
 mod scene;
 mod selection;
@@ -46,7 +45,6 @@ mod tool;
 mod toolbar;
 mod tools;
 mod view;
-mod win_pointer;
 mod workspace;
 
 use std::path::PathBuf;
@@ -153,29 +151,29 @@ fn main() {
     if args.next().as_deref() == Some("--thumbnail") {
         std::process::exit(thumbnail::run_child(args.next().and_then(|n| n.parse().ok()).unwrap_or(256)));
     }
-    native::attach_parent_console();
+    platform::attach_parent_console();
     let options = match parse_args() {
         Ok(o) => o,
         Err(e) => {
-            native::report_fatal(&format!("{e}\n{USAGE}"));
+            platform::report_fatal(&format!("{e}\n{USAGE}"));
             std::process::exit(2);
         }
     };
     let event_loop = match EventLoop::new() {
         Ok(el) => el,
         Err(e) => {
-            native::report_fatal(&format!("could not start the event loop: {e}"));
+            platform::report_fatal(&format!("could not start the event loop: {e}"));
             std::process::exit(1);
         }
     };
     event_loop.set_control_flow(ControlFlow::Wait);
     let mut app = App { options: Some(options), state: None, startup_error: None };
     if let Err(e) = event_loop.run_app(&mut app) {
-        native::report_fatal(&format!("InkPDF stopped: {e}"));
+        platform::report_fatal(&format!("InkPDF stopped: {e}"));
         std::process::exit(1);
     }
     if let Some(e) = app.startup_error {
-        native::report_fatal(&format!("InkPDF cannot start: {e}"));
+        platform::report_fatal(&format!("InkPDF cannot start: {e}"));
         std::process::exit(1);
     }
 }

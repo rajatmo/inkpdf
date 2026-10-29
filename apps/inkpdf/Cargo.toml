@@ -38,9 +38,21 @@ wgpu = { version = "30", features = ["wgsl"] }
 winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
 pollster = "1"
 bytemuck = { version = "1", features = ["derive"] }
-rfd = { workspace = true }
 # Typed text: reads the outlines of a system font (the same font parser the page renderer uses).
 skrifa = "0.47"
+
+# The system's file dialogs (Android has none this crate can use: its picker is an Intent, see `platform::save_file_dialog`).
+[target.'cfg(not(target_os = "android"))'.dependencies]
+rfd = { workspace = true }
+
+# Linux: a window on Wayland or X11, whichever the session runs (decided when the window is made). The Wayland client
+# library is loaded when needed, so one binary starts on either.
+[target.'cfg(all(unix, not(target_os = "android")))'.dependencies]
+winit = { version = "0.30", default-features = false, features = ["rwh_06", "x11", "wayland", "wayland-dlopen"] }
+
+# Android: NativeActivity (no Java glue to start with; the file picker and clipboard will need a little, see docs/PORTING.md).
+[target.'cfg(target_os = "android")'.dependencies]
+winit = { version = "0.30", default-features = false, features = ["rwh_06", "android-native-activity"] }
 
 [target.'cfg(windows)'.dependencies]
 # Pen and touch arrive as Windows pointer messages: winit reports only pressure and cannot tell a

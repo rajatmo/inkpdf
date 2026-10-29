@@ -150,10 +150,23 @@ fn parse_hex(text: &str) -> Option<[u8; 3]> {
 const PORTABLE_MARKER: &str = "portable.txt";
 
 /// Where the settings file lives: `settings.txt` beside the exe if `portable.txt` is there too (a copy on
-/// a stick leaves nothing on the PC), else `%APPDATA%\InkPDF\settings.txt`.
+/// a stick leaves nothing on the PC), else `%APPDATA%\InkPDF\settings.txt` (on Linux `$XDG_CONFIG_HOME/InkPDF/`, which
+/// is `~/.config/InkPDF/` unless said otherwise).
 fn path() -> Option<PathBuf> {
     let exe_dir = std::env::current_exe().ok().and_then(|exe| exe.parent().map(PathBuf::from));
-    settings_path(exe_dir.as_deref(), std::env::var_os("APPDATA").map(PathBuf::from))
+    settings_path(exe_dir.as_deref(), app_data())
+}
+
+/// The folder a user's application data goes in.
+#[cfg(windows)]
+fn app_data() -> Option<PathBuf> {
+    std::env::var_os("APPDATA").map(PathBuf::from)
+}
+
+#[cfg(not(windows))]
+fn app_data() -> Option<PathBuf> {
+    let non_empty = |name: &str| std::env::var_os(name).filter(|v| !v.is_empty()).map(PathBuf::from);
+    non_empty("XDG_CONFIG_HOME").or_else(|| non_empty("HOME").map(|home| home.join(".config")))
 }
 
 fn settings_path(exe_dir: Option<&Path>, appdata: Option<PathBuf>) -> Option<PathBuf> {

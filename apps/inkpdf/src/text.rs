@@ -27,8 +27,12 @@ pub const PAD: f32 = 2.0;
 const MAX_SIDE: f32 = 4096.0;
 /// Rows of samples per pixel row.
 const SUBROWS: usize = 4;
-/// Where, in the Windows fonts folder, to look for a font, best first.
+/// Which font files to look for, best first: Arial, then what is built to be as wide as it.
+#[cfg(windows)]
 const FONT_FILES: [&str; 4] = ["arial.ttf", "segoeui.ttf", "calibri.ttf", "tahoma.ttf"];
+#[cfg(not(windows))]
+const FONT_FILES: [&str; 7] =
+    ["arial.ttf", "liberationsans-regular.ttf", "dejavusans.ttf", "notosans-regular.ttf", "roboto-regular.ttf", "droidsans.ttf", "freesans.ttf"];
 
 /// A segment of an outline, in em units (y up).
 #[derive(Clone, Copy, Debug)]
@@ -96,11 +100,46 @@ struct Face {
     glyphs: Mutex<HashMap<char, Glyph>>,
 }
 
-static FACE: LazyLock<Option<Face>> = LazyLock::new(|| {
+/// Where the font called `name` (one of [`FONT_FILES`]) is, if this machine has it: in the Windows fonts folder.
+#[cfg(windows)]
+fn font_path(name: &str) -> Option<std::path::PathBuf> {
     let dir = std::env::var_os("WINDIR").map_or_else(|| std::path::PathBuf::from(r"C:\Windows"), std::path::PathBuf::from).join("Fonts");
+    Some(dir.join(name))
+}
+
+/// The same on Linux and Android: the font files under the usual folders, found once by their lower-cased names, so
+/// that `LiberationSans-Regular.ttf` answers to `liberationsans-regular.ttf` wherever the distribution put it.
+#[cfg(not(windows))]
+fn font_path(name: &str) -> Option<std::path::PathBuf> {
+    static INSTALLED: LazyLock<HashMap<String, std::path::PathBuf>> = LazyLock::new(|| {
+        let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+        let mut folders: Vec<std::path::PathBuf> =
+            ["/system/fonts", "/usr/share/fonts", "/usr/local/share/fonts"].iter().map(std::path::PathBuf::from).collect();
+        folders.extend(home.into_iter().flat_map(|h| [h.join(".local/share/fonts"), h.join(".fonts")]));
+        let mut found = HashMap::new();
+        // (A few levels is how deep distributions go: `truetype/liberation/…`.)
+        let mut todo: Vec<(std::path::PathBuf, u8)> = folders.into_iter().map(|f| (f, 0)).collect();
+        while let Some((dir, depth)) = todo.pop() {
+            for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    if depth < 5 {
+                        todo.push((path, depth + 1));
+                    }
+                } else if let Some(file) = path.file_name().and_then(|n| n.to_str()) {
+                    found.entry(file.to_ascii_lowercase()).or_insert(path);
+                }
+            }
+        }
+        found
+    });
+    INSTALLED.get(name).cloned()
+}
+
+static FACE: LazyLock<Option<Face>> = LazyLock::new(|| {
     FONT_FILES.iter().find_map(|name| {
         // The bytes live as long as the program: the parser borrows them.
-        let bytes: &'static [u8] = Box::leak(std::fs::read(dir.join(name)).ok()?.into_boxed_slice());
+        let bytes: &'static [u8] = Box::leak(std::fs::read(font_path(name)?).ok()?.into_boxed_slice());
         let font = FontRef::new(bytes).ok()?;
         let metrics = font.metrics(Size::unscaled(), LocationRef::default());
         let upem = f32::from(metrics.units_per_em).max(1.0);
@@ -564,7 +603,7 @@ mod tests {
 
     #[test]
     fn there_is_a_font_on_this_machine() {
-        assert!(available(), "no system font was found in the Windows fonts folder");
+        assert!(available(), "no system font was found (Windows: its fonts folder; Linux: a package such as fonts-liberation)");
     }
 
     #[test]

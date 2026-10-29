@@ -1,6 +1,7 @@
 # InkPDF architecture
 
-A fast, pen-first PDF annotator for Windows. The application layer was rewritten in 0.2.0 from the plan
+A fast, pen-first PDF annotator for Windows (Linux and Android are being added on the `linux-android-port` branch, see
+`docs/PORTING.md`; everything below the adapters is shared). The application layer was rewritten in 0.2.0 from the plan
 below; the 0.1.11 source is in this repository's history. The layering rule and the tool contract are
 enforced by tests (`src/architecture.rs`, `src/editor/tests/contract.rs`).
 
@@ -20,8 +21,8 @@ enforced by tests (`src/architecture.rs`, `src/editor/tests/contract.rs`).
 ```
  adapters  ─────────►  session  ─────────►  tools  ─────────►  domain
  app (winit shell),     editor/ (Editor:     tools/ (Tool trait,  ink, figure, geometry, smooth,
- gpu, win_pointer,      routing, chrome,     Pen, Shape, Text,    text, laser, view, colour, links,
- doc, native            history, prompt)     Pointer, gestures)   workspace, requests, input
+ gpu, platform,         routing, chrome,     Pen, Shape, Text,    text, laser, view, colour, links,
+ doc                    history, prompt)     Pointer, gestures)   workspace, requests, input
 ```
 
 * **domain** — no window, GPU, file or clock. `workspace.rs` is the document state the tools share
@@ -46,7 +47,7 @@ ones below; no two modules may reach each other, directly or through others.
 
 | Layer | Modules |
 |---|---|
-| adapter | `app`, `gpu`, `win_pointer`, `native`, `posture`, `doc`, `ink_io`, `tiles`, `thumbnail` |
+| adapter | `app`, `gpu`, `platform`, `doc`, `ink_io`, `tiles`, `thumbnail` |
 | session | `editor` |
 | tools | `tools` |
 | ui | `toolbar` |
@@ -86,6 +87,15 @@ ones below; no two modules may reach each other, directly or through others.
    * `Editor` derefs to the document state read-only outside tests, so only the editor and the tools change it, and the
      shell asks for changes in the editor's terms (`set_dpr`, `document_saved`, `requests()`, ...);
    * the editor reads the time from its own clock, not from the pointer layer.
+### Platforms (`src/platform/`)
+
+Everything that differs by operating system is behind `platform/mod.rs`, chosen at compile time: `windows/` (Win32
+pointer messages, message boxes, clipboard, posture), `linux/` and `android/` (winit's basic input for now) over a shared
+`generic.rs`. The shell holds a `Box<dyn PointerSource>`: `pump` (take what the OS has queued, right after the display
+wait), `pending`, `drain` (→ `PointerEvent`s with the OS's batched `samples`), `take_posture_change`, `uninstall`. A new
+OS adds one such source and changes nothing above `platform`; the session may not name it (tested). Small per-OS facts
+elsewhere (clock, font folders, GPU backend, settings folder) are `cfg` items in their own modules.
+
 ## Pages: one edit, everything follows
 
 Before the pages overview a page edit was done six times, by hand, in `doc.rs`, `ink/store.rs`, `ink_io.rs`, `app/files.rs`,

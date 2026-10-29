@@ -25,7 +25,7 @@ pub use predict::predict;
 
 /// How the machine is being held, which decides what the devices do: with a keyboard and mouse in front of
 /// you (desktop), or as a slate you touch and write on (tablet). It follows the machine's posture (see
-/// [`crate::posture`]) and can be forced from the command line.
+/// [`crate::platform`]) and can be forced from the command line.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Mode {
     #[default]
@@ -95,6 +95,8 @@ pub enum Phase {
     Down,
     Move,
     Up,
+    // (Only Windows says it so far: `WM_POINTERCAPTURECHANGED`. Android's `ACTION_CANCEL` will.)
+    #[cfg_attr(not(windows), allow(dead_code))]
     Cancel,
     /// A pen moving above the screen.
     Hover,

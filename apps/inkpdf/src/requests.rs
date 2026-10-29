@@ -4,6 +4,8 @@
 
 use std::collections::VecDeque;
 
+use crate::pages::PageEdit;
+
 /// What the person can answer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Choice {
@@ -15,7 +17,7 @@ pub enum Choice {
     Cancel,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Request {
     /// Write the document into its file (asking where first, if it has none).
     Save,
@@ -23,12 +25,10 @@ pub enum Request {
     Fullscreen,
     /// Close this document and start a blank one.
     Close,
-    /// Add a blank page at the end.
-    AddPage,
-    /// Add a blank page after this page.
-    InsertPage(usize),
-    /// Delete this page; nobody is asked.
-    DeletePage(usize),
+    /// The pages were edited (added, deleted, rearranged): the file's page table, and what is drawn for the pages, follow.
+    PagesEdited(PageEdit),
+    /// These deletions can no longer be undone: the pages kept for them can go.
+    GravesForgotten(Vec<u64>),
     /// Open a web address (a link was tapped).
     OpenUrl(String),
     /// The tool, colours or sizes changed: write them to the settings file.
@@ -43,9 +43,10 @@ pub struct Requests {
 }
 
 impl Requests {
-    /// Ask for something. Asking again for what is already waiting (a save, a settings write) changes nothing.
+    /// Ask for something. Asking again for what is already waiting (a save, a settings write) changes nothing; a
+    /// page edit is not asking but telling, and each one is told: two pages added in a row are two.
     pub fn push(&mut self, request: Request) {
-        if !self.queue.contains(&request) {
+        if matches!(request, Request::PagesEdited(_)) || !self.queue.contains(&request) {
             self.queue.push_back(request);
         }
     }
@@ -70,30 +71,18 @@ impl Requests {
         }
     }
 
-    /// The page after which a blank page was asked for.
+    /// The edit of the pages the shell has not yet been given effect, if there is one.
     #[cfg(test)]
-    pub fn insert_page(&self) -> Option<usize> {
-        self.queue.iter().find_map(|r| if let Request::InsertPage(n) = r { Some(*n) } else { None })
+    pub fn page_edit(&self) -> Option<&PageEdit> {
+        self.queue.iter().find_map(|r| if let Request::PagesEdited(e) = r { Some(e) } else { None })
     }
 
-    /// The page a delete was asked for.
+    /// Every edit of the pages waiting, taken: as the shell would take them.
     #[cfg(test)]
-    pub fn delete_page(&self) -> Option<usize> {
-        self.queue.iter().find_map(|r| if let Request::DeletePage(n) = r { Some(*n) } else { None })
-    }
-
-    #[cfg(test)]
-    pub fn take_delete_page(&mut self) -> Option<usize> {
-        let n = self.delete_page()?;
-        self.take(&Request::DeletePage(n));
-        Some(n)
-    }
-
-    #[cfg(test)]
-    pub fn take_insert_page(&mut self) -> Option<usize> {
-        let n = self.insert_page()?;
-        self.take(&Request::InsertPage(n));
-        Some(n)
+    pub fn take_page_edits(&mut self) -> Vec<PageEdit> {
+        let edits = self.queue.iter().filter_map(|r| if let Request::PagesEdited(e) = r { Some(e.clone()) } else { None }).collect();
+        self.queue.retain(|r| !matches!(r, Request::PagesEdited(_)));
+        edits
     }
 
     /// The web address waiting to be opened.
@@ -122,5 +111,23 @@ impl Requests {
 
     pub fn clear_answer(&mut self) {
         self.queue.retain(|r| !matches!(r, Request::Answer(_)));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn asking_twice_for_the_same_thing_is_asking_once_but_every_page_edit_is_told() {
+        let mut requests = Requests::default();
+        requests.push(Request::Save);
+        requests.push(Request::Save);
+        assert_eq!(requests.pop(), Some(Request::Save));
+        assert_eq!(requests.pop(), None, "a save asked for twice is one");
+        let add = PageEdit::Insert { at: 1, size: [600.0, 800.0] };
+        requests.push(Request::PagesEdited(add.clone()));
+        requests.push(Request::PagesEdited(add.clone()));
+        assert_eq!(requests.take_page_edits(), vec![add.clone(), add], "two pages added in a row are two edits for the shell");
     }
 }

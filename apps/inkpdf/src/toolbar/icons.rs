@@ -37,6 +37,13 @@ pub(super) struct Icons {
     pub node_add: Icon,
     pub node_smooth: Icon,
     pub options: Icon,
+    /// Four small pages: the pages overview.
+    pub pages: Icon,
+    /// A tick in a circle.
+    pub check: Icon,
+    /// Arrows pointing left and right.
+    pub earlier: Icon,
+    pub later: Icon,
 }
 
 static ICONS: LazyLock<Icons> = LazyLock::new(|| Icons {
@@ -64,6 +71,10 @@ static ICONS: LazyLock<Icons> = LazyLock::new(|| Icons {
     node_add: Icon::from_svg(include_str!("../../icons/svg/node-add.svg")),
     node_smooth: Icon::from_svg(include_str!("../../icons/svg/node-smooth.svg")),
     options: Icon::from_svg(include_str!("../../icons/svg/options.svg")),
+    pages: Icon::pages(),
+    check: Icon::check(),
+    earlier: Icon::arrow(-1.0),
+    later: Icon::arrow(1.0),
 });
 
 pub(super) fn icons() -> &'static Icons {
@@ -71,6 +82,26 @@ pub(super) fn icons() -> &'static Icons {
 }
 
 impl Icon {
+    /// Four small pages, two by two.
+    fn pages() -> Icon {
+        let square = |x0: f32, y0: f32| vec![[x0, y0], [x0 + 0.78, y0], [x0 + 0.78, y0 + 0.78], [x0, y0 + 0.78], [x0, y0]];
+        Icon { lines: vec![square(-0.9, -0.9), square(0.12, -0.9), square(-0.9, 0.12), square(0.12, 0.12)] }
+    }
+
+    /// An arrow pointing right (`way` 1) or left (-1).
+    fn arrow(way: f32) -> Icon {
+        Icon { lines: vec![vec![[-0.8 * way, 0.0], [0.8 * way, 0.0]], vec![[0.2 * way, -0.55], [0.8 * way, 0.0], [0.2 * way, 0.55]]] }
+    }
+
+    /// A tick in a circle.
+    fn check() -> Icon {
+        let circle: Vec<[f32; 2]> = (0..=32).map(|i| {
+            let a = i as f32 / 32.0 * std::f32::consts::TAU;
+            [0.9 * a.cos(), 0.9 * a.sin()]
+        }).collect();
+        Icon { lines: vec![circle, vec![[-0.42, 0.02], [-0.1, 0.36], [0.46, -0.32]]] }
+    }
+
     /// The paths of an SVG written by dvisvgm. Anything that cannot be read gives an empty icon.
     fn from_svg(svg: &str) -> Icon {
         let Some([vx, vy, vw, vh]) = view_box(svg) else { return Icon::default() };

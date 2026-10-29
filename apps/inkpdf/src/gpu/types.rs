@@ -39,6 +39,17 @@ pub(super) struct Globals {
     pub pad: [f32; 2],
 }
 
+/// The ink of one page drawn small, in a picture of the page (the pages overview): the committed ink's ranges for the
+/// page, the transform that puts the page where the picture is, and the part of the screen it may draw in.
+pub struct InkThumb {
+    pub ranges: Vec<Range<u32>>,
+    /// The document point at the screen's top-left corner, and pixels per point, as for the document's own ink.
+    pub origin: [f32; 2],
+    pub scale: f32,
+    /// `x, y, width, height` in pixels.
+    pub clip: [u32; 4],
+}
+
 /// The line work of a frame, drawn over the pages.
 pub struct InkScene<'a> {
     /// Document point at the viewport's top-left corner, and pixels per point.
@@ -50,6 +61,9 @@ pub struct InkScene<'a> {
     pub overlay_doc: &'a [Capsule],
     /// In pixels, over everything: the toolbar and cursors.
     pub overlay_screen: &'a [Capsule],
+    /// The ink in the pictures of pages that the interface shows (see [`InkThumb`]), drawn after the interface's panels
+    /// and pictures and before its lines.
+    pub thumbs: &'a [InkThumb],
 }
 
 /// What a quad is textured with.

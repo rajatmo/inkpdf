@@ -8,12 +8,14 @@ impl Editor {
     pub(crate) fn undo(&mut self) {
         if !self.tools.get_mut(self.ws.tool).undo(&mut self.ws) && self.ws.ink.undo() {
             self.ws.prune_selection();
+            self.page_step_followed();
         }
     }
 
     pub(crate) fn redo(&mut self) {
         if !self.tools.get_mut(self.ws.tool).redo(&mut self.ws) && self.ws.ink.redo() {
             self.ws.prune_selection();
+            self.page_step_followed();
         }
     }
 

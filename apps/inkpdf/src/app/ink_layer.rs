@@ -177,6 +177,10 @@ impl State {
     /// Rebuild the toolbars and pen panel on the GPU when their look has changed: a different state,
     /// window, scale or panel. Otherwise they stay as they are and cost nothing per frame.
     pub(super) fn sync_ui(&mut self) {
+        // The pages overview takes over the window: the interface steps out of the way.
+        if self.sync_overview_ui() {
+            return;
+        }
         let ed = &self.ed;
         let state = ed.toolbar_state();
         let [w, h] = ed.view.viewport.map(f32::to_bits);

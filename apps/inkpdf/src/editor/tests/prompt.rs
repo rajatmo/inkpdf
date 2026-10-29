@@ -119,8 +119,7 @@ fn nothing_underneath_hears_anything_while_it_is_up() {
     assert!(
         !(ed.requests.has(&Request::Close)
             || ed.requests.has(&Request::Save)
-            || ed.requests.has(&Request::AddPage)
-            || ed.requests.delete_page().is_some()
+            || ed.requests.page_edit().is_some()
             || ed.requests.has(&Request::Fullscreen))
     );
     assert!(ed.requests.answer().is_none() && ed.chrome.prompt.is_some(), "and the prompt is still waiting");

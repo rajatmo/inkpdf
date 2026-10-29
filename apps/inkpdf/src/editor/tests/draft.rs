@@ -159,7 +159,9 @@ fn leaving_the_tool_changing_the_shape_saving_or_adding_a_page_ends_the_stroke_a
             let save = ed.toolbar().centre_of(Item::Save);
             mouse_click_at(ed, save);
         }),
-        ("page", |ed| ed.page_inserted(Layout::new(&[[612.0, 792.0], [612.0, 792.0], [612.0, 792.0]]), 2)),
+        ("page", |ed| {
+            ed.edit_pages(crate::pages::PageEdit::Insert { at: 2, size: [612.0, 792.0] });
+        }),
     ];
     for (what, step) in steps {
         let mut ed = drawing(Shape::Line);

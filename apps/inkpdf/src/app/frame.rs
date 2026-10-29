@@ -85,6 +85,7 @@ impl State {
 
         self.sync_committed();
         self.sync_ui();
+        self.overview_frame();
         let ranges = self.visible_ink_ranges();
         let buf = std::mem::take(&mut self.overlay_buf);
         let overlays = self.overlays(pen_clock, buf);
@@ -94,12 +95,13 @@ impl State {
             committed: &ranges,
             overlay_doc: &overlays.doc,
             overlay_screen: &overlays.screen,
+            thumbs: &self.overview.thumbs,
         };
         if let Some(t) = self.ed.pending_sample_ms.take() {
             self.latency_ms.push((crate::clock::now_ms() - t) as f32);
         }
         let t_ink = Instant::now();
-        let result = self.gpu.draw(frame, &scene.quads, &ink_scene, BACKGROUND);
+        let result = self.gpu.draw(frame, &scene.quads, &self.overview.quads, &ink_scene, BACKGROUND);
         let t_draw = Instant::now();
         // Keep the buffers (and their room) for the next frame.
         self.overlay_buf = overlays;
@@ -142,12 +144,20 @@ impl State {
         let mut pending = 0;
         // Ask for what the view needs, unless the zoom is still moving: its level would change
         // every frame.
-        let plan = tiles::plan(&doc.layout, &self.ed.view);
+        // (With the pages overview up the document is not seen: what is wanted is a small picture of each page it shows.)
+        let overview = self.ed.overview_pages();
+        // (Pictures are kept by the page of the file that draws them, so that they outlast any change of the pages.)
+        let to_file = |page: u32| doc.render_page(page as usize);
+        let plan = if overview.is_some() { tiles::Plan::default() } else { tiles::plan(&self.ed.layout, &self.ed.view).mapped(to_file) };
         // Pages that were added are blank: there is nothing to render, so nothing to wait for.
         self.visible = plan.visible.iter().copied().filter(|&k| doc.renders(k)).collect();
         if settled {
             let (gpu, failed) = (&self.gpu, &self.failed);
-            let queue = plan.queue(|k| !doc.renders(k) || gpu.has(k) || failed.contains(&k));
+            let have = |k: Key| !doc.renders(k) || gpu.has(k) || failed.contains(&k);
+            let queue = match &overview {
+                Some(pages) => pages.clone().filter_map(|p| to_file(p as u32)).map(|p| Key::Thumb { page: p }).filter(|&k| !have(k)).collect(),
+                None => plan.queue(have),
+            };
             pending = queue.len();
             doc.set_queue(&queue);
         }
@@ -177,7 +187,7 @@ impl State {
 
     fn update_title(&mut self) {
         let Some(doc) = &self.doc else { return };
-        let page = self.ed.view.current_page(&doc.layout) + 1;
+        let page = self.ed.view.current_page(&self.ed.layout) + 1;
         let percent = (self.ed.view.zoom / self.ed.actual_size_zoom() * 100.0).round();
         let mark = if self.ed.ink.is_dirty() { "● " } else { "" };
         let title = format!("{mark}{} — page {page}/{} — {percent}%", doc.name, doc.page_count());

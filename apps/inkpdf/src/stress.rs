@@ -17,6 +17,7 @@ use crate::geometry::Shape;
 use crate::ink::{InkStore, P, PageStroke, Style};
 use crate::input::{Device, Intent, PenButtons, Phase, PointerEvent, Sample};
 use crate::links::{Link, Target};
+use crate::pages::PageEdit;
 use crate::smooth::{PenFilter, curve_through};
 use crate::testutil::sample_pdf;
 use crate::tool::ToolAction;
@@ -86,6 +87,19 @@ impl Rng {
 }
 
 /// How many times bigger to run, from `INKPDF_STRESS` (default 1).
+/// The shell's part of an edit of the pages: the document follows what the editor did (as it asked), and the two have the
+/// pages laid out alike.
+fn follow_pages(ed: &mut Editor, doc: &mut Doc) {
+    for edit in ed.requests.take_page_edits() {
+        assert!(doc.apply(&edit), "the document follows {edit:?}");
+    }
+    let (a, b) = (doc.layout(), ed.layout.clone());
+    assert_eq!(a.len(), b.len(), "the editor and the document have as many pages");
+    for p in 0..a.len() {
+        assert_eq!(a.page(p), b.page(p), "page {p} is laid out alike by both");
+    }
+}
+
 fn scale() -> usize {
     std::env::var("INKPDF_STRESS").ok().and_then(|v| v.parse().ok()).unwrap_or(1).max(1)
 }
@@ -541,27 +555,13 @@ fn poke(ed: &mut Editor, rng: &mut Rng, hostile: bool) -> String {
             ed.requests.take(&Request::Fullscreen);
             ed.redraw = false;
             ed.requests.take(&Request::SettingsChanged);
-            if ed.requests.take(&Request::AddPage) {
-                let mut sizes: Vec<[f32; 2]> = (0..ed.layout.len()).filter_map(|i| ed.layout.page(i)).map(|r| [r.w, r.h]).collect();
-                sizes.push(sizes.last().copied().unwrap_or([595.0, 842.0]));
-                what = format!("add a page: now {}", sizes.len());
-                PAGES_ADDED.with(|n| n.set(n.get() + 1));
-                ed.page_inserted(Layout::new(&sizes), sizes.len() - 1);
-            }
-            if let Some(after) = ed.requests.take_insert_page() {
-                let mut sizes: Vec<[f32; 2]> = (0..ed.layout.len()).filter_map(|i| ed.layout.page(i)).map(|r| [r.w, r.h]).collect();
-                if let Some(like) = sizes.get(after).copied() {
-                    sizes.insert(after + 1, like);
-                    what = format!("insert a page after {after}: now {}", sizes.len());
-                    ed.page_inserted(Layout::new(&sizes), after + 1);
-                }
-            }
-            if let Some(page) = ed.requests.take_delete_page() {
-                let mut sizes: Vec<[f32; 2]> = (0..ed.layout.len()).filter_map(|i| ed.layout.page(i)).map(|r| [r.w, r.h]).collect();
-                if sizes.len() > 1 && page < sizes.len() {
-                    sizes.remove(page);
-                    what = format!("delete page {page}: now {}", sizes.len());
-                    ed.page_deleted(Layout::new(&sizes), page);
+            for edit in ed.requests.take_page_edits() {
+                match edit {
+                    PageEdit::Insert { at, .. } => {
+                        what = format!("add a page: now {} (at {at})", ed.layout.len());
+                        PAGES_ADDED.with(|n| n.set(n.get() + 1));
+                    }
+                    other => what = format!("page edit by the shell: {other:?}"),
                 }
             }
             if std::mem::take(&mut ed.requests.has(&Request::Close)) {
@@ -1070,7 +1070,7 @@ fn stress_saving_and_reopening_keeps_every_stroke() {
         let (mut doc, _) = Doc::open(&path).expect("open");
         let mut store = InkStore::new();
         let count = 1 + rng.below(300);
-        let page = doc.layout.page(0).expect("page");
+        let page = doc.layout().page(0).expect("page");
         for _ in 0..count {
             let n = 2 + rng.below(30);
             let (mut x, mut y) = (page.x + rng.range(20.0, 500.0), page.y + rng.range(20.0, 700.0));
@@ -1104,7 +1104,7 @@ fn stress_saving_thousands_of_strokes_is_quick_and_complete() {
     let (mut doc, _) = Doc::open(&path).expect("open");
     let mut rng = Rng::new(31);
     let mut store = InkStore::new();
-    let page = doc.layout.page(0).expect("page");
+    let page = doc.layout().page(0).expect("page");
     let count = 5_000 * scale().min(4);
     for _ in 0..count {
         let (x, y) = (page.x + rng.range(20.0, 500.0), page.y + rng.range(20.0, 700.0));
@@ -1171,7 +1171,7 @@ fn stress_documents_grow_save_and_reopen_without_losing_a_page_or_a_stroke() {
                 }
                 1..=2 => {
                     let page = rng.below(doc.page_count());
-                    let rect = doc.layout.page(page).expect("page");
+                    let rect = doc.layout().page(page).expect("page");
                     let (x, y) = (rect.x + rng.range(20.0, rect.w - 60.0), rect.y + rng.range(20.0, rect.h - 60.0));
                     store.add(
                         page as u32,
@@ -1244,7 +1244,7 @@ fn stress_while_the_prompt_is_up_nothing_underneath_changes_whatever_arrives() {
             ed.requests.take(&Request::Save);
             ed.requests.take(&Request::Close);
             ed.requests.take(&Request::Fullscreen);
-            ed.requests.take(&Request::AddPage);
+            ed.requests.take_page_edits();
             ed.requests.clear_urls();
             ed.requests.take(&Request::SettingsChanged);
             if let Some(choice) = ed.requests.take_answer() {
@@ -1264,7 +1264,7 @@ fn stress_while_the_prompt_is_up_nothing_underneath_changes_whatever_arrives() {
                 !(ed.requests.has(&Request::Save)
                     || ed.requests.has(&Request::Close)
                     || ed.requests.has(&Request::Fullscreen)
-                    || ed.requests.has(&Request::AddPage))
+                    || ed.requests.page_edit().is_some())
                     && ed.requests.url().is_none(),
                 "event {i} ({event}) asked the shell for something under the prompt"
             );
@@ -1296,7 +1296,7 @@ fn stress_shapes_drawn_by_the_pen_stay_on_their_page_undo_redo_exactly_and_survi
     std::fs::write(&path, sample_pdf()).expect("write");
     let (mut doc, _) = Doc::open(&path).expect("open");
     let mut ed = Editor::new([1100.0, 900.0], 1.0);
-    ed.load(doc.layout.clone(), vec![]);
+    ed.load(doc.layout(), vec![]);
     ed.tool = Tool::Geometry;
     let mut rng = Rng::new(404);
     let (mut made, mut edits) = (0usize, 0usize);
@@ -1354,6 +1354,8 @@ fn stress_shapes_drawn_by_the_pen_stay_on_their_page_undo_redo_exactly_and_survi
             }
             _ => {}
         }
+        // (A random press can also add or delete a page, or undo one: the document follows, as the shell makes it.)
+        follow_pages(&mut ed, &mut doc);
         if round % 100 == 0 {
             check_editor(&ed, &format!("round {round}"));
             for s in ed.ink.strokes() {
@@ -1371,7 +1373,10 @@ fn stress_shapes_drawn_by_the_pen_stay_on_their_page_undo_redo_exactly_and_survi
     doc.save(&ed.ink).expect("save");
     let (_, back) = Doc::open(&path).expect("reopen");
     assert_eq!(back.len(), ed.ink.len(), "every shape survives a save and reopen");
-    for (stroke, (page, style, pts, figure, _)) in ed.ink.strokes().iter().zip(&back) {
+    // (The file keeps the ink page by page, each page's strokes in the order they were drawn.)
+    let mut by_page: Vec<_> = ed.ink.strokes().iter().collect();
+    by_page.sort_by_key(|s| s.page);
+    for (stroke, (page, style, pts, figure, _)) in by_page.into_iter().zip(&back) {
         assert_eq!((stroke.page, stroke.style.width.round()), (*page, style.width.round()));
         assert_eq!(stroke.pts.len(), pts.len(), "a shape keeps all its points");
         // And its anchors: it can still be edited after reopening.
@@ -1507,21 +1512,22 @@ fn stress_pages_inserted_anywhere_among_ink_keep_every_stroke_on_its_page_throug
     std::fs::write(&path, sample_pdf()).expect("write");
     let (mut doc, _) = Doc::open(&path).expect("open");
     let mut ed = Editor::new([1100.0, 900.0], 1.0);
-    ed.load(doc.layout.clone(), vec![]);
+    ed.load(doc.layout(), vec![]);
     let mut rng = Rng::new(606);
-    let (mut inserted, mut deleted, mut saves) = (0, 0, 0);
+    let (mut inserted, mut deleted, mut saves, mut moved) = (0, 0, 0, 0);
     for round in 0..(300 * scale().min(4)) {
-        match rng.below(12) {
+        match rng.below(14) {
             0..=2 if doc.page_count() < 60 => {
                 // A page somewhere among the others, the size of one of them.
                 let (at, like) = (rng.below(doc.page_count() + 1), rng.below(doc.page_count()));
-                doc.insert_blank_page(at, like).expect("inserted");
-                ed.page_inserted(doc.layout.clone(), at);
+                let size = doc.page_size(like as u32);
+                assert!(ed.edit_pages(PageEdit::Insert { at, size }));
+                follow_pages(&mut ed, &mut doc);
                 inserted += 1;
             }
             3..=6 => {
                 let page = rng.below(doc.page_count()) as u32;
-                let r = doc.layout.page(page as usize).expect("page");
+                let r = doc.layout().page(page as usize).expect("page");
                 let (x, y) = (r.x + rng.range(10.0, r.w - 10.0), r.y + rng.range(10.0, r.h - 10.0));
                 ed.ink.add(
                     page,
@@ -1533,20 +1539,36 @@ fn stress_pages_inserted_anywhere_among_ink_keep_every_stroke_on_its_page_throug
             }
             7 => {
                 ed.undo();
+                follow_pages(&mut ed, &mut doc);
             }
             8 => {
                 ed.redo();
+                follow_pages(&mut ed, &mut doc);
             }
             // A page goes, somewhere among the others, with the ink on it.
             9 | 10 if doc.page_count() > 1 => {
                 let at = rng.below(doc.page_count());
-                assert!(doc.delete_page(at), "page {at} of {} is deleted", doc.page_count());
-                ed.page_deleted(doc.layout.clone(), at);
+                assert!(ed.edit_pages(PageEdit::delete(at)), "page {at} of {} is deleted", doc.page_count());
+                follow_pages(&mut ed, &mut doc);
                 deleted += 1;
+            }
+            // Some pages are taken out and put back somewhere else.
+            11 | 12 if doc.page_count() > 1 => {
+                let n = doc.page_count();
+                let pages: Vec<usize> = (0..1 + rng.below(3.min(n - 1))).map(|_| rng.below(n)).collect();
+                let mut distinct = pages.clone();
+                distinct.sort_unstable();
+                distinct.dedup();
+                let to = rng.below(n - distinct.len() + 1);
+                // (Putting them where they were is no edit: it is refused, and nothing happens.)
+                if ed.edit_pages(PageEdit::Move { pages, to }) {
+                    moved += 1;
+                }
+                follow_pages(&mut ed, &mut doc);
             }
             _ => {
                 doc.save(&ed.ink).expect("save");
-                ed.ink.mark_clean();
+                ed.document_saved();
                 saves += 1;
                 let (back, strokes) = Doc::open(&path).expect("reopen");
                 assert_eq!(back.page_count(), doc.page_count(), "round {round}: the pages are all in the file");
@@ -1562,7 +1584,7 @@ fn stress_pages_inserted_anywhere_among_ink_keep_every_stroke_on_its_page_throug
         }
         // Whatever was done: every stroke is on the page it says it is.
         for s in ed.ink.strokes() {
-            let r = doc.layout.page(s.page as usize).expect("the stroke's page exists");
+            let r = doc.layout().page(s.page as usize).expect("the stroke's page exists");
             assert!(
                 s.pts.iter().all(|p| p[0] >= r.x - 0.01 && p[0] <= r.x + r.w + 0.01 && p[1] >= r.y - 0.01 && p[1] <= r.bottom() + 0.01),
                 "round {round}: stroke {} is off page {}",
@@ -1571,8 +1593,22 @@ fn stress_pages_inserted_anywhere_among_ink_keep_every_stroke_on_its_page_throug
             );
         }
     }
-    eprintln!("pages inserted: {inserted}; deleted: {deleted}; saves checked: {saves}; strokes at the end: {}", ed.ink.len());
-    assert!(inserted > 20 && deleted > 10 && saves > 5);
+    eprintln!("pages inserted: {inserted}; deleted: {deleted}; moved: {moved}; saves checked: {saves}; strokes at the end: {}", ed.ink.len());
+    assert!(inserted > 20 && deleted > 10 && moved > 10 && saves > 5);
+    // Everything the history holds can be undone and redone, with the document following, and the pages stay laid out alike.
+    ed.finish_text();
+    let mut undone = 0;
+    while ed.ink.can_undo() {
+        ed.undo();
+        follow_pages(&mut ed, &mut doc);
+        undone += 1;
+    }
+    for _ in 0..undone {
+        ed.redo();
+        follow_pages(&mut ed, &mut doc);
+    }
+    doc.save(&ed.ink).expect("save at the end");
+    assert_eq!(Doc::open(&path).expect("reopen").0.page_count(), doc.page_count(), "and the file has the pages the document has");
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -1656,7 +1692,7 @@ fn every_tool_together(seed: u64, rounds: usize) {
     std::fs::write(&path, sample_pdf()).expect("write");
     let (mut doc, _) = Doc::open(&path).expect("open");
     let mut ed = Editor::new([1100.0, 900.0], 1.0);
-    ed.load(doc.layout.clone(), vec![]);
+    ed.load(doc.layout(), vec![]);
     let mut rng = Rng::new(seed);
     let words = ["Hello", "wörld", "✓ done", "a longer line of text to type", "x", "日本語", "line\nbreak", "  spaced  "];
     let (mut typed, mut shapes, mut inks, mut saves, mut inserted, mut deleted) = (0, 0, 0, 0, 0, 0);
@@ -1754,21 +1790,23 @@ fn every_tool_together(seed: u64, rounds: usize) {
                 // Undo and redo, also with typing under way.
                 for _ in 0..1 + rng.below(3) {
                     if rng.chance(0.6) { ed.undo() } else { ed.redo() }
+                    follow_pages(&mut ed, &mut doc);
                 }
                 "undo/redo"
             }
             13 => {
                 if rng.chance(0.4) && doc.page_count() > 1 {
                     let at = rng.below(doc.page_count());
-                    assert!(doc.delete_page(at));
-                    ed.page_deleted(doc.layout.clone(), at);
+                    assert!(ed.edit_pages(PageEdit::delete(at)));
+                    follow_pages(&mut ed, &mut doc);
                     deleted += 1;
                     "delete a page"
                 } else {
                     if doc.page_count() < 30 {
                         let (at, like) = (rng.below(doc.page_count() + 1), rng.below(doc.page_count()));
-                        doc.insert_blank_page(at, like).expect("inserted");
-                        ed.page_inserted(doc.layout.clone(), at);
+                        let size = doc.page_size(like as u32);
+                        assert!(ed.edit_pages(PageEdit::Insert { at, size }));
+                        follow_pages(&mut ed, &mut doc);
                         inserted += 1;
                     }
                     "insert a page"
@@ -1791,7 +1829,7 @@ fn every_tool_together(seed: u64, rounds: usize) {
                 // Save and reopen, as the shell does it: typing ends first.
                 ed.finish_text();
                 doc.save(&ed.ink).expect("save");
-                ed.ink.mark_clean();
+                ed.document_saved();
                 saves += 1;
                 let (back, strokes) = Doc::open(&path).expect("reopen");
                 assert_eq!(back.page_count(), doc.page_count(), "round {round}: the pages are all in the file");
@@ -1807,7 +1845,7 @@ fn every_tool_together(seed: u64, rounds: usize) {
             check_editor(&ed, &format!("round {round} after {event}"));
             // Every stroke is on a page that exists.
             for s in ed.ink.strokes() {
-                assert!(doc.layout.page(s.page as usize).is_some(), "round {round}: stroke {} is on page {} of {}", s.id, s.page, doc.page_count());
+                assert!(doc.layout().page(s.page as usize).is_some(), "round {round}: stroke {} is on page {} of {}", s.id, s.page, doc.page_count());
             }
         }
     }
@@ -1821,11 +1859,13 @@ fn every_tool_together(seed: u64, rounds: usize) {
     let mut undone = 0;
     while ed.ink.can_undo() {
         ed.undo();
+        follow_pages(&mut ed, &mut doc);
         undone += 1;
     }
     check_editor(&ed, "after undoing everything");
     for _ in 0..undone {
         ed.redo();
+        follow_pages(&mut ed, &mut doc);
     }
     check_editor(&ed, "after redoing everything");
     let _ = std::fs::remove_dir_all(dir);
@@ -1837,4 +1877,334 @@ fn stress_every_tool_and_interaction_together_stays_consistent_through_undo_page
     for seed in [2024, 7, 31_337] {
         every_tool_together(seed, 2_000 * scale().min(3));
     }
+}
+
+// ── the pages overview ───────────────────────────────────────────────────────────────────────
+
+/// What must hold of the overview whatever was done to it.
+fn check_overview(ed: &Editor, doc: &Doc, what: &str) {
+    assert_eq!(ed.layout.len(), doc.page_count(), "{what}: the editor and the document have the same pages");
+    for s in ed.ink.strokes() {
+        assert!(ed.layout.page(s.page as usize).is_some(), "{what}: stroke {} is on page {} of {}", s.id, s.page, ed.layout.len());
+    }
+    let Some(state) = ed.chrome.overview.as_ref() else { return };
+    let layout = ed.overview_layout();
+    let count = ed.layout.len();
+    assert!(state.scroll.is_finite() && state.scroll >= 0.0 && state.scroll <= layout.max_scroll(count) + 0.01, "{what}: the pages are scrolled to {}", state.scroll);
+    let rows = ed.toc_rows().len();
+    assert!(state.toc_scroll >= 0.0 && state.toc_scroll <= layout.toc_max_scroll(rows) + 0.01, "{what}: the table is scrolled to {}", state.toc_scroll);
+    assert!(state.selected.iter().all(|&p| p < count), "{what}: pages chosen that are not there: {:?} of {count}", state.selected);
+    assert!(state.edit || state.selected.is_empty(), "{what}: pages are chosen outside edit mode");
+    // It draws, and what it draws is a number.
+    let mut ui = Ui::default();
+    ed.draw_overview(&mut ui);
+    assert!(ui.panels.iter().all(|p| p.rect.iter().all(|v| v.is_finite())), "{what}");
+    assert!(ui.lines.iter().all(|c| c.a.iter().chain(&c.b).all(|v| v.is_finite()) && c.width.is_finite()), "{what}");
+    assert!(ui.labels.iter().all(|l| l.at.iter().all(|v| v.is_finite()) && l.size > 0.0), "{what}");
+    assert!(ui.images.len() <= count, "{what}: a picture for every page at most");
+}
+
+#[test]
+fn stress_the_pages_overview_under_hostile_input_keeps_the_pages_the_selection_and_the_file_consistent() {
+    let dir = temp_dir("overview");
+    let path = dir.join("outline.pdf");
+    std::fs::write(&path, crate::testutil::pdf_with_outline()).expect("write");
+    let (mut doc, _) = Doc::open(&path).expect("open");
+    let mut ed = Editor::new([1280.0, 800.0], 1.25);
+    ed.load(doc.layout(), vec![]);
+    ed.outline = doc.take_outline();
+    ed.links = doc.take_links();
+    let mut rng = Rng::new(808);
+    let (mut opened, mut edits, mut saves, mut carried) = (0, 0, 0, 0);
+    // (More rounds than this find nothing new: a document of this size saves slower and slower, not differently.)
+    for round in 0..(8_000 * scale().min(3)) {
+        let what = format!("round {round}");
+        let was_open = ed.overview_open();
+        // (A real document does not grow without end; a long storm would otherwise spend its time on thousands of pages.)
+        if ed.layout.len() > 60 {
+            let n = ed.layout.len();
+            ed.edit_pages(PageEdit::Delete { pages: (30..n).collect(), grave: 0 });
+            follow_pages(&mut ed, &mut doc);
+        }
+        let size = ed.view.viewport;
+        let layout = ed.overview_layout();
+        // Where a pointer might be: mostly in the card, sometimes anywhere, sometimes nowhere a pointer can be.
+        let spot = |rng: &mut Rng| -> [f32; 2] {
+            if rng.chance(0.8) {
+                [rng.range(layout.card[0], layout.card[2]), rng.range(layout.card[1], layout.card[3])]
+            } else {
+                [rng.finite(size[0]), rng.finite(size[1])]
+            }
+        };
+        match rng.below(26) {
+            0 | 1 => {
+                if !ed.overview_open() {
+                    ed.open_overview();
+                    opened += 1;
+                }
+            }
+            2..=5 => {
+                let at = spot(&mut rng);
+                mouse_click(&mut ed, at);
+            }
+            6 | 7 => {
+                let (a, b) = (spot(&mut rng), spot(&mut rng));
+                mouse_drag(&mut ed, a, b, 1 + rng.below(8));
+                carried += 1;
+            }
+            8 | 9 => {
+                let at = spot(&mut rng);
+                tap_pen(&mut ed, at, 1000.0);
+            }
+            10 => {
+                let path: Vec<[f32; 2]> = (0..2 + rng.below(6)).map(|_| spot(&mut rng)).collect();
+                pen_path(&mut ed, PenButtons { in_range: true, contact: true, eraser: rng.chance(0.2), barrel: rng.chance(0.2) }, &path);
+            }
+            11 => {
+                let (a, b) = (spot(&mut rng), spot(&mut rng));
+                ed.palm = crate::input::PalmGuard::default();
+                let touch = |phase, pos| PointerEvent {
+                    device: Device::Touch,
+                    id: 5,
+                    phase,
+                    samples: vec![Sample { pos, pressure: 1.0, t_ms: 1000.0 }],
+                    pen: PenButtons::default(),
+                    contact_px: 20.0,
+                };
+                ed.pointer_event(touch(Phase::Down, a));
+                ed.pointer_event(touch(Phase::Move, b));
+                ed.pointer_event(touch(Phase::Up, b));
+            }
+            12 => {
+                let (x, y) = (rng.range(-3.0, 3.0), rng.range(-6.0, 6.0));
+                ed.mouse_moved(spot(&mut rng));
+                ed.wheel(MouseScrollDelta::LineDelta(x, y));
+            }
+            13 => {
+                let key = match rng.below(8) {
+                    0 => Key::Escape,
+                    1 => Key::Delete,
+                    2 => Key::Home(false),
+                    3 => Key::End(false),
+                    4 => Key::Arrow(Dir::Down, false),
+                    5 => Key::Arrow(Dir::Up, false),
+                    6 => Key::Backspace,
+                    _ => Key::Text("x"),
+                };
+                ed.press(key);
+            }
+            14 | 15 => {
+                let letter = rng.pick(&["a", "d", "z", "y", "c", "x", "v"]);
+                ed.shortcut(letter, rng.chance(0.2));
+            }
+            16 => {
+                // A page is added, deleted, copied or moved by something other than the overview's own controls.
+                let n = ed.layout.len();
+                let edit = match rng.below(4) {
+                    0 => PageEdit::Insert { at: rng.below(n + 1), size: [612.0, 792.0] },
+                    1 => PageEdit::delete(rng.below(n)),
+                    2 => PageEdit::Duplicate { pages: vec![rng.below(n), rng.below(n)] },
+                    _ => PageEdit::Move { pages: vec![rng.below(n)], to: rng.below(n) },
+                };
+                if n < 40 || matches!(edit, PageEdit::Delete { .. }) {
+                    edits += usize::from(ed.edit_pages(edit));
+                }
+            }
+            17 | 18 => {
+                if rng.chance(0.5) { ed.undo() } else { ed.redo() }
+            }
+            19 if ed.ink.len() < 300 => {
+                // Ink on a page, as when the overview is not up.
+                let page = rng.below(ed.layout.len());
+                let r = ed.layout.page(page).expect("page");
+                ed.ink.add(page as u32, Style { rgba: [0, 0, 0, 255], width: 2.0 }, vec![[r.x + 30.0, r.y + 40.0], [r.x + 90.0, r.y + 60.0]]);
+            }
+            20 => {
+                // The window changes size or scale.
+                ed.set_viewport([rng.range(300.0, 2400.0), rng.range(260.0, 1500.0)]);
+                ed.set_dpr(rng.pick(&[1.0, 1.25, 1.5, 2.0, 3.0]));
+            }
+            21 if rng.chance(0.15) => {
+                ed.settle();
+                doc.save(&ed.ink).expect("save");
+                ed.document_saved();
+                saves += 1;
+                let (back, strokes) = Doc::open(&path).expect("reopen");
+                assert_eq!(back.page_count(), doc.page_count(), "{what}: the pages are all in the file");
+                assert_eq!(strokes.len(), ed.ink.len(), "{what}: every stroke came back");
+            }
+            22 => {
+                ed.pan_px(rng.range(-100.0, 100.0), rng.range(-400.0, 400.0));
+            }
+            _ => {
+                if rng.chance(0.3) {
+                    ed.close_overview();
+                }
+            }
+        }
+        follow_pages(&mut ed, &mut doc);
+        // (Drawing it and walking every stroke is the dear part: every few rounds, and always when it has just been opened.)
+        if round % 6 == 0 || ed.chrome.overview.is_none() == was_open {
+            check_overview(&ed, &doc, &what);
+        }
+    }
+    eprintln!("overview opened: {opened}; edits by hand: {edits}; drags and clicks: {carried}; saves: {saves}; pages: {}", ed.layout.len());
+    assert!(opened > 100 && edits > 50 && saves > 20, "the storm should have used the overview");
+    // Everything that was done can be undone and redone, with the document following.
+    ed.close_overview();
+    let mut undone = 0;
+    while ed.ink.can_undo() {
+        ed.undo();
+        follow_pages(&mut ed, &mut doc);
+        undone += 1;
+    }
+    for _ in 0..undone {
+        ed.redo();
+        follow_pages(&mut ed, &mut doc);
+    }
+    check_overview(&ed, &doc, "after undoing and redoing everything");
+    doc.save(&ed.ink).expect("save at the end");
+    assert_eq!(Doc::open(&path).expect("reopen").0.page_count(), doc.page_count());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+// ── hostile outlines and page trees ──────────────────────────────────────────────────────────
+
+/// A PDF with `pages` pages and a hostile outline (and sometimes a hostile page tree): object 1 is the catalog, 2 the page
+/// tree, 3.. the pages, then the outline's objects.
+fn hostile_pdf(kind: usize, pages: usize) -> Vec<u8> {
+    let first_page = 3;
+    let kids: Vec<String> = (0..pages).map(|i| format!("{} 0 R", first_page + i)).collect();
+    let mut objs = vec![String::new(), format!("<< /Type /Pages /Kids [{}] /Count {pages} >>", kids.join(" "))];
+    objs.extend((0..pages).map(|_| "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>".to_string()));
+    let root = objs.len() + 1;
+    let item = |title: &str, extra: &str| format!("<< /Title ({title}) {extra} >>");
+    let mut catalog = format!("<< /Type /Catalog /Pages 2 0 R /Outlines {root} 0 R >>");
+    match kind {
+        // An entry that is its own next, its own child, and its own parent.
+        0 => {
+            objs.push(format!("<< /Type /Outlines /First {} 0 R /Last {} 0 R /Count 1 >>", root + 1, root + 1));
+            objs.push(item("loop", &format!("/Parent {root} 0 R /Next {0} 0 R /First {0} 0 R /Prev {0} 0 R /Dest [3 0 R /Fit]", root + 1)));
+        }
+        // Two siblings that point at each other for ever.
+        1 => {
+            objs.push(format!("<< /Type /Outlines /First {} 0 R /Last {} 0 R /Count 2 >>", root + 1, root + 2));
+            objs.push(item("a", &format!("/Parent {root} 0 R /Next {} 0 R /Dest [3 0 R /Fit]", root + 2)));
+            objs.push(item("b", &format!("/Parent {root} 0 R /Next {} 0 R /Dest [4 0 R /Fit]", root + 1)));
+        }
+        // A count that says millions, destinations that are nowhere, not a page, or not a destination at all.
+        2 => {
+            objs.push(format!("<< /Type /Outlines /First {} 0 R /Last {} 0 R /Count 99999999 >>", root + 1, root + 4));
+            objs.push(item("nowhere", &format!("/Parent {root} 0 R /Next {} 0 R /Dest [99 0 R /Fit]", root + 2)));
+            objs.push(item("not a page", &format!("/Parent {root} 0 R /Next {} 0 R /Dest [{root} 0 R /Fit]", root + 3)));
+            objs.push(item("a number", &format!("/Parent {root} 0 R /Next {} 0 R /Dest 7", root + 4)));
+            objs.push(item("negative", "/Count -5 /Dest [3 0 R /XYZ -1e30 1e30 null]"));
+        }
+        // Titles that are control characters, enormous, or not text.
+        3 => {
+            objs.push(format!("<< /Type /Outlines /First {} 0 R /Last {} 0 R /Count 3 >>", root + 1, root + 3));
+            objs.push(item(&"x".repeat(6000), &format!("/Parent {root} 0 R /Next {} 0 R /Dest [3 0 R /Fit]", root + 2)));
+            objs.push(item("a\\000b\\007c\\r\\n\\t  d", &format!("/Parent {root} 0 R /Next {} 0 R /Dest [3 0 R /Fit]", root + 3)));
+            objs.push(format!("<< /Title 42 /Parent {root} 0 R /Dest [3 0 R /Fit] >>"));
+        }
+        // A chain of entries each inside the one before: far deeper than anything should be listed.
+        4 => {
+            let depth = 400;
+            objs.push(format!("<< /Type /Outlines /First {} 0 R /Last {} 0 R /Count {depth} >>", root + 1, root + 1));
+            for d in 0..depth {
+                let me = root + 1 + d;
+                let parent = if d == 0 { root } else { me - 1 };
+                let kid = if d + 1 < depth { format!("/First {} 0 R /Last {} 0 R /Count 1", me + 1, me + 1) } else { String::new() };
+                objs.push(item(&format!("level {d}"), &format!("/Parent {parent} 0 R {kid} /Dest [3 0 R /Fit]")));
+            }
+        }
+        // A very long list of siblings.
+        5 => {
+            let n = 30_000;
+            objs.push(format!("<< /Type /Outlines /First {} 0 R /Last {} 0 R /Count {n} >>", root + 1, root + n));
+            for k in 0..n {
+                let me = root + 1 + k;
+                let next = if k + 1 < n { format!("/Next {} 0 R", me + 1) } else { String::new() };
+                objs.push(item(&format!("entry {k}"), &format!("/Parent {root} 0 R {next} /Dest [{} 0 R /Fit]", first_page + k % pages.max(1))));
+            }
+        }
+        // The outline is not an outline.
+        6 => objs.push("[1 2 3]".to_string()),
+        // A page tree in which a node holds itself, and a page that holds the tree.
+        _ => {
+            objs[1] = format!("<< /Type /Pages /Kids [2 0 R {}] /Count 99 >>", kids.join(" "));
+            objs.push(format!("<< /Type /Outlines /First {} 0 R /Last {} 0 R /Count 1 >>", root + 1, root + 1));
+            objs.push(item("tree", &format!("/Parent {root} 0 R /Dest [3 0 R /Fit]")));
+            catalog = format!("<< /Type /Catalog /Pages 2 0 R /Outlines {root} 0 R >>");
+        }
+    }
+    objs[0] = catalog;
+    crate::testutil::build_pdf(&objs)
+}
+
+#[test]
+fn stress_hostile_outlines_and_page_trees_open_or_are_refused_and_what_opens_edits_draws_and_saves() {
+    use crate::outline;
+    let dir = temp_dir("hostile-outline");
+    let mut rng = Rng::new(99);
+    let (mut opened, mut refused, mut edited) = (0, 0, 0);
+    let mut files: Vec<Vec<u8>> = (0..8).flat_map(|kind| [1, 4].map(|pages| hostile_pdf(kind, pages))).collect();
+    // And the proper outline with bytes damaged: any of them may be a wrong number, a wrong name, or a cut.
+    let good = crate::testutil::pdf_with_outline();
+    for _ in 0..120 * scale().min(3) {
+        let mut bytes = good.clone();
+        for _ in 0..1 + rng.below(12) {
+            let at = rng.below(bytes.len());
+            bytes[at] = rng.next() as u8;
+        }
+        if rng.chance(0.2) {
+            bytes.truncate(rng.below(bytes.len()));
+        }
+        files.push(bytes);
+    }
+    for (i, bytes) in files.iter().enumerate() {
+        let path = dir.join(format!("h{i}.pdf"));
+        std::fs::write(&path, bytes).expect("write");
+        let Ok((mut doc, strokes)) = Doc::open(&path) else {
+            refused += 1;
+            continue;
+        };
+        opened += 1;
+        let items = doc.take_outline();
+        assert!(items.len() <= 20_000, "file {i}: {} outline entries", items.len());
+        for entry in &items {
+            assert!(entry.depth <= 40, "file {i}: an entry {} deep", entry.depth);
+            assert!(entry.title.chars().count() <= 200 && !entry.title.chars().any(char::is_control), "file {i}: a title that is not clean");
+            assert!(entry.page.is_none_or(|p| p < doc.page_count()), "file {i}: an entry goes to page {:?} of {}", entry.page, doc.page_count());
+        }
+        let mut ed = Editor::new([1100.0, 800.0], 1.0);
+        ed.load(doc.layout(), strokes);
+        ed.outline = items;
+        ed.links = doc.take_links();
+        ed.open_overview();
+        for _ in 0..10 {
+            let n = ed.layout.len();
+            let edit = match rng.below(5) {
+                0 => PageEdit::Insert { at: rng.below(n + 1), size: [612.0, 792.0] },
+                1 => PageEdit::delete(rng.below(n)),
+                2 => PageEdit::Duplicate { pages: vec![rng.below(n)] },
+                3 => PageEdit::Move { pages: vec![rng.below(n)], to: rng.below(n) },
+                _ => PageEdit::Arrange { order: (0..n).rev().collect() },
+            };
+            edited += usize::from(ed.edit_pages(edit));
+            follow_pages(&mut ed, &mut doc);
+            check_overview(&ed, &doc, &format!("file {i}"));
+            if rng.chance(0.3) {
+                ed.undo();
+                follow_pages(&mut ed, &mut doc);
+            }
+        }
+        // Saved and read again, whatever the file was like: an error is fine, a panic is not.
+        let _ = doc.save(&ed.ink);
+        let _ = Doc::open(&path);
+    }
+    eprintln!("hostile files: {opened} opened, {refused} refused; page edits made on them: {edited}");
+    assert!(opened > 10 && edited > 50, "most of them should open and take edits ({opened} opened, {edited} edits)");
+    let _ = outline::read; // (the reader under test, named so that a rename here is noticed)
+    let _ = std::fs::remove_dir_all(dir);
 }

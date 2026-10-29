@@ -34,6 +34,8 @@ pub struct Chrome {
     /// The colour being made in the colour editor (kept as hue, saturation and brightness, so a grey does not forget
     /// its hue).
     pub colour_hsv: Hsv,
+    /// The pages overview, while it is up (see [`super::overview`]).
+    pub overview: Option<super::overview::OverviewState>,
     /// The press under way on the window's own controls, if any.
     pub(crate) act: Act,
 }
@@ -42,6 +44,7 @@ impl Chrome {
     /// A new document: no press is under way, and no prompt is up.
     pub(super) fn clear_press_and_prompt(&mut self) {
         self.act = Act::Idle;
+        self.overview = None;
         self.prompt = None;
         self.prompt_grab = None;
     }
@@ -49,6 +52,7 @@ impl Chrome {
     /// Put the prompt up, and everything else of the chrome away.
     pub(super) fn put_up_prompt(&mut self) {
         self.act = Act::Idle;
+        self.overview = None;
         self.panel = None;
         self.hover = None;
         self.prompt = Some(PromptView::default());

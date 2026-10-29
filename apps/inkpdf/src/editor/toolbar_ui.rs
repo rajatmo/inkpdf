@@ -176,14 +176,13 @@ impl Editor {
                 Item::Close => self.ws.requests.push(Request::Close),
                 Item::AddPage => {
                     let page = self.ws.view.current_page(&self.ws.layout);
-                    self.ws.requests.push(Request::InsertPage(page));
+                    self.insert_page_after(page);
                 }
-                // The last page there is stays (a document has at least one).
-                Item::DeletePage if self.ws.layout.len() > 1 => {
-                    let page = self.ws.view.current_page(&self.ws.layout);
-                    self.ws.requests.push(Request::DeletePage(page));
+                Item::Pages => self.open_overview(),
+                // The last page there is stays (a document has at least one: the edit is refused).
+                Item::DeletePage => {
+                    self.delete_current_page();
                 }
-                Item::DeletePage => {}
                 Item::Tool(_) => {}
             }
         }

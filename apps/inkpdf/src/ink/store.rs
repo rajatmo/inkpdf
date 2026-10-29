@@ -3,6 +3,7 @@
 use std::collections::{BTreeSet, HashSet};
 
 use crate::figure::Figure;
+use crate::pages::{PageEdit, Remap};
 
 use super::{P, PageStroke, Stroke, Style, TextBlock};
 
@@ -36,6 +37,21 @@ enum Cmd {
         before: Vec<Stroke>,
         after: Vec<Stroke>,
     },
+    /// The pages were edited (added, deleted, rearranged).
+    Pages(Box<PageStep>),
+}
+
+/// An edit of the pages as the history holds it.
+struct PageStep {
+    edit: PageEdit,
+    /// The edit that takes the pages back.
+    undo: PageEdit,
+    forward: Remap,
+    backward: Remap,
+    /// The strokes that were on the pages that went, each with its place in the drawing order.
+    buried: Vec<(usize, Stroke)>,
+    /// The strokes of the pages that were copied, as the copies have them: they come back when the step is redone.
+    made: Vec<Stroke>,
 }
 
 /// A stroke that is to become something else, keeping its id and its page (see [`InkStore::replace_many`]).
@@ -58,6 +74,10 @@ pub struct InkStore {
     revision: u64,
     /// The revision of the last change that was not just a stroke added at the end.
     structural: u64,
+    /// The edit of the pages the last undo or redo made, until it is taken (see [`InkStore::take_page_edit`]).
+    page_edit: Option<PageEdit>,
+    /// The graves of deletions whose steps the history let go of, until they are taken (see [`InkStore::take_evicted_graves`]).
+    evicted: Vec<u64>,
 }
 
 impl InkStore {
@@ -118,6 +138,7 @@ impl InkStore {
     }
 
     /// Flag a page as changed without touching its ink (a page that was added).
+    #[cfg(test)]
     pub fn mark_dirty(&mut self, page: u32) {
         self.dirty.insert(page);
     }
@@ -137,8 +158,13 @@ impl InkStore {
     fn record(&mut self, cmd: Cmd) {
         let appended = matches!(cmd, Cmd::Add(_));
         self.undo.push(cmd);
-        if self.undo.len() > MAX_HISTORY {
-            self.undo.remove(0);
+        if self.undo.len() > MAX_HISTORY
+            && let Cmd::Pages(step) = self.undo.remove(0)
+            && let PageEdit::Delete { grave, .. } = step.edit
+            && grave != 0
+        {
+            // The oldest step goes: a deletion that can no longer be undone has nothing to be kept for.
+            self.evicted.push(grave);
         }
         self.redo.clear();
         self.revision += 1;
@@ -194,67 +220,73 @@ impl InkStore {
         n
     }
 
-    /// A blank page was inserted at index `at`, pushing the pages from there on down the document by
-    /// `dy`: the strokes on them (and in the undo history) go with them, and keep their place on their
-    /// page. A move that carried a stroke across the new page cannot be undone sensibly any more, so
-    /// the history up to it is dropped.
-    pub fn insert_page_at(&mut self, at: u32, dy: f32) {
-        fn shift(s: &mut Stroke, at: u32, dy: f32) {
-            if s.page >= at {
-                s.page += 1;
-                s.translate(0.0, dy);
-            }
-        }
-        let crosses = |cmd: &Cmd| match cmd {
-            Cmd::Move { from, to_page, .. } => from.iter().any(|&(_, p)| (p < at) != (to_page.unwrap_or(p) < at)),
-            _ => false,
-        };
-        if let Some(last) = self.undo.iter().rposition(&crosses) {
-            self.undo.drain(..=last);
-        }
-        if self.redo.iter().any(&crosses) {
-            self.redo.clear();
-        }
-        self.strokes.iter_mut().for_each(|s| shift(s, at, dy));
-        for cmd in self.undo.iter_mut().chain(self.redo.iter_mut()) {
-            match cmd {
-                Cmd::Add(strokes) => strokes.iter_mut().for_each(|s| shift(s, at, dy)),
-                Cmd::Remove(removed) => removed.iter_mut().for_each(|(_, s)| shift(s, at, dy)),
-                Cmd::Move { from, to_page, .. } => {
-                    from.iter_mut().filter(|(_, p)| *p >= at).for_each(|(_, p)| *p += 1);
-                    if let Some(p) = to_page.as_mut().filter(|p| **p >= at) {
-                        *p += 1;
-                    }
-                }
-                Cmd::Reshape { before, after } => {
-                    shift(before, at, dy);
-                    shift(after, at, dy);
-                }
-                Cmd::Restyle { before, after } => before.iter_mut().chain(after.iter_mut()).for_each(|s| shift(s, at, dy)),
-            }
-        }
-        self.dirty = self.dirty.iter().map(|&p| if p >= at { p + 1 } else { p }).collect();
-        self.revision += 1;
+    /// Carry the strokes through an edit of the pages as one undo step: those on a page that goes are taken out (and
+    /// kept in the step, for its undoing), the others go with their pages and keep their place on them. `undo` is the
+    /// edit that takes the pages back, `forward` and `backward` what each does to the pages (see [`Remap`]).
+    /// The step is the one the history holds, so older steps need no change: they are undone only after this one is,
+    /// when the pages are numbered as they were.
+    pub fn edit_pages(&mut self, edit: PageEdit, undo: PageEdit, forward: Remap, backward: Remap) {
+        let made = self.copy_strokes(&forward);
+        let buried = self.remap_strokes(&forward);
+        self.strokes.extend(made.iter().cloned());
+        self.record(Cmd::Pages(Box::new(PageStep { edit, undo, forward, backward, buried, made })));
         self.structural = self.revision;
     }
 
-    /// The page at index `at` was deleted, and the pages after it moved up the document by `dy` (a negative
-    /// number): its strokes are gone, the strokes on the later pages go up with them and keep their place on
-    /// their page. The history is dropped: it may hold strokes of the deleted page, and steps between pages
-    /// that no longer exist.
-    pub fn delete_page_at(&mut self, at: u32, dy: f32) {
-        // (A shift that is not a number leaves the strokes where they are rather than ruining them.)
-        let dy = if dy.is_finite() { dy } else { 0.0 };
-        self.strokes.retain(|s| s.page != at);
-        for s in self.strokes.iter_mut().filter(|s| s.page > at) {
-            s.page -= 1;
-            s.translate(0.0, dy);
+    /// The names of the graves of deletions that can no longer be undone, because the history has let go of their steps: what
+    /// was kept for them can go. Taken, so it is given once.
+    pub fn take_evicted_graves(&mut self) -> Vec<u64> {
+        std::mem::take(&mut self.evicted)
+    }
+
+    /// The edit of the pages that the last undo or redo was, if it was one: what the rest of the document (the page
+    /// table, the links, the view) must now be given. Taken, so it is given once.
+    pub fn take_page_edit(&mut self) -> Option<PageEdit> {
+        self.page_edit.take()
+    }
+
+    /// Copies of the strokes on the pages that `remap` copies, each on its copy and in the same place on it (with an id of
+    /// its own), before the pages have their new places.
+    fn copy_strokes(&mut self, remap: &Remap) -> Vec<Stroke> {
+        let mut made = Vec::new();
+        for copy in remap.copies() {
+            let sources: Vec<Stroke> = self.strokes.iter().filter(|s| s.page as usize == copy.from).cloned().collect();
+            for mut stroke in sources {
+                stroke.translate(copy.dx, copy.dy);
+                stroke.page = copy.page as u32;
+                stroke.id = self.take_id();
+                made.push(stroke);
+            }
         }
-        self.undo.clear();
-        self.redo.clear();
-        self.dirty = self.dirty.iter().filter(|&&p| p != at).map(|&p| if p > at { p - 1 } else { p }).collect();
-        self.revision += 1;
-        self.structural = self.revision;
+        made
+    }
+
+    /// The strokes on pages that `remap` drops come out (with their places in the drawing order) and the others take
+    /// the pages' new numbers and places; the dirty pages follow, and the pages the edit touches are dirty.
+    fn remap_strokes(&mut self, remap: &Remap) -> Vec<(usize, Stroke)> {
+        let mut buried = Vec::new();
+        for (i, mut s) in std::mem::take(&mut self.strokes).into_iter().enumerate() {
+            match remap.moved(s.page as usize) {
+                Some(m) => {
+                    s.page = m.page as u32;
+                    s.translate(m.dx, m.dy);
+                    self.strokes.push(s);
+                }
+                None => buried.push((i, s)),
+            }
+        }
+        self.dirty = self.dirty.iter().filter_map(|&p| remap.page(p as usize)).map(|p| p as u32).collect();
+        self.dirty.extend(remap.touched().into_iter().map(|p| p as u32));
+        buried
+    }
+
+    /// Nothing before the last page that was deleted can be undone once the file is written without it: the page
+    /// cannot be put back into a file that no longer has it.
+    pub fn forget_deleted_pages(&mut self) {
+        let deleted = |cmd: &Cmd| matches!(cmd, Cmd::Pages(step) if matches!(step.edit, PageEdit::Delete { .. }));
+        if let Some(last) = self.undo.iter().rposition(deleted) {
+            self.undo.drain(..=last);
+        }
     }
 
     /// Move strokes by `(dx, dy)` as one undo step, optionally onto another page.
@@ -401,6 +433,11 @@ impl InkStore {
                 }
                 self.strokes.retain(|s| !ids.contains(&s.id));
             }
+            Cmd::Pages(step) => {
+                self.remap_strokes(&step.forward);
+                self.strokes.extend(step.made.iter().cloned());
+                self.page_edit = Some(step.edit.clone());
+            }
             Cmd::Move { ids, dx, dy, from, to_page } => {
                 let ids: HashSet<u64> = ids.iter().copied().collect();
                 for s in self.strokes.iter_mut().filter(|s| ids.contains(&s.id)) {
@@ -434,6 +471,15 @@ impl InkStore {
                     let at = (*i).min(self.strokes.len());
                     self.strokes.insert(at, s.clone());
                 }
+            }
+            Cmd::Pages(step) => {
+                self.remap_strokes(&step.backward);
+                // Ascending positions, so each insert lands where the stroke was.
+                for (i, s) in &step.buried {
+                    self.dirty.insert(s.page);
+                    self.strokes.insert((*i).min(self.strokes.len()), s.clone());
+                }
+                self.page_edit = Some(step.undo.clone());
             }
             Cmd::Move { ids, dx, dy, from, .. } => {
                 let ids: HashSet<u64> = ids.iter().copied().collect();
@@ -508,6 +554,7 @@ fn sanitize(mut pts: Vec<P>) -> Option<Vec<P>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::view::Layout;
 
     const BLACK: Style = Style { rgba: [0, 0, 0, 255], width: 2.0 };
 
@@ -724,127 +771,221 @@ mod tests {
         assert_eq!(store.bounds_of(&[a, b]), Some([-1.0, -1.0, 51.0, 61.0]));
         assert_eq!(store.bounds_of(&[]), None);
     }
-    // ── pages inserted among the others ──────────────────────────────────────────────────────
+    // ── the pages edited ─────────────────────────────────────────────────────────────────────
 
-    fn on_page(page: u32, y: f32) -> Vec<P> {
-        vec![[10.0, y + page as f32 * 1000.0], [60.0, y + 20.0 + page as f32 * 1000.0]]
+    /// A document of `n` pages, 600 x 800.
+    fn pages(n: usize) -> Layout {
+        Layout::new(&vec![[600.0, 800.0]; n])
+    }
+
+    /// A stroke `y` down on page `page` of `layout`.
+    fn on_page(layout: &Layout, page: usize, y: f32) -> Vec<P> {
+        let r = layout.page(page).expect("page");
+        vec![[r.x + 10.0, r.y + y], [r.x + 60.0, r.y + y + 20.0]]
+    }
+
+    /// Edit the pages as the editor does: the step goes into the history, and the layout after it comes back.
+    fn edit(store: &mut InkStore, before: &Layout, edit: PageEdit) -> Layout {
+        let after = before.edited(&edit).expect("layout");
+        let undo = edit.inverse(before).expect("inverse");
+        let forward = Remap::new(&edit, before, &after).expect("remap");
+        let backward = Remap::new(&undo, &after, before).expect("remap back");
+        store.edit_pages(edit, undo, forward, backward);
+        after
+    }
+
+    fn same(a: &[P], b: &[P]) -> bool {
+        a.len() == b.len() && a.iter().zip(b).all(|(p, q)| (p[0] - q[0]).abs() < 1e-2 && (p[1] - q[1]).abs() < 1e-2)
     }
 
     #[test]
     fn a_page_inserted_pushes_the_strokes_from_that_page_on_down_with_their_pages() {
+        let layout = pages(3);
         let mut store = InkStore::new();
-        let a = store.add(0, BLACK, on_page(0, 10.0)).expect("a");
-        let b = store.add(1, BLACK, on_page(1, 10.0)).expect("b");
-        let c = store.add(2, BLACK, on_page(2, 10.0)).expect("c");
-        store.insert_page_at(1, 800.0);
+        let a = store.add(0, BLACK, on_page(&layout, 0, 10.0)).expect("a");
+        let b = store.add(1, BLACK, on_page(&layout, 1, 10.0)).expect("b");
+        let c = store.add(2, BLACK, on_page(&layout, 2, 10.0)).expect("c");
+        store.mark_clean();
+        let after = edit(&mut store, &layout, PageEdit::Insert { at: 1, size: [600.0, 800.0] });
         let (sa, sb, sc) = (store.get(a).expect("a"), store.get(b).expect("b"), store.get(c).expect("c"));
         assert_eq!((sa.page, sb.page, sc.page), (0, 2, 3));
-        assert_eq!(sa.pts, on_page(0, 10.0), "before the new page: untouched");
-        assert_eq!(sb.pts[0], [10.0, 1810.0], "after it: down by the page");
-        assert_eq!(sc.pts[0], [10.0, 2810.0]);
-        assert_eq!(sb.bbox()[1], 1810.0 - 1.0, "the bounding box moved too");
-    }
-
-    #[test]
-    fn the_history_follows_the_pages_so_undo_and_redo_put_things_where_the_pages_are_now() {
-        let mut store = InkStore::new();
-        let a = store.add(1, BLACK, on_page(1, 10.0)).expect("a");
-        let b = store.add(1, BLACK, on_page(1, 200.0)).expect("b");
-        store.remove(&[a]);
-        store.insert_page_at(0, 500.0);
-        store.undo();
-        let back = store.get(a).expect("the erased stroke is back");
-        assert_eq!((back.page, back.pts[0]), (2, [10.0, 1510.0]), "on its page, which moved");
-        store.undo();
-        assert!(store.get(b).is_none());
-        store.redo();
-        assert_eq!(store.get(b).expect("b").pts[0][1], 1700.0);
-        // Dirty pages move too.
-        assert_eq!(store.dirty_pages().iter().copied().collect::<Vec<_>>(), vec![2]);
-    }
-
-    #[test]
-    fn a_move_across_the_inserted_page_cannot_be_undone_sensibly_so_the_history_up_to_it_goes() {
-        let mut store = InkStore::new();
-        let early = store.add(0, BLACK, on_page(0, 10.0)).expect("early");
-        let mover = store.add(0, BLACK, on_page(0, 100.0)).expect("mover");
-        store.move_by(&[mover], 0.0, 1000.0, Some(1));
-        let late = store.add(1, BLACK, on_page(1, 300.0)).expect("late");
-        store.insert_page_at(1, 800.0);
-        // The newest step is still there; the move, and what came before it, are not.
-        assert!(store.undo());
-        assert!(store.get(late).is_none());
-        assert!(!store.can_undo(), "nothing older survives the crossing move");
-        assert!(store.get(early).is_some() && store.get(mover).is_some(), "the ink itself is all still there");
-    }
-
-    #[test]
-    fn a_move_within_the_pages_that_shifted_keeps_its_history() {
-        let mut store = InkStore::new();
-        let s = store.add(1, BLACK, on_page(1, 10.0)).expect("s");
-        store.move_by(&[s], 30.0, 40.0, None);
-        store.insert_page_at(1, 800.0);
-        let at = store.get(s).expect("s").pts[0];
-        store.undo();
-        let undone = store.get(s).expect("s").pts[0];
-        assert_eq!([at[0] - undone[0], at[1] - undone[1]], [30.0, 40.0], "undoing the move still takes back exactly the move");
-        assert_eq!(store.get(s).expect("s").page, 2);
-    }
-
-    #[test]
-    fn inserting_at_the_end_changes_nothing_and_hostile_inputs_do_no_harm() {
-        let mut store = InkStore::new();
-        let a = store.add(0, BLACK, on_page(0, 10.0)).expect("a");
-        let before = store.get(a).expect("a").clone();
-        store.insert_page_at(5, 800.0);
-        assert_eq!(store.get(a), Some(&before));
-        store.insert_page_at(0, f32::MAX);
-        store.insert_page_at(0, f32::NAN);
-        assert!(store.get(a).is_some());
+        assert!(same(&sa.pts, &on_page(&layout, 0, 10.0)), "before the new page: untouched");
+        assert!(same(&sb.pts, &on_page(&after, 2, 10.0)), "after it: down by the page, in the same place on it");
+        assert!(same(&sc.pts, &on_page(&after, 3, 10.0)));
+        assert!((sb.bbox()[1] - (after.page(2).expect("page").y + 9.0)).abs() < 1e-2, "the bounding box moved too");
+        assert_eq!(store.dirty_pages().iter().copied().collect::<Vec<_>>(), vec![1], "the new page is to be written, and only it");
     }
 
     #[test]
     fn a_deleted_page_takes_its_strokes_and_the_later_pages_move_up_with_theirs() {
+        let layout = pages(3);
         let mut store = InkStore::new();
-        let a = store.add(0, BLACK, on_page(0, 10.0)).expect("a");
-        let b = store.add(1, BLACK, on_page(1, 10.0)).expect("b");
-        let c = store.add(2, BLACK, on_page(2, 10.0)).expect("c");
-        store.delete_page_at(1, -1000.0);
+        let a = store.add(0, BLACK, on_page(&layout, 0, 10.0)).expect("a");
+        let b = store.add(1, BLACK, on_page(&layout, 1, 10.0)).expect("b");
+        let c = store.add(2, BLACK, on_page(&layout, 2, 10.0)).expect("c");
+        let after = edit(&mut store, &layout, PageEdit::delete(1));
         assert!(store.get(b).is_none(), "the page's own ink is gone");
         let (sa, sc) = (store.get(a).expect("a"), store.get(c).expect("c"));
         assert_eq!((sa.page, sc.page), (0, 1));
-        assert_eq!(sa.pts, on_page(0, 10.0), "before the deleted page: untouched");
-        assert_eq!(sc.pts[0], [10.0, 1010.0], "after it: up by the page");
-        assert_eq!(sc.bbox()[1], 1010.0 - 1.0, "the bounding box moved too");
+        assert!(same(&sa.pts, &on_page(&layout, 0, 10.0)), "before the deleted page: untouched");
+        assert!(same(&sc.pts, &on_page(&after, 1, 10.0)), "after it: up by the page");
     }
 
     #[test]
-    fn deleting_a_page_drops_the_history_and_keeps_the_dirty_pages_straight() {
+    fn undoing_a_delete_brings_back_the_pages_ink_in_its_place_in_the_drawing_order_and_redo_takes_it_away_again() {
+        let layout = pages(3);
         let mut store = InkStore::new();
-        store.add(0, BLACK, on_page(0, 10.0)).expect("a");
-        store.add(1, BLACK, on_page(1, 10.0)).expect("b");
-        store.add(3, BLACK, on_page(3, 10.0)).expect("d");
+        let a = store.add(0, BLACK, on_page(&layout, 0, 10.0)).expect("a");
+        let b = store.add(1, BLACK, on_page(&layout, 1, 10.0)).expect("b");
+        let c = store.add(2, BLACK, on_page(&layout, 2, 10.0)).expect("c");
+        let d = store.add(1, BLACK, on_page(&layout, 1, 200.0)).expect("d");
+        let order: Vec<u64> = store.strokes().iter().map(|s| s.id).collect();
+        edit(&mut store, &layout, PageEdit::Delete { pages: vec![1], grave: 3 });
+        assert_eq!(store.len(), 2);
+        assert!(store.undo());
+        assert_eq!(store.strokes().iter().map(|s| s.id).collect::<Vec<_>>(), order, "back in the order they were drawn");
+        for (id, page) in [(a, 0), (b, 1), (c, 2), (d, 1)] {
+            assert_eq!(store.get(id).expect("stroke").page, page);
+        }
+        assert!(same(&store.get(c).expect("c").pts, &on_page(&layout, 2, 10.0)), "the later page is back down where it was");
+        assert!(same(&store.get(d).expect("d").pts, &on_page(&layout, 1, 200.0)));
+        assert_eq!(store.take_page_edit(), Some(PageEdit::Restore { grave: 3, pages: vec![(1, [600.0, 800.0])] }), "the rest of the document is told what to do");
+        assert_eq!(store.take_page_edit(), None, "once");
+        assert!(store.redo());
+        assert!(store.get(b).is_none() && store.get(d).is_none() && store.get(c).expect("c").page == 1);
+        assert_eq!(store.take_page_edit(), Some(PageEdit::Delete { pages: vec![1], grave: 3 }));
+    }
+
+    #[test]
+    fn page_edits_are_steps_of_the_one_history_older_steps_wait_for_them() {
+        let layout = pages(2);
+        let mut store = InkStore::new();
+        let a = store.add(1, BLACK, on_page(&layout, 1, 10.0)).expect("a");
+        store.remove(&[a]);
+        let after = edit(&mut store, &layout, PageEdit::Insert { at: 0, size: [600.0, 800.0] });
+        let b = store.add(2, BLACK, on_page(&after, 2, 10.0)).expect("b");
+        assert!(store.undo(), "the newest step first");
+        assert!(store.get(b).is_none() && store.take_page_edit().is_none());
+        assert!(store.undo(), "then the page that was inserted");
+        assert!(matches!(store.take_page_edit(), Some(PageEdit::Delete { .. })));
+        assert!(store.undo(), "and only then the erasing, on the pages as they were");
+        let back = store.get(a).expect("the erased stroke is back");
+        assert_eq!(back.page, 1);
+        assert!(same(&back.pts, &on_page(&layout, 1, 10.0)), "where it was");
+        assert!(store.redo() && store.redo() && store.redo());
+        assert_eq!(store.get(b).expect("b").page, 2);
+        assert!(store.get(a).is_none());
+    }
+
+    #[test]
+    fn rearranged_pages_carry_their_ink_and_undoing_puts_it_all_back() {
+        let layout = Layout::new(&[[600.0, 800.0], [300.0, 400.0], [500.0, 700.0]]);
+        let mut store = InkStore::new();
+        let ids: Vec<u64> = (0..3_usize).map(|p| store.add(p as u32, BLACK, on_page(&layout, p, 10.0)).expect("stroke")).collect();
+        store.mark_clean();
+        let after = edit(&mut store, &layout, PageEdit::Move { pages: vec![2], to: 0 });
+        for (id, page, was) in [(ids[2], 0_usize, 2_usize), (ids[0], 1, 0), (ids[1], 2, 1)] {
+            let s = store.get(id).expect("stroke");
+            assert_eq!(s.page as usize, page);
+            let (on, rect) = (after.page(page).expect("page"), layout.page(was).expect("page"));
+            let want: Vec<P> = on_page(&layout, was, 10.0).iter().map(|p| [p[0] - rect.x + on.x, p[1] - rect.y + on.y]).collect();
+            assert!(same(&s.pts, &want), "page {was} is page {page} now and its ink is in the same place on it");
+        }
+        assert!(store.is_dirty(), "a change to write");
+        assert!(store.undo());
+        for (p, id) in ids.iter().enumerate() {
+            let s = store.get(*id).expect("stroke");
+            assert_eq!(s.page as usize, p);
+            assert!(same(&s.pts, &on_page(&layout, p, 10.0)));
+        }
+    }
+
+    #[test]
+    fn deleting_pages_keeps_the_dirty_pages_straight_and_leaves_something_to_write() {
+        let layout = pages(5);
+        let mut store = InkStore::new();
+        store.add(0, BLACK, on_page(&layout, 0, 10.0)).expect("a");
+        store.add(1, BLACK, on_page(&layout, 1, 10.0)).expect("b");
+        store.add(3, BLACK, on_page(&layout, 3, 10.0)).expect("d");
         store.mark_dirty(4);
-        assert!(store.can_undo());
         let before = store.revision();
-        store.delete_page_at(1, -1000.0);
-        assert!(!store.can_undo() && !store.can_redo(), "no step can refer to a page that has gone");
-        // Page 1 is gone, the pages after it have a number less: 0 stays, 3 becomes 2, 4 becomes 3.
-        assert_eq!(store.dirty_pages().iter().copied().collect::<Vec<_>>(), vec![0, 2, 3]);
+        edit(&mut store, &layout, PageEdit::delete(1));
+        // Page 1 is gone, the pages after it have a number less: 0 stays, 3 becomes 2, 4 becomes 3; the page that took
+        // its place is to be written, so that the file loses the page.
+        assert_eq!(store.dirty_pages().iter().copied().collect::<Vec<_>>(), vec![0, 1, 2, 3]);
         assert!(store.revision() > before && !store.only_appended_since(before), "drawn afresh, not just appended to");
+        // Deleting the last page: the page now last is written.
+        let mut store = InkStore::new();
+        edit(&mut store, &pages(3), PageEdit::delete(2));
+        assert_eq!(store.dirty_pages().iter().copied().collect::<Vec<_>>(), vec![1]);
     }
 
     #[test]
-    fn deleting_the_last_page_or_one_that_is_not_there_or_with_a_shift_that_is_not_a_number_does_no_harm() {
+    fn once_the_file_is_written_without_a_deleted_page_it_cannot_be_put_back_but_newer_steps_still_undo() {
+        let layout = pages(3);
         let mut store = InkStore::new();
-        let a = store.add(0, BLACK, on_page(0, 10.0)).expect("a");
-        let b = store.add(1, BLACK, on_page(1, 10.0)).expect("b");
-        let before = store.get(a).expect("a").clone();
-        store.delete_page_at(1, 0.0);
-        assert!(store.get(b).is_none() && store.get(a) == Some(&before), "the last page goes alone");
-        store.delete_page_at(9, -1000.0);
-        store.delete_page_at(0, f32::NAN);
-        store.delete_page_at(0, f32::MAX);
-        assert_eq!(store.len(), 0, "nothing is left on page 0 once it is deleted too, and no stroke was ruined on the way");
+        store.add(0, BLACK, on_page(&layout, 0, 10.0)).expect("early");
+        let after = edit(&mut store, &layout, PageEdit::delete(1));
+        let late = store.add(1, BLACK, on_page(&after, 1, 10.0)).expect("late");
+        edit(&mut store, &after, PageEdit::Insert { at: 2, size: [600.0, 800.0] });
+        store.forget_deleted_pages();
+        assert!(store.undo() && store.undo(), "the insert and the stroke drawn after the delete");
+        assert!(store.get(late).is_none());
+        assert!(!store.can_undo(), "the delete, and what came before it, are not for undoing any more");
+        // Pages that were only added or moved can always be undone: the file has them.
+        let mut store = InkStore::new();
+        edit(&mut store, &layout, PageEdit::Insert { at: 1, size: [600.0, 800.0] });
+        store.forget_deleted_pages();
+        assert!(store.can_undo());
+    }
+
+    #[test]
+    fn duplicated_pages_have_copies_of_the_ink_that_undo_takes_away_and_redo_brings_back_as_the_same_strokes() {
+        let layout = pages(3);
+        let mut store = InkStore::new();
+        let a = store.add(0, BLACK, on_page(&layout, 0, 10.0)).expect("a");
+        let b = store.add(1, BLACK, on_page(&layout, 1, 10.0)).expect("b");
+        let c = store.add(1, BLACK, on_page(&layout, 1, 200.0)).expect("c");
+        store.mark_clean();
+        let after = edit(&mut store, &layout, PageEdit::Duplicate { pages: vec![1] });
+        assert_eq!(store.len(), 5, "the two strokes of page 1 are copied");
+        let copies: Vec<&Stroke> = store.strokes().iter().filter(|s| s.page == 2).collect();
+        assert_eq!(copies.len(), 2);
+        assert!(copies.iter().all(|s| s.id != a && s.id != b && s.id != c), "each has an id of its own");
+        assert!(same(&copies[0].pts, &on_page(&after, 2, 10.0)) && same(&copies[1].pts, &on_page(&after, 2, 200.0)), "in the same places on the copy");
+        assert_eq!(store.get(b).expect("b").page, 1, "the originals stay where they are");
+        assert_eq!(store.get(c).expect("c").page, 1);
+        assert_eq!(store.dirty_pages().iter().copied().collect::<Vec<_>>(), vec![2], "the copy is to be written, and only it");
+        let ids: Vec<u64> = copies.iter().map(|s| s.id).collect();
+        assert!(store.undo());
+        assert_eq!(store.len(), 3, "the copies are gone");
+        assert!(matches!(store.take_page_edit(), Some(PageEdit::Delete { pages, .. }) if pages == vec![2]));
+        assert!(store.redo());
+        assert_eq!(store.strokes().iter().filter(|s| s.page == 2).map(|s| s.id).collect::<Vec<_>>(), ids, "the same strokes, with the same ids");
+        // A page after the copied one moves down with its ink.
+        let mut store = InkStore::new();
+        let last = store.add(2, BLACK, on_page(&layout, 2, 10.0)).expect("last");
+        let after = edit(&mut store, &layout, PageEdit::Duplicate { pages: vec![0] });
+        assert_eq!(store.get(last).expect("last").page, 3);
+        assert!(same(&store.get(last).expect("last").pts, &on_page(&after, 3, 10.0)));
+    }
+
+    #[test]
+    fn a_deletion_the_history_lets_go_of_gives_up_its_grave() {
+        let mut store = InkStore::new();
+        let mut layout = pages(2);
+        let mut graves = 0;
+        // A page added and a page deleted, over and over: far more steps than the history keeps.
+        for round in 0..(MAX_HISTORY as u64) {
+            layout = edit(&mut store, &layout, PageEdit::Insert { at: 1, size: [600.0, 800.0] });
+            layout = edit(&mut store, &layout, PageEdit::Delete { pages: vec![1], grave: round + 1 });
+            graves += 1;
+        }
+        let forgotten = store.take_evicted_graves();
+        assert_eq!(forgotten.len(), graves - MAX_HISTORY / 2, "the deletions among the steps that went");
+        assert_eq!(forgotten.first(), Some(&1), "the oldest first");
+        assert!(store.take_evicted_graves().is_empty(), "given once");
+        // And the ones still in the history are not forgotten.
+        assert!(forgotten.iter().all(|g| *g <= (graves - MAX_HISTORY / 2) as u64));
     }
 }

@@ -112,6 +112,39 @@ fn a_spline_has_two_endpoints_with_tangents_off_the_chord() {
 }
 
 #[test]
+fn an_axis_shrunk_to_nothing_and_pulled_out_again_comes_out_across_the_other_one() {
+    // Both ends of the y axis onto the crossing: nothing is left of it but the way it ran.
+    let mut f = axes(Shape::Axes2d);
+    let origin = f.anchor_pos(0).expect("crossing");
+    f.move_control(Control::Anchor(3), origin, false);
+    f.move_control(Control::Anchor(4), origin, false);
+    assert_eq!(f.anchor_pos(3), f.anchor_pos(4), "the y axis is a point now");
+    // Pulled out anywhere, it is still across the x axis (the screen's y, not its x).
+    f.move_control(Control::Anchor(4), [160.0, 10.0], false);
+    let end = f.anchor_pos(4).expect("end");
+    assert!((end[0] - origin[0]).abs() < 1e-3 && (end[1] - 10.0).abs() < 1e-3, "{end:?}: it came out vertical, through the crossing");
+    // The x axis shrunk to nothing is across the y axis in the same way.
+    let mut g = axes(Shape::Axes2d);
+    let origin = g.anchor_pos(0).expect("crossing");
+    g.move_control(Control::Anchor(1), origin, false);
+    g.move_control(Control::Anchor(2), origin, false);
+    g.move_control(Control::Anchor(2), [190.0, 80.0], false);
+    let end = g.anchor_pos(2).expect("end");
+    assert!((end[1] - origin[1]).abs() < 1e-3 && (end[0] - 190.0).abs() < 1e-3, "{end:?}: it came out horizontal");
+    // And dragging the crossing with an axis that is a point keeps them across each other.
+    let mut h = axes(Shape::Axes2d);
+    let origin = h.anchor_pos(0).expect("crossing");
+    h.move_control(Control::Anchor(3), origin, false);
+    h.move_control(Control::Anchor(4), origin, false);
+    h.move_control(Control::Anchor(0), [30.0, 20.0], false);
+    h.move_control(Control::Anchor(4), [90.0, 90.0], false);
+    let (x0, x1) = (h.anchor_pos(1).expect("x"), h.anchor_pos(2).expect("x"));
+    let (y1, o) = (h.anchor_pos(4).expect("y"), h.anchor_pos(0).expect("crossing"));
+    let (dx, dy) = ([x1[0] - x0[0], x1[1] - x0[1]], [y1[0] - o[0], y1[1] - o[1]]);
+    assert!((dx[0] * dy[0] + dx[1] * dy[1]).abs() < 1e-2, "the axes are across each other: {dx:?} {dy:?}");
+}
+
+#[test]
 fn axes_have_the_crossing_and_the_ends_as_anchors() {
     let f = axes(Shape::Axes2d);
     assert_eq!(f.anchor_pos(0), Some([100.0, 50.0]));

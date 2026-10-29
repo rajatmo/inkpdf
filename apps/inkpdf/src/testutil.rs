@@ -56,3 +56,22 @@ fn write_link_demo() {
     let Some(out) = std::env::var_os("INKPDF_DEMO_LINKS_OUT") else { return };
     std::fs::write(out, pdf_with_links()).expect("write the demo");
 }
+
+/// Four pages and an outline: `Chapter 1` (page 1) with `1.1 Basics` (page 2) and `1.2 More` (page 3) under it,
+/// `Chapter 2` (page 4), and `Appendix`, which goes nowhere.
+pub fn pdf_with_outline() -> Vec<u8> {
+    build_pdf(&[
+        "<< /Type /Catalog /Pages 2 0 R /Outlines 7 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R 4 0 R 5 0 R 6 0 R] /Count 4 >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>".to_string(),
+        "<< /Type /Outlines /First 8 0 R /Last 12 0 R /Count 5 >>".to_string(),
+        "<< /Title (Chapter 1) /Parent 7 0 R /First 9 0 R /Last 10 0 R /Next 11 0 R /Count 2 /Dest [3 0 R /Fit] >>".to_string(),
+        "<< /Title (1.1 Basics) /Parent 8 0 R /Next 10 0 R /Dest [4 0 R /Fit] >>".to_string(),
+        "<< /Title (1.2 More) /Parent 8 0 R /Prev 9 0 R /Dest [5 0 R /Fit] >>".to_string(),
+        "<< /Title (Chapter 2) /Parent 7 0 R /Prev 8 0 R /Next 12 0 R /Dest [6 0 R /Fit] >>".to_string(),
+        "<< /Title (Appendix) /Parent 7 0 R /Prev 11 0 R >>".to_string(),
+    ])
+}

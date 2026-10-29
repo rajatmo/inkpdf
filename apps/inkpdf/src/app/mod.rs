@@ -13,6 +13,7 @@ mod bench;
 mod files;
 mod frame;
 mod ink_layer;
+mod overview;
 mod pages;
 mod text_layer;
 
@@ -98,6 +99,8 @@ pub struct State {
     ink_pages: Vec<(u32, Range<u32>)>,
     /// What the toolbar and pop-ups on the GPU were last built from.
     ui_built: Option<UiStamp>,
+    /// The pages overview's pictures and text, while it is up.
+    overview: overview::Shown,
     /// The line work over the ink, rebuilt each frame into the same buffers (their room is kept).
     overlay_buf: ink_layer::Overlays,
     /// The text boxes to draw this frame, and where the ink's own are.
@@ -155,6 +158,7 @@ impl State {
             ink_built: InkStamp::NEVER,
             ink_pages: Vec::new(),
             ui_built: None,
+            overview: overview::Shown::default(),
             overlay_buf: ink_layer::Overlays::default(),
             text_draws: Vec::new(),
             text_index: text_layer::TextIndex::default(),

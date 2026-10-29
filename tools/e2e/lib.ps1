@@ -47,7 +47,7 @@ public static class W {
 
 # ---- The app
 # Start the app on a blank document, or on a copy of the PDF `$Pdf` (a name in the scratch folder, or "pages3": a
-# three-page PDF made by the build's own generator), with the settings file `$Settings` and extra arguments.
+# three-page PDF made by the build's own generator, or "outline12": twelve pages with a table of contents), with the settings file `$Settings` and extra arguments.
 function Launch([string]$Settings = "", [string]$Pdf = "", [string[]]$AppArgs = @()) {
     Get-Process inkpdf -ErrorAction SilentlyContinue | Stop-Process -Force
     $env:APPDATA = Join-Path $script:sp "appdata"
@@ -58,6 +58,7 @@ function Launch([string]$Settings = "", [string]$Pdf = "", [string[]]$AppArgs = 
     if ($Pdf) {
         $script:file = Join-Path $script:sp "work-$Pdf.pdf"
         if ($Pdf -match "^pages(\d+)$") { & "$script:target\inkpdf-gen.exe" $script:file $Matches[1] | Out-Null }
+        elseif ($Pdf -match "^outline(\d+)$") { & "$script:target\inkpdf-gen.exe" $script:file $Matches[1] --outline | Out-Null }
         else { Copy-Item (Join-Path $script:sp $Pdf) $script:file -Force }
     }
     $script:appArgs = @($AppArgs)
@@ -97,8 +98,8 @@ function Type-Text([string]$s) {
     Start-Sleep -Milliseconds 150
 }
 function Keys([string]$k) { [System.Windows.Forms.SendKeys]::SendWait($k); Start-Sleep -Milliseconds 150 }
-# Toolbar buttons (window fractions, a maximised 4K window): close undo redo save | delete page, add page | pen shape text pointer | mode, fullscreen
-$script:btn = @{ close = 0.0152; undo = 0.0340; redo = 0.0488; save = 0.0637; del = 0.0824; plus = 0.0973; pen = 0.4777; shape = 0.4926; text = 0.5074; laser = 0.5223; mode = 0.9699; full = 0.9848 }
+# Toolbar buttons (window fractions, a maximised 4K window): close undo redo save | delete page, add page, pages overview | pen shape text pointer | mode, fullscreen
+$script:btn = @{ close = 0.0152; undo = 0.0340; redo = 0.0488; save = 0.0637; del = 0.0824; plus = 0.0973; pages = 0.1122; pen = 0.4777; shape = 0.4926; text = 0.5074; laser = 0.5223; mode = 0.9699; full = 0.9848 }
 function Press($name) { Click $script:btn[$name] 0.0285 }
 # The bar under the tools (same window): draw select erase | duplicate copy paste delete | five colours, settings
 $script:bar = @{ draw = 0.4147; select = 0.4296; erase = 0.4444; duplicate = 0.4632; copy = 0.4780; paste = 0.4929; delete = 0.5077; black = 0.5245; blue = 0.5355; red = 0.5465; green = 0.5575; orange = 0.5684; style = 0.5821; remove = 0.5022; add = 0.5171 }

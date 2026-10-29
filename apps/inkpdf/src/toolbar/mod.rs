@@ -9,6 +9,7 @@
 
 mod context_bar;
 mod icons;
+mod overview;
 mod prompt;
 mod theme;
 mod tool_panel;
@@ -24,8 +25,12 @@ use crate::tool::{PALETTE, Tool, width_range};
 
 pub use context_bar::{ContextBar, ContextItem, ContextState};
 use icons::icons;
+pub use overview::{
+    Action as OverviewAction, Control as OverviewControl, DragView, Hover as OverviewHover, MenuItem as OverviewMenuItem, OverviewLayout, OverviewView, TocHit, TocRow,
+    draw as draw_overview,
+};
 pub use prompt::{PromptLayout, PromptView};
-pub use theme::Ui;
+pub use theme::{Align, Image, Label, Ui};
 use theme::{ACCENT, ACCENT_WASH, HOVER_WASH, INK, INK_DIM, RIM, SEPARATOR};
 #[cfg(test)]
 pub use tool_panel::ToolPanel;
@@ -65,6 +70,8 @@ pub enum Item {
     DeletePage,
     /// Add a blank page after the one being looked at.
     AddPage,
+    /// Open the pages overview.
+    Pages,
     Tool(Tool),
     /// Switch between the desktop and the tablet mode (and show which it is).
     ModeSwitch,
@@ -111,14 +118,23 @@ impl Default for State {
 }
 
 /// What goes in each pill, left to right; `None` is a gap with a hairline in it.
-const LEFT: [Option<Item>; 8] =
-    [Some(Item::Close), None, Some(Item::Undo), Some(Item::Redo), Some(Item::Save), None, Some(Item::DeletePage), Some(Item::AddPage)];
+const LEFT: [Option<Item>; 9] = [
+    Some(Item::Close),
+    None,
+    Some(Item::Undo),
+    Some(Item::Redo),
+    Some(Item::Save),
+    None,
+    Some(Item::DeletePage),
+    Some(Item::AddPage),
+    Some(Item::Pages),
+];
 const MIDDLE: [Option<Item>; 4] =
     [Some(Item::Tool(Tool::Pen)), Some(Item::Tool(Tool::Geometry)), Some(Item::Tool(Tool::Text)), Some(Item::Tool(Tool::Laser))];
 const RIGHT: [Option<Item>; 2] = [Some(Item::ModeSwitch), Some(Item::Fullscreen)];
 
 /// Buttons in all.
-const BUTTONS: usize = 12;
+const BUTTONS: usize = 13;
 
 pub struct Toolbar {
     /// The three pills, `[x0, y0, x1, y1]` in pixels: left, middle, right.
@@ -134,9 +150,9 @@ impl Toolbar {
     /// Along the top of a viewport of `viewport` pixels, sized for `dpr`.
     pub fn layout(viewport: [f32; 2], dpr: f32) -> Toolbar {
         let (gap, pad, margin) = (10.0 * dpr, 8.0 * dpr, 12.0 * dpr);
-        // Shrink to fit narrow windows, never below something still tappable: the left pill (six
+        // Shrink to fit narrow windows, never below something still tappable: the left pill (seven
         // buttons and two gaps) and half the middle one must fit in half the window.
-        let unit = (38.0 * dpr).min(((viewport[0] / 2.0 - margin - 3.0 * pad - 3.0 * gap) / 8.0).max(20.0 * dpr));
+        let unit = (38.0 * dpr).min(((viewport[0] / 2.0 - margin - 3.0 * pad - 3.0 * gap) / 9.0).max(20.0 * dpr));
         let height = unit + 2.0 * pad;
         let width_of = |slots: &[Option<Item>]| slots.iter().map(|s| if s.is_some() { unit } else { gap }).sum::<f32>() + 2.0 * pad;
         let (left_w, middle_w, right_w) = (width_of(&LEFT), width_of(&MIDDLE), width_of(&RIGHT));
@@ -240,6 +256,7 @@ impl Toolbar {
                 Item::Close => icons.close.draw(&mut ui.lines, cx, cy, half, line, INK),
                 Item::DeletePage => icons.trash.draw(&mut ui.lines, cx, cy, half, line, ink(state.can_delete)),
                 Item::AddPage => icons.plus.draw(&mut ui.lines, cx, cy, half, line, INK),
+                Item::Pages => icons.pages.draw(&mut ui.lines, cx, cy, half, line, INK),
                 // The mode in use, drawn as the machine it is for; the tablet in the accent colour, as the one you chose
                 // to leave the desk for.
                 Item::ModeSwitch => match state.mode {

@@ -110,6 +110,9 @@ impl Editor {
         if self.chrome.prompt.is_some() {
             return false;
         }
+        if self.chrome.overview.is_some() {
+            return self.overview_key(key);
+        }
         let mode = self.mode;
         let tool = self.tools.get_mut(self.ws.tool);
         let used = tool.policy(mode).keyboard && tool.key(&mut self.ws, key);
@@ -150,6 +153,10 @@ impl Editor {
             return false;
         }
         let letter = key.to_ascii_lowercase();
+        // The overview takes the document's own shortcuts (undo, redo, save) and leaves the rest of them alone.
+        if self.chrome.overview.is_some() && !matches!((letter.as_str(), self.mode), ("z" | "y" | "s", Mode::Desktop)) {
+            return self.mode == Mode::Desktop && self.overview_shortcut(&letter);
+        }
         if self.is_typing()
             && let Some(c) = letter.chars().next().filter(|c| letter.len() == 1 && matches!(c, 'a' | 'c' | 'x' | 'v'))
         {

@@ -61,8 +61,16 @@ anchors that suit it (nodes, tangent handles, diagonals, bounding corners, axis 
 drawn by tapping: a tap adds a node, a double tap ends the stroke, a double tap near the first node closes
 it. A finger also follows links and, pulled past the last page, adds a blank page. The + button adds a page
 after the one you are looking at, and the bin button next to it deletes the one you are looking at, at once and
-without asking (the last page stays; it cannot be undone, and the file only loses it when you save). See
-[apps/inkpdf/installer/readme.txt](apps/inkpdf/installer/readme.txt) for the full user guide.
+without asking (the last page stays). Every change to the pages is a step of the history: undo brings a deleted page
+back with its ink and links, until the file is saved.
+
+The pages button (four small pages, at the end of the left toolbar) opens the **pages overview**: a card over the
+document with a picture of every page, ink and all, its number, and, if the PDF has an outline, its table of contents
+on the left (the section being read is lit; tap an entry to go there, its arrow to fold it). Tap a page to go to it.
+The check mark is edit mode: tap pages to choose them, then duplicate, move them earlier or later, or delete them from the
+bar under the pages; or drag a page (or all the chosen ones) to where it should go. The number under each page opens
+its menu (add a page before or after, duplicate, delete). Everything works with the mouse, the stylus tip or a finger,
+and each step undoes. See [apps/inkpdf/installer/readme.txt](apps/inkpdf/installer/readme.txt) for the full user guide.
 
 ## Install
 

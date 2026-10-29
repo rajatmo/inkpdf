@@ -259,7 +259,9 @@ fn leaving_the_tool_saving_or_adding_a_page_finishes_the_typing() {
             let save = ed.toolbar().centre_of(Item::Save);
             mouse_click_at(ed, save);
         }),
-        ("page", |ed| ed.page_inserted(Layout::new(&[[612.0, 792.0], [612.0, 792.0], [612.0, 792.0]]), 2)),
+        ("page", |ed| {
+            ed.edit_pages(crate::pages::PageEdit::Insert { at: 2, size: [612.0, 792.0] });
+        }),
         ("settle", |ed| ed.finish_text()),
     ];
     for (what, step) in steps {
@@ -377,7 +379,7 @@ fn text_survives_a_page_inserted_before_it() {
     let before = ed.ink.strokes()[0].pts[0];
     let layout = Layout::new(&[[612.0, 792.0], [612.0, 792.0], [612.0, 792.0]]);
     let shift = layout.page(2).map(|p| p.y).unwrap_or(0.0) - ed.layout.page(1).map(|p| p.y).unwrap_or(0.0);
-    ed.page_inserted(layout, 0);
+    assert!(ed.edit_pages(crate::pages::PageEdit::Insert { at: 0, size: [612.0, 792.0] }));
     let after = &ed.ink.strokes()[0];
     assert_eq!(after.page, 1);
     assert!((after.pts[0][1] - before[1] - shift).abs() < 0.01, "{before:?} {:?}", after.pts[0]);

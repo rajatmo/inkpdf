@@ -1,5 +1,6 @@
 //! An open PDF: its page layout, the pool that renders its tiles, and saving.
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -12,6 +13,8 @@ use crate::coords::PageGeom;
 use crate::ink::{InkStore, PageStroke};
 use crate::ink_io;
 use crate::links::Link;
+use crate::outline::OutlineItem;
+use crate::pages::PageEdit;
 use crate::tiles::{self, Key};
 use crate::view::Layout;
 
@@ -30,6 +33,15 @@ struct Slot {
     render: Option<usize>,
     /// Which page of the file as last saved it is; `None` for a page that was added since.
     file: Option<usize>,
+    /// For a page that is a copy of one: which page of the file as last saved it is a copy of (so that saving can make
+    /// the copy from it); `None` for a page that is not a copy.
+    dup_of: Option<usize>,
+}
+
+/// A page that was deleted, kept until the deletion can no longer be undone.
+struct Buried {
+    slot: Slot,
+    geom: PageGeom,
 }
 
 pub struct Doc {
@@ -39,9 +51,10 @@ pub struct Doc {
     /// Displayed size of each page in points.
     pub sizes: Vec<[f32; 2]>,
     pub geoms: Vec<PageGeom>,
-    pub layout: Layout,
-    /// Links on the pages, in document space.
-    pub links: Vec<Link>,
+    /// Links on the pages as the file had them, in document space, for the editor to take (see [`Doc::take_links`]).
+    links: Vec<Link>,
+    /// The table of contents as the file had it, for the editor to take (see [`Doc::take_outline`]).
+    outline: Vec<OutlineItem>,
     pub open_millis: u128,
     /// The file as last read or saved: saving appends to it.
     base: Arc<Vec<u8>>,
@@ -52,10 +65,12 @@ pub struct Doc {
     /// deleted are those of these with no slot (pages beyond what the app can show are neither shown nor
     /// deleted).
     file_pages: usize,
-    /// What the renderer was given: the file without our ink annotations.
-    render_bytes: Arc<Vec<u8>>,
+    /// The size of each page of the file the renderer has, in points (what its pictures are made for).
+    render_sizes: Vec<[f32; 2]>,
     pool: RenderPool,
     queued: Vec<RenderRequest>,
+    /// The pages deleted since the file was last written, each deletion under the name the editor gave it.
+    graves: HashMap<u64, Vec<Buried>>,
 }
 
 impl Doc {
@@ -86,30 +101,35 @@ impl Doc {
         let geoms: Vec<PageGeom> = pages.map(PageGeom::from_info).collect();
         let layout = Layout::new(&sizes);
         // A file this app inked earlier shows that ink from the ink layer, not the page raster.
-        let (strokes, links, render_bytes) = match ink_io::load(&bytes, &geoms, &layout) {
-            Ok(l) => (l.strokes, l.links, l.render_bytes),
+        let (strokes, mut links, mut outline, render_bytes) = match ink_io::load(&bytes, &geoms, &layout) {
+            Ok(l) => (l.strokes, l.links, l.outline, l.render_bytes),
             Err(e) => {
                 eprintln!("could not read earlier ink: {e}");
-                (Vec::new(), Vec::new(), bytes.clone())
+                (Vec::new(), Vec::new(), Vec::new(), bytes.clone())
             }
         };
+        // (In a damaged file the outline and the links can name pages the renderer does not show.)
+        crate::outline::limit_to(&mut outline, sizes.len());
+        crate::links::limit_to(&mut links, sizes.len());
         let pool = RenderPool::new(render_bytes.clone(), render_threads(), RenderConfig::default());
-        let slots = (0..sizes.len()).map(|i| Slot { render: Some(i), file: Some(i) }).collect();
+        let sizes_of_file = sizes.clone();
+        let slots = (0..sizes.len()).map(|i| Slot { render: Some(i), file: Some(i), dup_of: None }).collect();
         let file_pages = sizes.len();
         let doc = Doc {
             path,
             name,
             sizes,
             geoms,
-            layout,
             links,
+            outline,
             open_millis: started.elapsed().as_millis(),
             base: bytes,
             slots,
             file_pages,
-            render_bytes,
+            render_sizes: sizes_of_file,
             pool,
             queued: Vec::new(),
+            graves: HashMap::new(),
         };
         Ok((doc, strokes))
     }
@@ -118,96 +138,93 @@ impl Doc {
         self.sizes.len()
     }
 
+    #[cfg(test)]
     pub fn page_size(&self, page: u32) -> [f32; 2] {
         self.sizes.get(page as usize).copied().unwrap_or(BLANK_PAGE)
     }
 
-    /// Add a blank page after the last one, the same size as it (see [`Doc::insert_blank_page`]).
+    /// Where each page is laid out, as the editor lays it out.
+    pub fn layout(&self) -> Layout {
+        Layout::new(&self.sizes)
+    }
+
+    /// The links the file had, for the editor, which keeps them from then on.
+    pub fn take_links(&mut self) -> Vec<Link> {
+        std::mem::take(&mut self.links)
+    }
+
+    /// The table of contents the file had, for the editor, which keeps it from then on.
+    pub fn take_outline(&mut self) -> Vec<OutlineItem> {
+        std::mem::take(&mut self.outline)
+    }
+
+    /// Add a blank page after the last one, the same size as it.
     #[cfg(test)]
     pub fn add_blank_page(&mut self) -> Option<usize> {
-        let last = self.sizes.len().saturating_sub(1);
-        self.insert_blank_page(self.sizes.len(), last)
+        let size = self.sizes.last().copied().unwrap_or(BLANK_PAGE);
+        let at = self.sizes.len();
+        self.apply(&PageEdit::Insert { at, size }).then_some(at)
     }
 
-    /// Insert a blank page so that it becomes page `at` (0 to the page count), the same size as page
-    /// `like`. Returns its index, or `None` when the document cannot have more pages. The pages
-    /// from `at` on move down one, and so do their links; it is written when the document is saved.
-    pub fn insert_blank_page(&mut self, at: usize, like: usize) -> Option<usize> {
-        if self.sizes.len() >= tiles::MAX_PAGES || at > self.sizes.len() {
-            return None;
-        }
-        let size = self.sizes.get(like).or(self.sizes.last()).copied().unwrap_or(BLANK_PAGE);
-        let old_count = self.sizes.len();
-        self.sizes.insert(at, size);
-        self.geoms.insert(at, PageGeom { width: size[0], height: size[1], crop: [0.0, 0.0, size[0], size[1]], rotation: 0 });
-        self.slots.insert(at, Slot { render: None, file: None });
-        let old = std::mem::replace(&mut self.layout, Layout::new(&self.sizes));
-        if at < old_count {
-            self.shift_links(&old, at);
-            // Every page from here on has a new number: what the renderer was doing is out of date.
-            self.pool = RenderPool::new(self.render_bytes.clone(), render_threads(), RenderConfig::default());
-            self.queued.clear();
-        }
-        Some(at)
-    }
-
-    /// Carry the links along with the pages that moved when a page was inserted at `at`: each link
-    /// keeps its place on its page, and a link to a page from `at` on points to its new number.
-    fn shift_links(&mut self, old: &Layout, at: usize) {
-        let renumber = |p: usize| if p >= at { p + 1 } else { p };
-        for link in &mut self.links {
-            let from = old.page_at((link.rect[1] + link.rect[3]) / 2.0);
-            if let (Some(was), Some(now)) = (old.page(from), self.layout.page(renumber(from))) {
-                let (dx, dy) = (now.x - was.x, now.y - was.y);
-                link.rect = [link.rect[0] + dx, link.rect[1] + dy, link.rect[2] + dx, link.rect[3] + dy];
-            }
-            if let crate::links::Target::Page(p) = &mut link.target {
-                *p = renumber(*p);
-            }
+    /// The pages kept for these deletions can go: the deletions can no longer be undone.
+    pub fn forget_graves(&mut self, graves: &[u64]) {
+        for grave in graves {
+            self.graves.remove(grave);
         }
     }
 
-    /// Delete page `at`. `false`, and nothing done, if there is no such page or it is the only one (a document
-    /// has at least one). The pages after it move up, and so do their links; the links on it, and the links to
-    /// it, go. The file only loses the page when the document is saved.
-    pub fn delete_page(&mut self, at: usize) -> bool {
-        if self.sizes.len() <= 1 || at >= self.sizes.len() {
+    /// Do an edit of the pages (see [`PageEdit`]): the page table follows, and the file is changed when the document is
+    /// saved. `false`, and nothing done, if the edit cannot be done to this document, or puts back pages that are no
+    /// longer kept. The editor does the same edit to everything it keeps by page.
+    pub fn apply(&mut self, edit: &PageEdit) -> bool {
+        let count = self.sizes.len();
+        if edit.order(count).is_none() {
             return false;
         }
-        self.sizes.remove(at);
-        self.geoms.remove(at);
-        self.slots.remove(at);
-        let old = std::mem::replace(&mut self.layout, Layout::new(&self.sizes));
-        self.drop_links_of(&old, at);
-        // Every page from here on has a new number: what the renderer was doing is out of date.
-        self.pool = RenderPool::new(self.render_bytes.clone(), render_threads(), RenderConfig::default());
-        self.queued.clear();
-        true
-    }
-
-    /// Carry the links along with the pages that moved up when page `at` was deleted: each link keeps its place
-    /// on its page, and a link to a page after it points to its new number. A link on the deleted page, or to
-    /// it, has nothing left to be.
-    fn drop_links_of(&mut self, old: &Layout, at: usize) {
-        let now = &self.layout;
-        self.links.retain_mut(|link| {
-            let from = old.page_at((link.rect[1] + link.rect[3]) / 2.0);
-            if from == at || matches!(link.target, crate::links::Target::Page(p) if p == at) {
-                return false;
+        let mut raised: Vec<Buried> = Vec::new();
+        match edit {
+            PageEdit::Restore { grave, pages } => match self.graves.remove(grave) {
+                Some(found) if found.len() == pages.len() => raised = found,
+                Some(found) => {
+                    self.graves.insert(*grave, found);
+                    return false;
+                }
+                None => return false,
+            },
+            PageEdit::Delete { pages, grave } if *grave != 0 => {
+                let mut gone = pages.clone();
+                gone.sort_unstable();
+                gone.dedup();
+                let kept = gone.iter().map(|&p| Buried { slot: self.slots[p], geom: self.geoms[p] }).collect();
+                self.graves.insert(*grave, kept);
             }
-            if from > at
-                && let (Some(was), Some(to)) = (old.page(from), now.page(from - 1))
-            {
-                let (dx, dy) = (to.x - was.x, to.y - was.y);
-                link.rect = [link.rect[0] + dx, link.rect[1] + dy, link.rect[2] + dx, link.rect[3] + dy];
+            _ => {}
+        }
+        let news = edit.new_page_sizes();
+        let blank_size = {
+            let mut next = news.into_iter();
+            move || next.next().unwrap_or(BLANK_PAGE)
+        };
+        let mut sizes = blank_size.clone();
+        edit.apply_with(&mut self.sizes, |source| source.copied().unwrap_or_else(&mut sizes));
+        let mut back = raised.iter().map(|b| b.geom);
+        let mut sizes = blank_size;
+        edit.apply_with(&mut self.geoms, |source| match (source, back.next()) {
+            (Some(geom), _) => *geom,
+            (None, Some(geom)) => geom,
+            (None, None) => {
+                let size = sizes();
+                PageGeom { width: size[0], height: size[1], crop: [0.0, 0.0, size[0], size[1]], rotation: 0 }
             }
-            if let crate::links::Target::Page(p) = &mut link.target
-                && *p > at
-            {
-                *p -= 1;
-            }
-            true
         });
+        let mut back = raised.iter().map(|b| b.slot);
+        edit.apply_with(&mut self.slots, |source| match (source, back.next()) {
+            // A copy draws from the page it copies, and is made from the file's page when the file is written.
+            (Some(slot), _) => Slot { render: slot.render, file: None, dup_of: slot.file.or(slot.dup_of) },
+            (None, Some(slot)) => slot,
+            (None, None) => Slot { render: None, file: None, dup_of: None },
+        });
+        true
     }
 
     /// For each page of the file as last saved, which page of the document it is now (`None`: it was deleted).
@@ -221,21 +238,26 @@ impl Doc {
         map
     }
 
-    /// Whether the renderer has something to draw for `key`: not for a page that was added.
-    pub fn renders(&self, key: Key) -> bool {
-        self.slots.get(key.page() as usize).is_some_and(|s| s.render.is_some())
+    /// The page of the file the renderer has that draws page `page` of the document, if there is one (not for a page that
+    /// was added). A picture is kept under this number, not the page's own: it stays the right one when pages are moved,
+    /// deleted, copied or brought back, and a copy shares its original's.
+    pub fn render_page(&self, page: usize) -> Option<u32> {
+        self.slots.get(page).and_then(|s| s.render).map(|r| r as u32)
     }
 
-    /// Replace the work the pool is doing with exactly `keys`, most urgent first. Unchanged
-    /// requests keep running. Keys for pages that are blank are ignored.
+    /// Whether the renderer has a page for `key` (whose page is one of the file's, see [`Doc::render_page`]).
+    pub fn renders(&self, key: Key) -> bool {
+        (key.page() as usize) < self.render_sizes.len()
+    }
+
+    /// Replace the work the pool is doing with exactly `keys` (pages of the file, see [`Doc::render_page`]), most urgent
+    /// first. Unchanged requests keep running, through any change of the pages.
     pub fn set_queue(&mut self, keys: &[Key]) {
         let requests: Vec<RenderRequest> = keys
             .iter()
             .filter_map(|&k| {
-                // The request is tagged with the page's place in the document, and asks the
-                // renderer for the page that draws it.
-                let render = self.slots.get(k.page() as usize)?.render?;
-                Some(RenderRequest { page: render, ..tiles::request(k, self.page_size(k.page())) })
+                let size = self.render_sizes.get(k.page() as usize)?;
+                Some(RenderRequest { page: k.page() as usize, ..tiles::request(k, *size) })
             })
             .collect();
         if requests != self.queued {
@@ -266,9 +288,8 @@ impl Doc {
     /// The new file is written beside the old one and swapped in, so a failure part-way leaves the
     /// original as it was.
     fn write_to(&mut self, path: &Path, store: &InkStore) -> Result<(), String> {
-        let inserts: Vec<(usize, [f32; 2])> =
-            self.slots.iter().enumerate().filter(|(_, s)| s.file.is_none()).map(|(i, _)| (i, self.sizes[i])).collect();
-        let bytes = ink_io::save(&self.base, store, &self.geoms, &self.layout, store.dirty_pages(), &inserts, &self.doc_of_file())?;
+        let copies: Vec<(usize, usize)> = self.slots.iter().enumerate().filter_map(|(page, s)| s.dup_of.filter(|_| s.file.is_none()).map(|from| (page, from))).collect();
+        let bytes = ink_io::save(&self.base, store, &self.geoms, &self.layout(), store.dirty_pages(), &self.doc_of_file(), &copies)?;
         let dir = path.parent().filter(|d| !d.as_os_str().is_empty()).map_or_else(|| PathBuf::from("."), Path::to_path_buf);
         let file = path.file_name().map_or_else(|| "document.pdf".into(), |n| n.to_string_lossy().into_owned());
         let tmp = dir.join(format!(".{file}.inkpdf-saving"));
@@ -279,8 +300,10 @@ impl Doc {
         }
         self.base = Arc::new(bytes);
         // The file now has exactly these pages, in this order.
-        self.slots.iter_mut().enumerate().for_each(|(i, s)| s.file = Some(i));
+        self.slots.iter_mut().enumerate().for_each(|(i, s)| (s.file, s.dup_of) = (Some(i), None));
         self.file_pages = self.slots.len();
+        // The deleted pages are out of the file: they cannot come back.
+        self.graves.clear();
         Ok(())
     }
 }
@@ -293,6 +316,7 @@ fn render_threads() -> usize {
 mod tests {
     use super::*;
     use crate::ink::Style;
+    use crate::pages::Remap;
     use crate::testutil::sample_pdf;
 
     const RED: Style = Style { rgba: [255, 0, 0, 255], width: 2.0 };
@@ -313,7 +337,7 @@ mod tests {
         assert!(strokes.is_empty());
 
         let mut store = InkStore::new();
-        let o = doc.layout.page(0).expect("page");
+        let o = doc.layout().page(0).expect("page");
         store.add(0, RED, vec![[o.x + 100.0, o.y + 100.0], [o.x + 200.0, o.y + 150.0], [o.x + 300.0, o.y + 100.0]]);
         doc.save(&store).expect("save");
         store.mark_clean();
@@ -381,11 +405,11 @@ mod tests {
 
     #[test]
     fn a_blank_document_is_one_empty_page_with_no_file() {
-        let doc = Doc::blank(BLANK_PAGE).expect("blank");
+        let mut doc = Doc::blank(BLANK_PAGE).expect("blank");
         assert_eq!(doc.page_count(), 1);
         assert_eq!(doc.page_size(0), [595.0, 842.0], "A4");
         assert_eq!((doc.path.as_ref(), doc.name.as_str()), (None, UNTITLED));
-        assert!(doc.links.is_empty());
+        assert!(doc.take_links().is_empty());
     }
 
     #[test]
@@ -393,7 +417,7 @@ mod tests {
         let dir = temp_dir("saveas");
         let mut doc = Doc::blank(BLANK_PAGE).expect("blank");
         let mut store = InkStore::new();
-        let page = doc.layout.page(0).expect("page");
+        let page = doc.layout().page(0).expect("page");
         store.add(0, RED, vec![[page.x + 50.0, page.y + 50.0], [page.x + 120.0, page.y + 90.0]]);
         assert!(doc.save(&store).is_err(), "there is nowhere to write it yet");
 
@@ -426,7 +450,7 @@ mod tests {
         let mut store = InkStore::new();
         store.mark_dirty(1);
         store.mark_dirty(2);
-        let page = doc.layout.page(2).expect("page");
+        let page = doc.layout().page(2).expect("page");
         store.add(2, RED, vec![[page.x + 40.0, page.y + 40.0], [page.x + 140.0, page.y + 60.0]]);
         doc.save(&store).expect("save");
 
@@ -472,8 +496,8 @@ mod tests {
         let dir = temp_dir("links");
         let path = dir.join("links.pdf");
         fs::write(&path, crate::testutil::pdf_with_links()).expect("write");
-        let (doc, _) = Doc::open(&path).expect("open");
-        assert_eq!(doc.links.len(), 4);
+        let (mut doc, _) = Doc::open(&path).expect("open");
+        assert_eq!(doc.take_links().len(), 4);
         let _ = fs::remove_dir_all(dir);
     }
     #[test]
@@ -493,37 +517,34 @@ mod tests {
         let (mut doc, _) = Doc::open(&path).expect("open");
         let n = doc.page_count();
         assert!(n >= 2, "the sample has more than one page");
-        let before: Vec<_> = doc.links.iter().map(|l| l.target.clone()).collect();
+        let mut links = doc.take_links();
+        let was = doc.layout();
         let last = (n - 1) as u32;
         let mut store = InkStore::new();
-        let at = doc.layout.page(n - 1).expect("page");
+        let at = doc.layout().page(n - 1).expect("page");
         store.add(last, RED, vec![[at.x + 30.0, at.y + 40.0], [at.x + 90.0, at.y + 70.0]]);
         store.mark_clean();
         store.add(last, RED, vec![[at.x + 30.0, at.y + 100.0], [at.x + 90.0, at.y + 130.0]]);
 
         // Insert a page after the first, the size of the first.
-        let old_y = doc.layout.page(1).expect("page").y;
-        assert_eq!(doc.insert_blank_page(1, 0), Some(1));
+        insert(&mut doc, &mut store, 1, 0);
         assert_eq!(doc.page_count(), n + 1);
         assert_eq!(doc.page_size(1), doc.page_size(0));
-        store.insert_page_at(1, doc.layout.page(2).expect("page").y - old_y);
-        store.mark_dirty(1);
-        // Links to a page from the new one on point at its new number.
-        for (now, was) in doc.links.iter().zip(&before) {
-            if let crate::links::Target::Page(p) = was {
-                assert_eq!(now.target, crate::links::Target::Page(if *p >= 1 { p + 1 } else { *p }));
-            }
-        }
+        // The editor carries the links the same way: each keeps its place on its page, and links to a page from the new one on
+        // point at its new number.
+        let edit = PageEdit::Insert { at: 1, size: doc.page_size(0) };
+        crate::links::remap(&mut links, &was, &Remap::new(&edit, &was, &doc.layout()).expect("remap"));
         doc.save(&store).expect("save");
 
-        let (reopened, strokes) = Doc::open(&path).expect("reopen");
+        let (mut reopened, strokes) = Doc::open(&path).expect("reopen");
         assert_eq!(reopened.page_count(), n + 1, "the page is in the file");
         assert_eq!(reopened.page_size(1), doc.page_size(1));
         assert_eq!(strokes.len(), 2, "both strokes came back");
         assert!(strokes.iter().all(|s| s.0 == last + 1), "on the page they were on, which is one further on");
-        // The links as read from the new file are where the shifted ones were.
-        assert_eq!(reopened.links.len(), doc.links.len());
-        for (a, b) in reopened.links.iter().zip(&doc.links) {
+        // The links as read from the new file are where the carried ones are.
+        let from_file = reopened.take_links();
+        assert_eq!(from_file.len(), links.len());
+        for (a, b) in from_file.iter().zip(&links) {
             assert_eq!(a.target, b.target);
             assert!(a.rect.iter().zip(&b.rect).all(|(x, y)| (x - y).abs() < 0.5), "{:?} vs {:?}", a.rect, b.rect);
         }
@@ -541,16 +562,13 @@ mod tests {
         let (mut doc, _) = Doc::open(&path).expect("open");
         let last = (doc.page_count() - 1) as u32;
         let mut store = InkStore::new();
-        let at = doc.layout.page(last as usize).expect("page");
+        let at = doc.layout().page(last as usize).expect("page");
         store.add(last, RED, vec![[at.x + 30.0, at.y + 40.0], [at.x + 90.0, at.y + 70.0]]);
         doc.save(&store).expect("first save");
         store.mark_clean();
         // Now a page in front of it, and a second stroke on the page that moved.
-        let old_y = doc.layout.page(1).expect("page").y;
-        doc.insert_blank_page(1, 0).expect("insert");
-        store.insert_page_at(1, doc.layout.page(2).expect("page").y - old_y);
-        store.mark_dirty(1);
-        let moved = doc.layout.page(last as usize + 1).expect("page");
+        insert(&mut doc, &mut store, 1, 0);
+        let moved = doc.layout().page(last as usize + 1).expect("page");
         store.add(last + 1, RED, vec![[moved.x + 30.0, moved.y + 200.0], [moved.x + 90.0, moved.y + 230.0]]);
         doc.save(&store).expect("second save");
         let (_, strokes) = Doc::open(&path).expect("reopen");
@@ -560,13 +578,27 @@ mod tests {
     }
 
     #[test]
+    fn a_renders_in_flight_survive_any_change_of_the_pages_and_pictures_keep_their_names() {
+        let (mut doc, mut store, path) = open_pages("pictures-follow", 4);
+        let before: Vec<Option<u32>> = (0..4).map(|p| doc.render_page(p)).collect();
+        edit(&mut doc, &mut store, PageEdit::Move { pages: vec![3], to: 0 });
+        assert_eq!((0..4).map(|p| doc.render_page(p)).collect::<Vec<_>>(), [before[3], before[0], before[1], before[2]], "a moved page keeps what draws it");
+        edit(&mut doc, &mut store, PageEdit::Delete { pages: vec![1], grave: 4 });
+        edit(&mut doc, &mut store, PageEdit::Duplicate { pages: vec![0] });
+        assert_eq!((0..4).map(|p| doc.render_page(p)).collect::<Vec<_>>(), [before[3], before[3], before[1], before[2]]);
+        assert!(undo(&mut doc, &mut store) && undo(&mut doc, &mut store));
+        assert_eq!((0..4).map(|p| doc.render_page(p)).collect::<Vec<_>>(), [before[3], before[0], before[1], before[2]]);
+        let _ = fs::remove_dir_all(path.parent().expect("dir"));
+    }
+
+    #[test]
     fn after_an_insertion_pages_render_from_the_pages_of_the_file_they_came_from() {
         let path = temp_pdf("render-map");
         let (mut doc, _) = Doc::open(&path).expect("open");
-        assert_eq!(doc.insert_blank_page(0, 0), Some(0), "in front of the only page");
-        assert!(!doc.renders(Key::Preview { page: 0 }), "the new page is blank");
-        assert!(doc.renders(Key::Preview { page: 1 }), "the page that was first is second now");
-        doc.set_queue(&[Key::Preview { page: 0 }, Key::Preview { page: 1 }]);
+        assert!(doc.apply(&PageEdit::Insert { at: 0, size: doc.page_size(0) }), "in front of the only page");
+        assert_eq!(doc.render_page(0), None, "the new page is blank");
+        assert_eq!(doc.render_page(1), Some(0), "the page that was first is second now, and is drawn from the file's first");
+        doc.set_queue(&[Key::Preview { page: 0 }]);
         let started = Instant::now();
         let rendered = loop {
             if let Some(page) = doc.try_recv() {
@@ -575,7 +607,7 @@ mod tests {
             assert!(started.elapsed().as_secs() < 20, "the page was never rendered");
             std::thread::sleep(std::time::Duration::from_millis(5));
         };
-        assert_eq!(Key::from_tag(rendered.request.tag), Key::Preview { page: 1 }, "it is tagged with where the page is now");
+        assert_eq!(Key::from_tag(rendered.request.tag), Key::Preview { page: 0 }, "it is tagged with the page of the file, which no change of the pages alters");
         assert_eq!(rendered.request.page, 0, "and was drawn from the file's first page");
         assert!(rendered.error.is_none());
         let _ = fs::remove_dir_all(path.parent().expect("dir"));
@@ -597,23 +629,36 @@ mod tests {
         (doc, InkStore::new(), path)
     }
 
+    /// Do an edit of the pages as the editor does: the document and the ink, with its history, both follow.
+    fn edit(doc: &mut Doc, store: &mut InkStore, edit: PageEdit) {
+        let before = doc.layout();
+        let after = before.edited(&edit).expect("layout");
+        let undo = edit.inverse(&before).expect("inverse");
+        let forward = Remap::new(&edit, &before, &after).expect("remap");
+        let backward = Remap::new(&undo, &after, &before).expect("remap back");
+        assert!(doc.apply(&edit), "{edit:?} is done to the document");
+        store.edit_pages(edit, undo, forward, backward);
+    }
+
+    /// A blank page as page `at`, as big as page `like`.
+    fn insert(doc: &mut Doc, store: &mut InkStore, at: usize, like: usize) {
+        let size = doc.page_size(like as u32);
+        edit(doc, store, PageEdit::Insert { at, size });
+    }
+
     fn widths(doc: &Doc) -> Vec<f32> {
         (0..doc.page_count()).map(|p| doc.page_size(p as u32)[0]).collect()
     }
 
     /// A stroke on `page`, as the document lays it out now.
     fn scribble(doc: &Doc, store: &mut InkStore, page: usize) {
-        let at = doc.layout.page(page).expect("page");
+        let at = doc.layout().page(page).expect("page");
         store.add(page as u32, RED, vec![[at.x + 30.0, at.y + 40.0], [at.x + 90.0, at.y + 70.0]]);
     }
 
     /// Delete page `at` the way the editor does, with the ink following.
     fn delete(doc: &mut Doc, store: &mut InkStore, at: usize) {
-        let was = doc.layout.page(at + 1).map(|p| p.y);
-        assert!(doc.delete_page(at), "page {at} is deleted");
-        let dy = was.zip(doc.layout.page(at)).map_or(0.0, |(was, now)| now.y - was);
-        store.delete_page_at(at as u32, dy);
-        store.mark_dirty(at.min(doc.page_count() - 1) as u32);
+        edit(doc, store, PageEdit::delete(at));
     }
 
     #[test]
@@ -635,7 +680,7 @@ mod tests {
         assert_eq!(on, vec![0, 1, 2], "the deleted page's ink went with it, the rest stayed on its own page, once each");
         // The strokes are where they were on their pages (the pages moved, the ink moved with them).
         for (page, _, pts, _, _) in &strokes {
-            let r = reopened.layout.page(*page as usize).expect("page");
+            let r = reopened.layout().page(*page as usize).expect("page");
             assert!((pts[0][0] - r.x - 30.0).abs() < 0.5 && (pts[0][1] - r.y - 40.0).abs() < 0.5, "{pts:?} on page {page}");
         }
         // Saving again changes nothing: the file's own numbering was reset by the save.
@@ -650,8 +695,8 @@ mod tests {
         delete(&mut doc, &mut store, 0);
         delete(&mut doc, &mut store, 1);
         assert_eq!(widths(&doc), vec![610.0]);
-        assert!(!doc.delete_page(0), "a document keeps at least one page");
-        assert!(!doc.delete_page(5), "and there is no page 5");
+        assert!(!doc.apply(&PageEdit::delete(0)), "a document keeps at least one page");
+        assert!(!doc.apply(&PageEdit::delete(5)), "and there is no page 5");
         doc.save(&store).expect("save");
         assert_eq!(widths(&Doc::open(&path).expect("reopen").0), vec![610.0], "the middle page is what is left");
         let _ = fs::remove_dir_all(path.parent().expect("dir"));
@@ -661,10 +706,7 @@ mod tests {
     fn pages_added_and_pages_deleted_in_one_session_come_out_right_together() {
         let (mut doc, mut store, path) = open_pages("delete-and-add", 3);
         // [600, 610, 620] -> add a copy of page 0 after it -> delete the original second page.
-        assert_eq!(doc.insert_blank_page(1, 0), Some(1));
-        let old_y = doc.layout.page(2).expect("page").y;
-        let _ = old_y;
-        store.mark_dirty(1);
+        insert(&mut doc, &mut store, 1, 0);
         assert_eq!(widths(&doc), vec![600.0, 600.0, 610.0, 620.0]);
         delete(&mut doc, &mut store, 2);
         assert_eq!(widths(&doc), vec![600.0, 600.0, 620.0]);
@@ -676,7 +718,7 @@ mod tests {
     #[test]
     fn deleting_a_page_that_was_only_added_leaves_the_file_as_it_was() {
         let (mut doc, mut store, path) = open_pages("delete-added", 2);
-        assert_eq!(doc.insert_blank_page(1, 0), Some(1));
+        insert(&mut doc, &mut store, 1, 0);
         delete(&mut doc, &mut store, 1);
         doc.save(&store).expect("save");
         assert_eq!(widths(&Doc::open(&path).expect("reopen").0), vec![600.0, 610.0]);
@@ -688,8 +730,7 @@ mod tests {
         let dir = temp_dir("delete-all-original");
         let mut doc = Doc::blank([600.0, 800.0]).expect("blank");
         let mut store = InkStore::new();
-        doc.add_blank_page().expect("add");
-        store.mark_dirty(1);
+        insert(&mut doc, &mut store, 1, 0);
         delete(&mut doc, &mut store, 0);
         assert_eq!(doc.page_count(), 1);
         scribble(&doc, &mut store, 0);
@@ -705,8 +746,8 @@ mod tests {
     fn pages_render_from_the_file_page_they_came_from_after_one_before_them_is_deleted() {
         let (mut doc, mut store, path) = open_pages("delete-render", 3);
         delete(&mut doc, &mut store, 0);
-        assert!(doc.renders(Key::Preview { page: 0 }) && doc.renders(Key::Preview { page: 1 }));
-        doc.set_queue(&[Key::Preview { page: 1 }]);
+        assert_eq!((doc.render_page(0), doc.render_page(1)), (Some(1), Some(2)), "the pages that moved up are drawn from the pages they came from");
+        doc.set_queue(&[Key::Preview { page: 2 }]);
         let started = Instant::now();
         let rendered = loop {
             if let Some(page) = doc.try_recv() {
@@ -715,7 +756,7 @@ mod tests {
             assert!(started.elapsed().as_secs() < 20, "the page was never rendered");
             std::thread::sleep(std::time::Duration::from_millis(5));
         };
-        assert_eq!(Key::from_tag(rendered.request.tag), Key::Preview { page: 1 }, "tagged with where the page is now");
+        assert_eq!(Key::from_tag(rendered.request.tag), Key::Preview { page: 2 }, "tagged with the page of the file");
         assert_eq!(rendered.request.page, 2, "and drawn from the file's third page");
         let _ = fs::remove_dir_all(path.parent().expect("dir"));
     }
@@ -725,18 +766,241 @@ mod tests {
         let dir = temp_dir("delete-links");
         let path = dir.join("links.pdf");
         fs::write(&path, crate::testutil::pdf_with_links()).expect("write");
-        let (mut doc, _) = Doc::open(&path).expect("open");
-        let on_deleted_page = doc.links.len();
-        assert!(on_deleted_page > 0);
+        // The links go through the edit as the editor carries them.
+        let through = |page: usize| {
+            let (mut doc, _) = Doc::open(&path).expect("open");
+            let mut links = doc.take_links();
+            let before = doc.layout();
+            let edit = PageEdit::delete(page);
+            assert!(doc.apply(&edit));
+            crate::links::remap(&mut links, &before, &Remap::new(&edit, &before, &doc.layout()).expect("remap"));
+            (links, doc.page_count())
+        };
+        let all = Doc::open(&path).expect("open").0.take_links().len();
+        assert!(all > 0);
         // The sample's links are all on its first page; delete the second and they stay (those that went to it go).
-        let to_second = doc.links.iter().filter(|l| l.target == crate::links::Target::Page(1)).count();
-        assert!(doc.delete_page(1));
-        assert_eq!(doc.links.len(), on_deleted_page - to_second, "the links that went to the deleted page are gone");
-        assert!(doc.links.iter().all(|l| !matches!(l.target, crate::links::Target::Page(p) if p >= doc.page_count())));
+        let to_second = Doc::open(&path).expect("open").0.take_links().iter().filter(|l| l.target == crate::links::Target::Page(1)).count();
+        let (links, pages) = through(1);
+        assert_eq!(links.len(), all - to_second, "the links that went to the deleted page are gone");
+        assert!(links.iter().all(|l| !matches!(l.target, crate::links::Target::Page(p) if p >= pages)));
         // Delete the first page: its links go with it, and no link is left pointing nowhere.
-        let mut one_more = Doc::open(&path).expect("open again").0;
-        assert!(one_more.delete_page(0));
-        assert!(one_more.links.iter().all(|l| !matches!(l.target, crate::links::Target::Page(p) if p >= one_more.page_count())));
+        let (links, pages) = through(0);
+        assert!(links.iter().all(|l| !matches!(l.target, crate::links::Target::Page(p) if p >= pages)));
         let _ = fs::remove_dir_all(dir);
+    }
+
+    /// Undo the last step of the history the way the editor and the shell do: the ink follows inside the step, and the
+    /// document is told what happened to the pages.
+    fn undo(doc: &mut Doc, store: &mut InkStore) -> bool {
+        let done = store.undo();
+        if let Some(edit) = store.take_page_edit() {
+            assert!(doc.apply(&edit), "the document follows the undoing: {edit:?}");
+        }
+        done
+    }
+
+    fn redo(doc: &mut Doc, store: &mut InkStore) -> bool {
+        let done = store.redo();
+        if let Some(edit) = store.take_page_edit() {
+            assert!(doc.apply(&edit), "the document follows the redoing: {edit:?}");
+        }
+        done
+    }
+
+    /// The first point of each stroke in the file at `path`, with its page, to the tenth of a point, sorted.
+    fn where_the_ink_is(path: &Path) -> Vec<(u32, i64, i64)> {
+        let (_, strokes) = Doc::open(path).expect("reopen");
+        let mut found: Vec<_> = strokes.iter().map(|(page, _, pts, ..)| (*page, (pts[0][0] * 10.0).round() as i64, (pts[0][1] * 10.0).round() as i64)).collect();
+        found.sort_unstable();
+        found
+    }
+
+    /// What `where_the_ink_is` should say for the strokes `store` holds, with the pages as `doc` has them: the file
+    /// keeps a stroke in its page's own space and the reader turns it back into the document's, so the same points.
+    fn where_the_ink_should_be(store: &InkStore) -> Vec<(u32, i64, i64)> {
+        let mut found: Vec<_> = store.strokes().iter().map(|s| (s.page, (s.pts[0][0] * 10.0).round() as i64, (s.pts[0][1] * 10.0).round() as i64)).collect();
+        found.sort_unstable();
+        found
+    }
+
+    #[test]
+    fn pages_moved_are_saved_in_their_new_order_and_their_ink_stays_with_them() {
+        let (mut doc, mut store, path) = open_pages("move-pages", 5);
+        for page in 0..5 {
+            scribble(&doc, &mut store, page);
+        }
+        doc.save(&store).expect("first save");
+        store.mark_clean();
+        edit(&mut doc, &mut store, PageEdit::Move { pages: vec![3], to: 0 });
+        assert_eq!(widths(&doc), vec![630.0, 600.0, 610.0, 620.0, 640.0]);
+        edit(&mut doc, &mut store, PageEdit::Move { pages: vec![0, 4], to: 2 });
+        assert_eq!(widths(&doc), vec![600.0, 610.0, 630.0, 640.0, 620.0]);
+        doc.save(&store).expect("save");
+        assert_eq!(widths(&Doc::open(&path).expect("reopen").0), vec![600.0, 610.0, 630.0, 640.0, 620.0], "the file has the pages in the new order");
+        assert_eq!(where_the_ink_is(&path), where_the_ink_should_be(&store), "and each page keeps its ink, where it was on it");
+        // Saving again changes nothing: the numbering of the file is the document's now.
+        doc.save(&store).expect("save again");
+        assert_eq!(widths(&Doc::open(&path).expect("again").0), vec![600.0, 610.0, 630.0, 640.0, 620.0]);
+        // And the moves can be undone, even after the save, since the file has all the pages.
+        assert!(undo(&mut doc, &mut store) && undo(&mut doc, &mut store));
+        assert_eq!(widths(&doc), vec![600.0, 610.0, 620.0, 630.0, 640.0]);
+        doc.save(&store).expect("save the undoing");
+        assert_eq!(widths(&Doc::open(&path).expect("again").0), vec![600.0, 610.0, 620.0, 630.0, 640.0], "the file is as it was");
+        assert_eq!(where_the_ink_is(&path), where_the_ink_should_be(&store));
+        let _ = fs::remove_dir_all(path.parent().expect("dir"));
+    }
+
+    #[test]
+    fn a_deleted_page_comes_back_with_undo_and_the_file_is_as_if_nothing_had_happened() {
+        let (mut doc, mut store, path) = open_pages("undo-delete", 4);
+        for page in 0..4 {
+            scribble(&doc, &mut store, page);
+        }
+        doc.save(&store).expect("first save");
+        store.mark_clean();
+        let ink = where_the_ink_is(&path);
+        // The editor names the grave of a deletion, so that it can be put back.
+        edit(&mut doc, &mut store, PageEdit::Delete { pages: vec![1, 2], grave: 5 });
+        assert_eq!(widths(&doc), vec![600.0, 630.0]);
+        assert!(undo(&mut doc, &mut store));
+        assert_eq!(widths(&doc), vec![600.0, 610.0, 620.0, 630.0], "both pages are back, in their places");
+        assert_eq!((doc.render_page(1), doc.render_page(2)), (Some(1), Some(2)), "and are drawn from the file again");
+        doc.save(&store).expect("save");
+        assert_eq!(widths(&Doc::open(&path).expect("reopen").0), vec![600.0, 610.0, 620.0, 630.0]);
+        assert_eq!(where_the_ink_is(&path), ink, "with all their ink");
+        // Redo deletes them again, and the file follows.
+        assert!(redo(&mut doc, &mut store));
+        doc.save(&store).expect("save");
+        assert_eq!(widths(&Doc::open(&path).expect("reopen").0), vec![600.0, 630.0]);
+        let _ = fs::remove_dir_all(path.parent().expect("dir"));
+    }
+
+    #[test]
+    fn once_the_file_is_written_without_a_deleted_page_the_page_cannot_be_put_back() {
+        let (mut doc, mut store, path) = open_pages("grave-cleared", 3);
+        edit(&mut doc, &mut store, PageEdit::Delete { pages: vec![1], grave: 8 });
+        doc.save(&store).expect("save");
+        let restore = PageEdit::Restore { grave: 8, pages: vec![(1, [610.0, 800.0])] };
+        assert!(!doc.apply(&restore), "the grave is empty: the file has been written without the page");
+        assert_eq!(widths(&doc), vec![600.0, 620.0], "and nothing changed");
+        assert!(!doc.apply(&PageEdit::Restore { grave: 99, pages: vec![(0, [600.0, 800.0])] }), "a grave that was never dug");
+        let _ = fs::remove_dir_all(path.parent().expect("dir"));
+    }
+
+    #[test]
+    fn adding_deleting_and_moving_pages_in_one_session_come_out_right_together() {
+        let (mut doc, mut store, path) = open_pages("everything", 5);
+        for page in 0..5 {
+            scribble(&doc, &mut store, page);
+        }
+        // [600 610 620 630 640] -> a blank page after the first -> a page goes -> the last two swap -> a blank page in front.
+        insert(&mut doc, &mut store, 1, 0);
+        edit(&mut doc, &mut store, PageEdit::delete(3));
+        assert_eq!(widths(&doc), vec![600.0, 600.0, 610.0, 630.0, 640.0]);
+        edit(&mut doc, &mut store, PageEdit::Move { pages: vec![4], to: 3 });
+        assert_eq!(widths(&doc), vec![600.0, 600.0, 610.0, 640.0, 630.0]);
+        insert(&mut doc, &mut store, 0, 4);
+        assert_eq!(widths(&doc), vec![630.0, 600.0, 600.0, 610.0, 640.0, 630.0]);
+        doc.save(&store).expect("save");
+        let reopened = Doc::open(&path).expect("reopen").0;
+        assert_eq!(widths(&reopened), vec![630.0, 600.0, 600.0, 610.0, 640.0, 630.0]);
+        assert_eq!(where_the_ink_is(&path), where_the_ink_should_be(&store), "every page kept its ink, and the page that went took its own");
+        let _ = fs::remove_dir_all(path.parent().expect("dir"));
+    }
+
+    #[test]
+    fn a_document_follows_every_kind_of_edit_to_the_same_layout_the_editor_has() {
+        let (mut doc, mut store, path) = open_pages("same-layout", 4);
+        let mut editor_layout = doc.layout();
+        for e in [
+            PageEdit::Insert { at: 2, size: [500.0, 700.0] },
+            PageEdit::Delete { pages: vec![0, 3], grave: 2 },
+            PageEdit::Move { pages: vec![1], to: 0 },
+            PageEdit::Arrange { order: vec![2, 0, 1] },
+        ] {
+            editor_layout = editor_layout.edited(&e).expect("layout");
+            edit(&mut doc, &mut store, e);
+            let mine = doc.layout();
+            assert_eq!(mine.len(), editor_layout.len());
+            assert!((0..mine.len()).all(|p| mine.page(p) == editor_layout.page(p)), "the same pages, laid out alike");
+        }
+        let _ = fs::remove_dir_all(path.parent().expect("dir"));
+    }
+
+    #[test]
+    fn copies_of_pages_are_saved_after_the_last_page_copied_with_their_ink_and_the_originals_keep_theirs() {
+        let (mut doc, mut store, path) = open_pages("duplicate", 4);
+        for page in 0..4 {
+            scribble(&doc, &mut store, page);
+        }
+        edit(&mut doc, &mut store, PageEdit::Duplicate { pages: vec![2, 1] });
+        assert_eq!(widths(&doc), vec![600.0, 610.0, 620.0, 610.0, 620.0, 630.0], "the copies come together after the page copied last");
+        assert_eq!(store.len(), 6, "each copy has the ink of its page");
+        doc.save(&store).expect("save");
+        assert_eq!(widths(&Doc::open(&path).expect("reopen").0), vec![600.0, 610.0, 620.0, 610.0, 620.0, 630.0], "the file has the copies");
+        assert_eq!(where_the_ink_is(&path), where_the_ink_should_be(&store), "with their ink, and the others' ink where it was");
+        // The copies draw from the page they copy.
+        assert_eq!((doc.render_page(3), doc.render_page(4)), (doc.render_page(1), doc.render_page(2)), "a copy is drawn from the page it copies: it shares its pictures");
+        let _ = fs::remove_dir_all(path.parent().expect("dir"));
+    }
+
+    #[test]
+    fn ink_saved_on_a_page_before_it_was_copied_is_not_doubled_on_the_copy() {
+        let (mut doc, mut store, path) = open_pages("duplicate-saved", 3);
+        scribble(&doc, &mut store, 1);
+        doc.save(&store).expect("first save");
+        store.mark_clean();
+        edit(&mut doc, &mut store, PageEdit::Duplicate { pages: vec![1] });
+        assert_eq!(store.len(), 2);
+        doc.save(&store).expect("save the copy");
+        let ink = where_the_ink_is(&path);
+        assert_eq!(ink.len(), 2, "one stroke on the page and one on its copy, not two on the copy: {ink:?}");
+        assert_eq!(ink, where_the_ink_should_be(&store));
+        let _ = fs::remove_dir_all(path.parent().expect("dir"));
+    }
+
+    #[test]
+    fn a_copy_outlives_the_page_it_was_made_from_and_copies_of_copies_and_of_added_pages_are_pages_too() {
+        let (mut doc, mut store, path) = open_pages("duplicate-more", 3);
+        for page in 0..3 {
+            scribble(&doc, &mut store, page);
+        }
+        // Copy the middle page, then delete the original: the copy is what is left of it.
+        edit(&mut doc, &mut store, PageEdit::Duplicate { pages: vec![1] });
+        edit(&mut doc, &mut store, PageEdit::delete(1));
+        assert_eq!(widths(&doc), vec![600.0, 610.0, 620.0]);
+        // A copy of the copy, and of a page that was only added.
+        edit(&mut doc, &mut store, PageEdit::Duplicate { pages: vec![1] });
+        insert(&mut doc, &mut store, 0, 0);
+        edit(&mut doc, &mut store, PageEdit::Duplicate { pages: vec![0] });
+        assert_eq!(widths(&doc), vec![600.0, 600.0, 600.0, 610.0, 610.0, 620.0]);
+        doc.save(&store).expect("save");
+        assert_eq!(widths(&Doc::open(&path).expect("reopen").0), vec![600.0, 600.0, 600.0, 610.0, 610.0, 620.0]);
+        assert_eq!(where_the_ink_is(&path), where_the_ink_should_be(&store));
+        let _ = fs::remove_dir_all(path.parent().expect("dir"));
+    }
+
+    #[test]
+    fn duplicating_can_be_undone_and_redone_and_the_file_follows() {
+        let (mut doc, mut store, path) = open_pages("duplicate-undo", 3);
+        for page in 0..3 {
+            scribble(&doc, &mut store, page);
+        }
+        doc.save(&store).expect("first save");
+        store.mark_clean();
+        edit(&mut doc, &mut store, PageEdit::Duplicate { pages: vec![0, 2] });
+        assert_eq!(widths(&doc), vec![600.0, 610.0, 620.0, 600.0, 620.0]);
+        assert!(undo(&mut doc, &mut store));
+        assert_eq!(widths(&doc), vec![600.0, 610.0, 620.0], "the copies are gone");
+        assert_eq!(store.len(), 3, "with their ink");
+        doc.save(&store).expect("save the undoing");
+        assert_eq!(widths(&Doc::open(&path).expect("reopen").0), vec![600.0, 610.0, 620.0]);
+        assert!(redo(&mut doc, &mut store));
+        assert_eq!(widths(&doc), vec![600.0, 610.0, 620.0, 600.0, 620.0]);
+        assert_eq!(store.len(), 5, "and the ink is back");
+        doc.save(&store).expect("save the redoing");
+        assert_eq!(widths(&Doc::open(&path).expect("reopen").0), vec![600.0, 610.0, 620.0, 600.0, 620.0]);
+        assert_eq!(where_the_ink_is(&path), where_the_ink_should_be(&store));
+        let _ = fs::remove_dir_all(path.parent().expect("dir"));
     }
 }

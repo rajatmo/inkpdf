@@ -7,7 +7,7 @@ use super::{Act, Editor};
 /// Seconds of its lift-off speed a flicked page keeps travelling for.
 const FLING_SECONDS: f32 = 0.22;
 /// A touch bigger than this (in logical pixels, about 28 mm) is a palm.
-const PALM_PX: f32 = 106.0;
+pub(super) const PALM_PX: f32 = 106.0;
 
 impl Editor {
     pub(super) fn touch_event(&mut self, ev: &PointerEvent) {
@@ -107,7 +107,7 @@ impl Editor {
     /// installed. Pans and zooms; it cannot tell a pen from a finger.
     pub fn basic_touch(&mut self, phase: winit::event::TouchPhase, id: u64, pos: [f32; 2]) {
         use winit::event::TouchPhase;
-        if self.chrome.prompt.is_some() {
+        if self.chrome.prompt.is_some() || self.chrome.overview.is_some() {
             return;
         }
         match phase {

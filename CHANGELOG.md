@@ -2,11 +2,36 @@
 
 ## Unreleased
 
+Pages overview (the candidate for 1.0): a card over the document, opened from the new pages button at the end of the left
+toolbar, with a picture of every page (the ink drawn on it), its number, and the PDF's table of contents on the left when it
+has one. Tap a page or an entry to go there. The check mark is edit mode: choose pages, then duplicate, move earlier or
+later, or delete them from the bar under the pages; drag a page (or all the chosen ones) to where it should go; the number
+under each page has a menu (add before, add after, duplicate, delete). Every device works: the mouse, the stylus tip, a
+finger (which scrolls, and uses the bar to move pages), and at a desk Ctrl+A, Ctrl+D, Delete and Esc.
+
+- Pages are a step of the history now: add, delete, duplicate and move all undo and redo, and undoing a deletion brings back
+  the page with its ink, its links and the outline entries that went to it (until the file is saved, when the page is
+  gone from the file). Before, deleting a page could not be undone and dropped the whole history.
+- Saving writes pages in their new order, copies pages from the page they copy (so a copy survives the deletion of its
+  original), and the table of contents follows (entries of a deleted page lose their destination).
+- Inside: a page edit is one value (`PageEdit`) that the ink, links, outline, selection, layout and the file's page table
+  all take (`pages.rs`), replacing six hand-kept copies of the same arithmetic; the editor does every page edit
+  (`editor/pages.rs`) and tells the shell once (`Request::PagesEdited`); the layout is no longer kept twice. The UI can
+  now draw text and small pictures of pages (a layer between the interface's panels and lines), and the ink in them.
+  A new storm drives the overview with hostile input.
+- Quicker and lighter: pictures of pages are kept under the page of the file that draws them, so adding, deleting,
+  moving or undoing pages no longer throws the rendered pages away and renders them again; the table of contents rows
+  are built once, not on every pointer move; the pages kept for deletions go as soon as the history lets go of them
+  (it keeps 500 steps), not only when the file is saved; the bitmaps of the numbers in the overview are trimmed. A
+  30-round soak of real clicks and wheel turns (ink, overview, add, delete, duplicate, undo) holds memory, handles and
+  threads flat once the picture cache is full (its budget is 768 MB).
+- Damaged files: an outline or links that point at pages the file does not have are dropped when the file is opened,
+  instead of being kept until they cause trouble. A storm opens files with hostile outlines and page trees.
+- A shape's axes no longer go wrong when an axis has no length (found by a storm).
 - The line being drawn no longer swings: the short stretch the pen's predicted position adds ahead of the ink was a
   straight guess, which stuck out of a turn by up to several pixels and snapped back with the next sample. It is now
   aimed along the path's heading and cut short on a tight turn (at most half a pixel off the path), and is full length
   on a straight run.
-
 - The ends of a tap-drawn spline are no longer pointed: an open end leaves with no curvature, as in Inkscape's Spiro
   and a natural spline, instead of running straight along the chord to the next point. Closed splines and the inner
   points are as before, and splines already saved keep their shape.

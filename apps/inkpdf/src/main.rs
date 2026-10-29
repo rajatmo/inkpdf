@@ -25,6 +25,8 @@ mod input;
 mod laser;
 mod links;
 mod native;
+mod outline;
+mod pages;
 mod plane;
 mod posture;
 mod requests;

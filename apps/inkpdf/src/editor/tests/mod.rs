@@ -10,6 +10,7 @@ mod inputs;
 mod laser;
 mod links;
 mod modes;
+mod overview;
 mod pages;
 mod pen;
 mod prompt;

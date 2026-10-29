@@ -15,12 +15,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use pdfcraft_annot::appearance::parse_da;
 use pdfcraft_annot::{Meta, NewAnnotation, Shape, Style as AnnotStyle, add_annotation, delete_annotation, page_refs};
 use pdfcraft_cos::{Dict, Document, Object, SaveOptions, pdf_date, write_full, write_incremental};
-use pdfcraft_organize::{OrganizeError, delete_pages, insert_blank_page};
+use pdfcraft_organize::{OrganizeError, delete_pages, duplicate_pages, insert_blank_page, move_pages, page_count};
 
 use crate::coords::PageGeom;
 use crate::figure::Figure;
 use crate::ink::{InkStore, P, PageStroke, Style, TextBlock};
 use crate::links::{self, Link};
+use crate::outline::OutlineItem;
 use crate::view::Layout;
 
 /// What marks an annotation as ours.
@@ -38,6 +39,8 @@ pub struct Loaded {
     pub render_bytes: Arc<Vec<u8>>,
     /// The links the file has, where touch can follow them.
     pub links: Vec<Link>,
+    /// The table of contents the file has.
+    pub outline: Vec<OutlineItem>,
 }
 
 struct Found {
@@ -148,9 +151,10 @@ fn find_ours(doc: &Document) -> Vec<Found> {
 pub fn load(bytes: &Arc<Vec<u8>>, geoms: &[PageGeom], layout: &Layout) -> Result<Loaded, String> {
     let mut doc = Document::open(bytes.clone()).map_err(|e| e.to_string())?;
     let links = links::read(&doc, geoms, layout);
+    let outline = crate::outline::read(&doc);
     let found = find_ours(&doc);
     if found.is_empty() {
-        return Ok(Loaded { strokes: Vec::new(), render_bytes: bytes.clone(), links });
+        return Ok(Loaded { strokes: Vec::new(), render_bytes: bytes.clone(), links, outline });
     }
     let mut strokes = Vec::new();
     for f in &found {
@@ -184,7 +188,24 @@ pub fn load(bytes: &Arc<Vec<u8>>, geoms: &[PageGeom], layout: &Layout) -> Result
         delete_annotation(&mut doc, f.page, f.index).map_err(|e| e.to_string())?;
     }
     let render_bytes = write_full(&doc, &SaveOptions::default()).map_err(|e| e.to_string())?;
-    Ok(Loaded { strokes, render_bytes: Arc::new(render_bytes), links })
+    Ok(Loaded { strokes, render_bytes: Arc::new(render_bytes), links, outline })
+}
+
+/// Put the pages of the file that are left (the deleted ones are out of it by now) in the order the document has them:
+/// `order` is, for each page of the document, the page of the file it was, or `None` if it was added (it is put in
+/// afterwards). The pages that are already in order are not touched.
+fn arrange(doc: &mut Document, doc_of_file: &[Option<usize>], order: &[Option<usize>]) -> Result<(), String> {
+    let mut present: Vec<usize> = (0..doc_of_file.len()).filter(|&f| doc_of_file[f].is_some()).collect();
+    let wanted: Vec<usize> = order.iter().flatten().copied().collect();
+    for (at, &file_page) in wanted.iter().enumerate() {
+        let Some(now) = present.iter().position(|&f| f == file_page) else { continue };
+        if now != at {
+            move_pages(doc, &[now], at).map_err(|e| e.to_string())?;
+            present.remove(now);
+            present.insert(at, file_page);
+        }
+    }
+    Ok(())
 }
 
 fn unix_now() -> i64 {
@@ -192,18 +213,19 @@ fn unix_now() -> i64 {
 }
 
 /// The file with `store`'s ink written into the pages in `pages` (as the document numbers them),
-/// as an update appended to `base`. `inserts` are blank pages to put into the file: each is its
-/// page number in the finished document, and its size, in ascending order. `doc_of_file` says, for each
-/// page of the file (from the first, as many as the document can show), which page of the document it now
-/// is, or `None` if it was deleted (and is to be left out of the saved file).
+/// as an update appended to `base`. `doc_of_file` says, for each page of the file (from the first, as many as the
+/// document can show), which page of the document it now is, or `None` if it was deleted (and is to be left out of the
+/// saved file); a page of the document that no page of the file is, is one that was added (it is put in, as big as
+/// `layout` says), and the pages of the file are put in the order the document has them. `copies` are the pages of the
+/// document that are copies of pages of the file, each with the page of the file it is a copy of: they are made from them.
 pub fn save(
     base: &Arc<Vec<u8>>,
     store: &InkStore,
     geoms: &[PageGeom],
     layout: &Layout,
     pages: &BTreeSet<u32>,
-    inserts: &[(usize, [f32; 2])],
     doc_of_file: &[Option<usize>],
+    copies: &[(usize, usize)],
 ) -> Result<Vec<u8>, String> {
     let mut doc = Document::open(base.clone()).map_err(|e| e.to_string())?;
     let now = pdf_date(unix_now());
@@ -217,10 +239,36 @@ pub fn save(
     for f in old.iter().rev() {
         delete_annotation(&mut doc, f.page, f.index).map_err(|e| e.to_string())?;
     }
+    // Copies of pages come first, as pages at the end of the file (so that a page that was copied and then deleted still has
+    // its copy): ink this app saved on the page they are copies of is not theirs, and goes.
+    let originals = doc_of_file.len();
+    for &(_, source) in copies {
+        let end = page_count(&doc).map_err(|e| e.to_string())?;
+        duplicate_pages(&mut doc, &[source], Some(end)).map_err(|e| e.to_string())?;
+    }
+    if !copies.is_empty() {
+        let mut stale = find_ours(&doc);
+        stale.retain(|f| f.page >= originals);
+        for f in stale.iter().rev() {
+            delete_annotation(&mut doc, f.page, f.index).map_err(|e| e.to_string())?;
+        }
+    }
+    let mut of_file: Vec<Option<usize>> = doc_of_file.to_vec();
+    of_file.extend(copies.iter().map(|&(page, _)| Some(page)));
+    let doc_of_file = &of_file[..];
     // Then the pages that were deleted go, and the pages that were added are put in (each at its place in the
     // finished document: every page before it is there by then, as the pages go in from the front).
     let deleted: Vec<usize> = doc_of_file.iter().enumerate().filter(|(_, at)| at.is_none()).map(|(file_page, _)| file_page).collect();
-    let mut inserts = inserts;
+    // For each page of the document, the page of the file it was (none: it was added).
+    let mut order: Vec<Option<usize>> = vec![None; layout.len()];
+    for (file_page, at) in doc_of_file.iter().enumerate() {
+        if let Some(slot) = at.and_then(|at| order.get_mut(at)) {
+            *slot = Some(file_page);
+        }
+    }
+    let added: Vec<(usize, [f32; 2])> =
+        order.iter().enumerate().filter(|(_, from)| from.is_none()).filter_map(|(at, _)| layout.page(at).map(|r| (at, [r.w, r.h]))).collect();
+    let mut inserts = &added[..];
     if !deleted.is_empty() {
         match delete_pages(&mut doc, &deleted) {
             Ok(()) => {}
@@ -234,6 +282,7 @@ pub fn save(
             Err(e) => return Err(e.to_string()),
         }
     }
+    arrange(&mut doc, doc_of_file, &order)?;
     for &(at, [w, h]) in inserts {
         insert_blank_page(&mut doc, at, f64::from(w), f64::from(h)).map_err(|e| e.to_string())?;
     }
@@ -357,7 +406,7 @@ mod tests {
         let (bytes, geoms, layout) = setup();
         let store = store_with(&layout);
         let pages: BTreeSet<u32> = [0].into();
-        let saved = save(&bytes, &store, &geoms, &layout, &pages, &[], &[Some(0)]).expect("save");
+        let saved = save(&bytes, &store, &geoms, &layout, &pages, &[Some(0)], &[]).expect("save");
         assert_eq!(&saved[..bytes.len()], &bytes[..], "the original bytes are kept as the start of the file");
         assert!(saved.len() > bytes.len());
 
@@ -380,7 +429,7 @@ mod tests {
     #[test]
     fn same_style_strokes_share_an_annotation_and_a_new_style_starts_another() {
         let (bytes, geoms, layout) = setup();
-        let saved = save(&bytes, &store_with(&layout), &geoms, &layout, &[0].into(), &[], &[Some(0)]).expect("save");
+        let saved = save(&bytes, &store_with(&layout), &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save");
         let doc = Document::open(Arc::new(saved)).expect("open");
         let found = find_ours(&doc);
         // Two red strokes in one annotation, one blue dot in another.
@@ -392,10 +441,10 @@ mod tests {
     #[test]
     fn resaving_replaces_our_annotations_instead_of_piling_up() {
         let (bytes, geoms, layout) = setup();
-        let first = Arc::new(save(&bytes, &store_with(&layout), &geoms, &layout, &[0].into(), &[], &[Some(0)]).expect("first save"));
+        let first = Arc::new(save(&bytes, &store_with(&layout), &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("first save"));
         // Erase everything and save again on top of the first save.
         let empty = InkStore::new();
-        let second = save(&first, &empty, &geoms, &layout, &[0].into(), &[], &[Some(0)]).expect("second save");
+        let second = save(&first, &empty, &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("second save");
         let doc = Document::open(Arc::new(second)).expect("open");
         assert!(find_ours(&doc).is_empty(), "the old annotations were deleted");
     }
@@ -403,7 +452,7 @@ mod tests {
     #[test]
     fn the_render_copy_has_none_of_our_annotations() {
         let (bytes, geoms, layout) = setup();
-        let saved = Arc::new(save(&bytes, &store_with(&layout), &geoms, &layout, &[0].into(), &[], &[Some(0)]).expect("save"));
+        let saved = Arc::new(save(&bytes, &store_with(&layout), &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save"));
         let loaded = load(&saved, &geoms, &layout).expect("load");
         assert!(!Arc::ptr_eq(&loaded.render_bytes, &saved));
         let doc = Document::open(loaded.render_bytes.clone()).expect("open the render copy");
@@ -416,9 +465,9 @@ mod tests {
     #[test]
     fn pages_not_listed_are_left_alone() {
         let (bytes, geoms, layout) = setup();
-        let first = Arc::new(save(&bytes, &store_with(&layout), &geoms, &layout, &[0].into(), &[], &[Some(0)]).expect("save"));
+        let first = Arc::new(save(&bytes, &store_with(&layout), &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save"));
         // Saving with no changed pages writes no new annotations and deletes none.
-        let again = save(&first, &InkStore::new(), &geoms, &layout, &BTreeSet::new(), &[], &[Some(0)]).expect("save");
+        let again = save(&first, &InkStore::new(), &geoms, &layout, &BTreeSet::new(), &[Some(0)], &[]).expect("save");
         let doc = Document::open(Arc::new(again)).expect("open");
         assert_eq!(find_ours(&doc).len(), 2);
     }
@@ -431,7 +480,7 @@ mod tests {
         for i in 0..(STROKES_PER_ANNOTATION * 2 + 5) {
             store.add(0, RED, vec![[o[0] + i as f32, o[1]], [o[0] + i as f32 + 1.0, o[1] + 1.0]]);
         }
-        let saved = save(&bytes, &store, &geoms, &layout, &[0].into(), &[], &[Some(0)]).expect("save");
+        let saved = save(&bytes, &store, &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save");
         let found = find_ours(&Document::open(Arc::new(saved)).expect("open"));
         assert_eq!(found.len(), 3);
         assert_eq!(found.iter().map(|f| f.strokes.len()).sum::<usize>(), STROKES_PER_ANNOTATION * 2 + 5);
@@ -458,7 +507,7 @@ mod tests {
     fn text_is_saved_as_a_free_text_annotation_and_read_back_in_the_same_place() {
         for (words, size) in [("Hello", 24.0), ("Two\nlines of text", 12.0), ("Zwei Ünï — ünïcode ✓", 18.0)] {
             let (bytes, geoms, layout) = setup();
-            let saved = Arc::new(save(&bytes, &text_store(&layout, words, size), &geoms, &layout, &[0].into(), &[], &[Some(0)]).expect("save"));
+            let saved = Arc::new(save(&bytes, &text_store(&layout, words, size), &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save"));
             let doc = Document::open(saved.clone()).expect("open");
             assert!(find_ours(&doc).iter().any(|f| f.text.is_some()), "{words:?}: the text is one of our annotations");
             let loaded = load(&saved, &geoms, &layout).expect("load");
@@ -482,7 +531,7 @@ mod tests {
         let geom = PageGeom { width: 612.0, height: 792.0, crop: [0.0, 0.0, 612.0, 792.0], rotation: 90 };
         let (bytes, layout) = (Arc::new(sample_pdf()), Layout::new(&[[792.0, 612.0]]));
         let geoms = vec![geom];
-        let saved = Arc::new(save(&bytes, &text_store(&layout, "Turned", 20.0), &geoms, &layout, &[0].into(), &[], &[Some(0)]).expect("save"));
+        let saved = Arc::new(save(&bytes, &text_store(&layout, "Turned", 20.0), &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save"));
         let loaded = load(&saved, &geoms, &layout).expect("load");
         let texts = loaded_texts(&loaded);
         assert_eq!(texts.len(), 1);
@@ -507,7 +556,7 @@ mod tests {
             TextBlock { text: words.into(), size },
             crate::text::outline(top_left, words, size),
         );
-        let saved = Arc::new(save(&bytes, &store, &geoms, &layout, &[0].into(), &[], &[Some(0)]).expect("save"));
+        let saved = Arc::new(save(&bytes, &store, &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save"));
         let page = PageRenderer::new(saved, RenderConfig::default()).render(RenderRequest { page: 0, scale: 1.0, ..RenderRequest::default() });
         assert!(page.error.is_none(), "{:?}", page.error);
         let (w, rgba) = (page.width as usize, page.rgba.as_ref());
@@ -544,7 +593,7 @@ mod tests {
                 TextBlock { text: words.into(), size },
                 crate::text::outline(top_left, words, size),
             );
-            let saved = Arc::new(save(&bytes, &store, &geoms, &layout, &[0].into(), &[], &[Some(0)]).expect("save"));
+            let saved = Arc::new(save(&bytes, &store, &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save"));
             // Read back by this app, the box is where it was put.
             let back = load(&saved, &geoms, &layout).expect("load");
             let texts = loaded_texts(&back);
@@ -582,8 +631,8 @@ mod tests {
     #[test]
     fn resaving_changed_text_replaces_it() {
         let (bytes, geoms, layout) = setup();
-        let first = Arc::new(save(&bytes, &text_store(&layout, "before", 18.0), &geoms, &layout, &[0].into(), &[], &[Some(0)]).expect("save"));
-        let second = save(&first, &text_store(&layout, "after", 18.0), &geoms, &layout, &[0].into(), &[], &[Some(0)]).expect("save again");
+        let first = Arc::new(save(&bytes, &text_store(&layout, "before", 18.0), &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save"));
+        let second = save(&first, &text_store(&layout, "after", 18.0), &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save again");
         let loaded = load(&Arc::new(second), &geoms, &layout).expect("load");
         let texts = loaded_texts(&loaded);
         assert_eq!(texts.iter().map(|t| t.0.as_str()).collect::<Vec<_>>(), ["after"], "one text box, the new one");
@@ -594,7 +643,7 @@ mod tests {
         let (bytes, geoms, layout) = setup();
         // No text, and nothing but control characters, are not text boxes.
         for words in ["", "\u{1}\u{2}"] {
-            let saved = Arc::new(save(&bytes, &text_store(&layout, words, 18.0), &geoms, &layout, &[0].into(), &[], &[Some(0)]).expect("save"));
+            let saved = Arc::new(save(&bytes, &text_store(&layout, words, 18.0), &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save"));
             let loaded = load(&saved, &geoms, &layout).expect("load");
             assert!(loaded_texts(&loaded).is_empty(), "{words:?}");
             assert_eq!(loaded.strokes.len(), 3, "the ink is still there");
@@ -672,7 +721,7 @@ mod tests {
         stroke(&mut ed, below);
         assert!(ed.ink.len() >= 6, "{} strokes", ed.ink.len());
 
-        let saved = save(&bytes, &ed.ink, &geoms, &layout, ed.ink.dirty_pages(), &[], &[Some(0)]).expect("save");
+        let saved = save(&bytes, &ed.ink, &geoms, &layout, ed.ink.dirty_pages(), &[Some(0)], &[]).expect("save");
         std::fs::write(&out, &saved).expect("write the demo");
         println!("wrote {out}: {} strokes, {} -> {} bytes", ed.ink.len(), bytes.len(), saved.len());
     }
@@ -692,7 +741,7 @@ mod tests {
         add_annotation(&mut doc, &new, &Meta { date: Some("D:20260101000000Z".into()), id: "other-1".into() }).expect("add");
         let with_foreign = Arc::new(write_incremental(&doc, &SaveOptions::default()).expect("write"));
         assert!(load(&with_foreign, &geoms, &layout).expect("load").strokes.is_empty());
-        let saved = save(&with_foreign, &store_with(&layout), &geoms, &layout, &[0].into(), &[], &[Some(0)]).expect("save");
+        let saved = save(&with_foreign, &store_with(&layout), &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save");
         let reopened = Document::open(Arc::new(saved)).expect("open");
         let ink_annots = pdfcraft_annot::summaries(&reopened).into_iter().filter(|s| s.subtype == "Ink").count();
         assert_eq!(ink_annots, 3, "the foreign one plus our two");
@@ -720,7 +769,7 @@ mod tests {
             store.add_figure(0, BLUE, f.clone());
         }
         store.add(0, BLUE, vec![at(500.0, 500.0), at(520.0, 540.0)]);
-        let saved = Arc::new(save(&bytes, &store, &geoms, &layout, &[0].into(), &[], &[Some(0)]).expect("save"));
+        let saved = Arc::new(save(&bytes, &store, &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save"));
         let loaded = load(&saved, &geoms, &layout).expect("load");
         let kinds: Vec<bool> = loaded.strokes.iter().map(|s| s.3.is_some()).collect();
         assert_eq!(kinds, [false, true, true, true, true, true, true, false], "order and kind are kept");
@@ -764,7 +813,7 @@ mod tests {
             RED,
             crate::figure::Figure::from_shape(Shape::Rectangle, [o[0] + 100.0, o[1] + 100.0], [o[0] + 250.0, o[1] + 180.0]).expect("rect"),
         );
-        let saved = save(&bytes, &store, &geoms, &layout, &[0].into(), &[], &[Some(0)]).expect("save");
+        let saved = save(&bytes, &store, &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save");
         let at = saved.windows(3).position(|w| w == b"~r;").expect("the description is in the file");
         let mut damaged = saved.clone();
         damaged[at + 1] = b'z';
@@ -773,7 +822,7 @@ mod tests {
         assert!(loaded.strokes[0].3.is_none(), "not a shape any more, but the ink is still there");
         assert_eq!(loaded.strokes[0].2.len(), 5);
         // An annotation another program wrote, with no description at all, is plain ink.
-        let plain = save(&bytes, &store_with(&layout), &geoms, &layout, &[0].into(), &[], &[Some(0)]).expect("save");
+        let plain = save(&bytes, &store_with(&layout), &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save");
         assert!(load(&Arc::new(plain), &geoms, &layout).expect("load").strokes.iter().all(|s| s.3.is_none()));
     }
 }

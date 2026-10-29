@@ -70,6 +70,8 @@ impl State {
         let ed = &self.ed;
         self.text_index.refresh(ed);
         if !text::available() || (self.text_index.at.is_empty() && ed.text_edit().is_none()) {
+            // No text boxes, but the pages overview's text is bitmaps too (a page number each): kept only as long as it is shown.
+            self.gpu.trim_texts(&self.overview.keys, KEEP_BITMAPS);
             return;
         }
         let (top, bottom) = ed.view.visible_y();
@@ -103,6 +105,7 @@ impl State {
             used.insert(key);
             self.text_draws.push(TextDraw { page: edit.page, key, top_left: edit.top_left, size: text::measure(&edit.text, edit.size) });
         }
+        used.extend(self.overview.keys.iter().copied());
         self.gpu.trim_texts(&used, KEEP_BITMAPS);
     }
 

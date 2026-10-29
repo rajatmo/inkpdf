@@ -25,10 +25,13 @@ use textures::PageTexture;
 use types::Vertex;
 
 pub use device::{GpuChoice, list_gpus};
-pub use types::{Capsule, Drawn, InkScene, Panel, Quad, Tex};
+pub use types::{Capsule, Drawn, InkScene, InkThumb, Panel, Quad, Tex};
 
 /// Quads are drawn as two triangles each.
 const VERTICES_PER_QUAD: usize = 6;
+
+/// A stretch of quads in the vertex buffer that share a texture.
+type Run = (Tex, Range<u32>);
 
 pub struct Gpu {
     window: Arc<Window>,
@@ -280,25 +283,40 @@ impl Gpu {
         }
     }
 
-    /// Draw `quads` in order over `clear`, then the ink and overlays, into `frame` and present.
-    pub fn draw(&mut self, frame: Option<wgpu::SurfaceTexture>, quads: &[Quad], ink: &InkScene, clear: [f64; 4]) -> Drawn {
+    /// Draw `quads` in order over `clear`, then the ink and overlays, then the interface (`ui_quads` are its pictures and
+    /// text, between its panels and its lines), into `frame` and present.
+    pub fn draw(&mut self, frame: Option<wgpu::SurfaceTexture>, quads: &[Quad], ui_quads: &[Quad], ink: &InkScene, clear: [f64; 4]) -> Drawn {
         let Some(frame) = frame else { return Drawn::Skipped };
-        let runs = self.upload_quads(quads);
+        let (runs, ui_runs) = self.upload_quads(quads, ui_quads);
         let counts = self.upload_overlays(ink);
         self.capsules.set_transforms(&self.queue, ink.scroll, ink.zoom, self.viewport());
+        let viewport = self.viewport();
+        for (i, t) in ink.thumbs.iter().enumerate() {
+            self.capsules.set_thumb(&self.device, &self.queue, i, types::Xf::new(t.origin, t.scale, viewport));
+        }
 
         let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("inkpdf frame") });
-        self.record(&mut encoder, &view, clear, &runs, ink, counts);
+        self.record(&mut encoder, &view, clear, (&runs, &ui_runs), ink, counts);
         self.queue.submit(Some(encoder.finish()));
         self.window.pre_present_notify();
         self.queue.present(frame);
         Drawn::Presented
     }
 
-    /// Write the quads' vertices and group them into runs that share a texture.
-    fn upload_quads(&mut self, quads: &[Quad]) -> Vec<(Tex, Range<u32>)> {
-        let mut verts: Vec<Vertex> = Vec::with_capacity(quads.len() * VERTICES_PER_QUAD);
+    /// Write the quads' vertices and group them into runs that share a texture: those of the pages, and those of the
+    /// interface after them.
+    fn upload_quads(&mut self, quads: &[Quad], ui_quads: &[Quad]) -> (Vec<Run>, Vec<Run>) {
+        let mut verts: Vec<Vertex> = Vec::with_capacity((quads.len() + ui_quads.len()) * VERTICES_PER_QUAD);
+        let main = self.quad_runs(quads, &mut verts);
+        let ui = self.quad_runs(ui_quads, &mut verts);
+        self.vertices.reserve(&self.device, (verts.len() * std::mem::size_of::<Vertex>()) as u64);
+        self.vertices.write(&self.queue, 0, bytemuck::cast_slice(&verts));
+        (main, ui)
+    }
+
+    /// Add `quads` that have a texture to `verts`, and say which ranges of them share one.
+    fn quad_runs(&self, quads: &[Quad], verts: &mut Vec<Vertex>) -> Vec<(Tex, Range<u32>)> {
         let mut runs: Vec<(Tex, Range<u32>)> = Vec::new();
         for q in quads {
             let missing = match q.tex {
@@ -317,8 +335,6 @@ impl Gpu {
                 _ => runs.push((q.tex, start..end)),
             }
         }
-        self.vertices.reserve(&self.device, (verts.len() * std::mem::size_of::<Vertex>()) as u64);
-        self.vertices.write(&self.queue, 0, bytemuck::cast_slice(&verts));
         runs
     }
 
@@ -336,7 +352,7 @@ impl Gpu {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         clear: [f64; 4],
-        runs: &[(Tex, Range<u32>)],
+        runs: (&[Run], &[Run]),
         ink: &InkScene,
         counts: OverlayCounts,
     ) {
@@ -356,8 +372,8 @@ impl Gpu {
             occlusion_query_set: None,
             multiview_mask: None,
         });
-        self.record_pages(&mut pass, runs);
-        self.record_lines(&mut pass, ink, counts);
+        self.record_pages(&mut pass, runs.0);
+        self.record_lines(&mut pass, ink, counts, runs.1);
     }
 
     fn record_pages(&self, pass: &mut wgpu::RenderPass<'_>, runs: &[(Tex, Range<u32>)]) {
@@ -383,8 +399,8 @@ impl Gpu {
 
     /// Committed ink, then the document and screen overlays, then the interface on top: its
     /// panels, then its lines.
-    fn record_lines(&self, pass: &mut wgpu::RenderPass<'_>, ink: &InkScene, counts: OverlayCounts) {
-        if ink.committed.is_empty() && counts.total() == 0 && self.ui_lines.len() == 0 && self.ui_panels.len() == 0 {
+    fn record_lines(&self, pass: &mut wgpu::RenderPass<'_>, ink: &InkScene, counts: OverlayCounts, ui_runs: &[(Tex, Range<u32>)]) {
+        if ink.committed.is_empty() && counts.total() == 0 && self.ui_lines.len() == 0 && self.ui_panels.len() == 0 && ui_runs.is_empty() {
             return;
         }
         pass.set_pipeline(&self.capsules.pipeline);
@@ -415,6 +431,31 @@ impl Gpu {
             pass.set_vertex_buffer(0, self.ui_panels.slice());
             pass.draw(0..4, 0..self.ui_panels.len());
             pass.set_pipeline(&self.capsules.pipeline);
+        }
+        // The interface's pictures and text, over its panels.
+        if !ui_runs.is_empty() {
+            self.record_pages(pass, ui_runs);
+            pass.set_pipeline(&self.capsules.pipeline);
+        }
+        // The ink in the pictures of pages, each in its own place and no further than its picture reaches.
+        if !ink.thumbs.is_empty() && self.ink.len() > 0 {
+            pass.set_vertex_buffer(0, self.ink.slice());
+            let [vw, vh] = [self.config.width, self.config.height];
+            for (i, t) in ink.thumbs.iter().enumerate() {
+                let (Some(bind), [x, y, w, h]) = (self.capsules.thumb_bind(i), t.clip) else { continue };
+                if x >= vw || y >= vh || w == 0 || h == 0 {
+                    continue;
+                }
+                pass.set_bind_group(0, bind, &[]);
+                pass.set_scissor_rect(x, y, w.min(vw - x), h.min(vh - y));
+                for r in &t.ranges {
+                    let end = r.end.min(self.ink.len());
+                    if r.start < end {
+                        pass.draw(0..4, r.start..end);
+                    }
+                }
+            }
+            pass.set_scissor_rect(0, 0, vw, vh);
         }
         if self.ui_lines.len() > 0 {
             pass.set_bind_group(0, self.capsules.screen_bind(), &[]);

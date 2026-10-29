@@ -29,6 +29,8 @@ mod context;
 mod dispatch;
 mod mouse;
 mod navigation;
+mod overview;
+mod pages;
 mod pen;
 mod prompt;
 mod routing;
@@ -73,11 +75,17 @@ pub struct Editor {
     pub cursor: [f32; 2],
     /// The document's links, in document space; only a finger's tap follows one.
     pub links: Vec<crate::links::Link>,
+    /// The document's table of contents (see [`crate::outline`]); empty if it has none.
+    pub outline: Vec<crate::outline::OutlineItem>,
     /// How far a finger has pulled up past the end of the document, in pixels: a long enough pull
     /// adds a blank page.
     pub pull: f32,
     /// A page was already asked for in this pull.
     pull_fired: bool,
+    /// The last name given to a place where deleted pages are kept (see [`crate::pages::PageEdit::Delete`]).
+    grave: u64,
+    /// What was kept by page and went with the pages of each deletion, until it is undone or the file is written.
+    graves: HashMap<u64, pages::Grave>,
     /// The tools that own their interaction (see [`crate::tools`]).
     pub tools: ToolSet,
     /// The window's own controls (see [`Chrome`]).
@@ -104,8 +112,11 @@ impl Editor {
             ws: Workspace::new(viewport, dpr),
             cursor: [0.0; 2],
             links: Vec::new(),
+            outline: Vec::new(),
             pull: 0.0,
             pull_fired: false,
+            grave: 0,
+            graves: HashMap::new(),
             tools: ToolSet::new(),
             chrome: Chrome::default(),
             mode: Mode::default(),
@@ -133,56 +144,12 @@ impl Editor {
         self.mouse_press = None;
         self.ws.requests.clear_answer();
         self.links.clear();
+        self.outline.clear();
+        self.graves.clear();
         self.pull = 0.0;
         self.fingers = TouchGestures::default();
         self.ws.fit_mode = true;
         self.ws.fit_width();
-        self.ws.redraw = true;
-    }
-
-    /// A blank page was inserted as page `at` (at the end, or among the others): take the new
-    /// layout, carry the ink on the pages that moved down with them, mark the page changed (so
-    /// saving writes it) and glide to it.
-    pub fn page_inserted(&mut self, layout: Layout, at: usize) {
-        // Whatever the pen was in the middle of was in the old layout.
-        if !matches!(self.chrome.act, Act::Idle) {
-            self.end_act();
-        }
-        self.tools.end_all(&mut self.ws);
-        self.settle();
-        let shift = match (self.ws.layout.page(at), layout.page(at + 1)) {
-            (Some(was), Some(now)) => now.y - was.y,
-            _ => 0.0,
-        };
-        self.ws.ink.insert_page_at(at as u32, shift);
-        self.ws.ink.mark_dirty(at as u32);
-        self.ws.layout = layout;
-        self.tools.pointer.laser.clear();
-        self.ws.scroll_to_page(at);
-        self.ws.redraw = true;
-    }
-
-    /// Page `at` was deleted: take the new layout, drop the ink that was on it, carry the ink on the later pages
-    /// up with them, mark the page that took its place changed (so saving writes the file without it) and glide
-    /// there. The undo history goes: it may hold steps on a page that no longer exists.
-    pub fn page_deleted(&mut self, layout: Layout, at: usize) {
-        // Whatever the pen was in the middle of was on the old layout.
-        if !matches!(self.chrome.act, Act::Idle) {
-            self.end_act();
-        }
-        self.tools.end_all(&mut self.ws);
-        self.settle();
-        let shift = match (self.ws.layout.page(at + 1), layout.page(at)) {
-            (Some(was), Some(now)) => now.y - was.y,
-            _ => 0.0,
-        };
-        self.ws.ink.delete_page_at(at as u32, shift);
-        let shown = at.min(layout.len().saturating_sub(1));
-        self.ws.ink.mark_dirty(shown as u32);
-        self.ws.layout = layout;
-        self.ws.prune_selection();
-        self.tools.pointer.laser.clear();
-        self.ws.scroll_to_page(shown);
         self.ws.redraw = true;
     }
 
@@ -278,6 +245,8 @@ impl Editor {
     /// The window changed size: the view follows it.
     pub fn set_viewport(&mut self, size: [f32; 2]) {
         self.ws.set_viewport(size);
+        // (The pages overview is laid out by the window: what it keeps is brought back into range.)
+        self.overview_settled();
     }
 
     /// The view itself, for the shell's benchmark to drive.
@@ -288,6 +257,7 @@ impl Editor {
     /// The window's scale changed.
     pub fn set_dpr(&mut self, dpr: f32) {
         self.ws.dpr = dpr;
+        self.overview_settled();
     }
 
     /// How much the pen is steadied while drawing, from the command line.
@@ -303,6 +273,9 @@ impl Editor {
     /// The document was written to its file: nothing is unsaved.
     pub fn document_saved(&mut self) {
         self.ws.ink.mark_clean();
+        // The file has lost the pages that were deleted: they cannot be put back into it.
+        self.ws.ink.forget_deleted_pages();
+        self.graves.clear();
     }
 
     /// What the editor asks of the shell (see [`crate::requests`]).

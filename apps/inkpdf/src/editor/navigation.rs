@@ -46,7 +46,7 @@ impl Editor {
         if self.pull >= PULL_PX * self.ws.dpr && !self.pull_fired {
             self.pull_fired = true;
             self.pull = 0.0;
-            self.ws.requests.push(Request::AddPage);
+            self.add_page();
         }
     }
 }

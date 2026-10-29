@@ -8,6 +8,7 @@ use crate::doc::{Doc, UNTITLED};
 use crate::editor::Request;
 use crate::ink::PageStroke;
 use crate::native;
+use crate::pages::PageEdit;
 use crate::requests::Choice;
 use crate::settings;
 
@@ -62,12 +63,13 @@ impl State {
         }
     }
     /// Make `doc` the document being edited, with the ink it came with.
-    fn install(&mut self, doc: Doc, strokes: Vec<PageStroke>) {
+    fn install(&mut self, mut doc: Doc, strokes: Vec<PageStroke>) {
         eprintln!("opened {} — {} pages, {} ink strokes, {} ms", doc.name, doc.page_count(), strokes.len(), doc.open_millis);
         self.gpu.clear_textures();
         self.failed.clear();
-        self.ed.load(doc.layout.clone(), strokes);
-        self.ed.links.clone_from(&doc.links);
+        self.ed.load(doc.layout(), strokes);
+        self.ed.links = doc.take_links();
+        self.ed.outline = doc.take_outline();
         self.doc = Some(doc);
         self.ink_built = InkStamp::NEVER;
         self.last_zoom = self.ed.view.zoom;
@@ -164,42 +166,15 @@ impl State {
         }
     }
 
-    /// Insert a blank page as page `at`, the size of page `like`, and glide to it.
-    fn insert_page(&mut self, at: usize, like: usize) {
+    /// The editor edited the pages: the file's page table follows, and what was drawn for the pages is out of date.
+    fn pages_edited(&mut self, edit: &PageEdit) {
         let Some(doc) = &mut self.doc else { return };
-        let old_count = doc.page_count();
-        if doc.insert_blank_page(at, like).is_none() {
+        if !doc.apply(edit) {
+            eprintln!("the document could not follow the edit of its pages: {edit:?}");
             return;
         }
-        self.ed.page_inserted(doc.layout.clone(), at);
-        self.ed.links.clone_from(&doc.links);
-        if at < old_count {
-            // Pages after it have new numbers: what is on the GPU for them is out of date.
-            self.gpu.clear_textures();
-            self.failed.clear();
-        }
+        // (What is on the GPU is kept by the page of the file that draws it: a change of the pages leaves it as it is.)
         self.ink_built = InkStamp::NEVER;
-    }
-
-    /// Delete page `at` (the document keeps at least one page), and glide to the page that took its place.
-    fn delete_page(&mut self, at: usize) {
-        let Some(doc) = &mut self.doc else { return };
-        if !doc.delete_page(at) {
-            return;
-        }
-        self.ed.page_deleted(doc.layout.clone(), at);
-        self.ed.links.clone_from(&doc.links);
-        // Pages after it have new numbers: what is on the GPU for them is out of date.
-        self.gpu.clear_textures();
-        self.failed.clear();
-        self.ink_built = InkStamp::NEVER;
-    }
-
-    /// A finger pulled past the end of the document: add a blank page, the size of the last, and
-    /// glide to it.
-    fn add_page(&mut self) {
-        let Some(count) = self.doc.as_ref().map(Doc::page_count) else { return };
-        self.insert_page(count, count.saturating_sub(1));
     }
 
     pub(super) fn request_close(&mut self) {
@@ -233,9 +208,12 @@ impl State {
                 }
                 Request::Fullscreen => self.toggle_fullscreen(),
                 Request::Close => self.close_document(),
-                Request::AddPage => self.add_page(),
-                Request::InsertPage(after) => self.insert_page(after + 1, after),
-                Request::DeletePage(page) => self.delete_page(page),
+                Request::PagesEdited(edit) => self.pages_edited(&edit),
+                Request::GravesForgotten(graves) => {
+                    if let Some(doc) = &mut self.doc {
+                        doc.forget_graves(&graves);
+                    }
+                }
                 Request::OpenUrl(url) => native::open_url(&url),
             }
         }

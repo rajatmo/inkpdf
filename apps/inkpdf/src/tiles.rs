@@ -17,6 +17,8 @@ pub const TILE: u32 = 512;
 const LEVELS_PER_OCTAVE: f32 = 24.0;
 /// The longest side of a page preview, in pixels.
 const PREVIEW_SIDE: f32 = 1024.0;
+/// The longest side of a page thumbnail, in pixels.
+const THUMB_SIDE: f32 = 360.0;
 /// Pages kept as previews beyond the visible ones.
 pub const PREVIEW_REACH: usize = 3;
 /// Never ask for more tiles than this for one view (a guard against a degenerate viewport).
@@ -28,13 +30,24 @@ pub const MAX_PAGES: usize = 1 << 20;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Key {
     Preview { page: u32 },
+    /// A small picture of a whole page, for the pages overview (see [`THUMB_SIDE`]).
+    Thumb { page: u32 },
     Tile { page: u32, level: i16, tx: u16, ty: u16 },
 }
 
 impl Key {
+    /// The same key for another page.
+    pub fn with_page(self, page: u32) -> Key {
+        match self {
+            Key::Preview { .. } => Key::Preview { page },
+            Key::Thumb { .. } => Key::Thumb { page },
+            Key::Tile { level, tx, ty, .. } => Key::Tile { page, level, tx, ty },
+        }
+    }
+
     pub fn page(self) -> u32 {
         match self {
-            Key::Preview { page } | Key::Tile { page, .. } => page,
+            Key::Preview { page } | Key::Thumb { page } | Key::Tile { page, .. } => page,
         }
     }
 
@@ -42,6 +55,7 @@ impl Key {
     pub fn to_tag(self) -> u64 {
         match self {
             Key::Preview { page } => (1 << 62) | (u64::from(page) << 40),
+            Key::Thumb { page } => (1 << 61) | (u64::from(page) << 40),
             Key::Tile { page, level, tx, ty } => {
                 (u64::from(page) << 40) | (u64::from((level as i32 + 32768) as u16) << 24) | (u64::from(tx & 0xfff) << 12) | u64::from(ty & 0xfff)
             }
@@ -52,6 +66,9 @@ impl Key {
         let page = ((tag >> 40) & 0xf_ffff) as u32;
         if tag & (1 << 62) != 0 {
             return Key::Preview { page };
+        }
+        if tag & (1 << 61) != 0 {
+            return Key::Thumb { page };
         }
         Key::Tile { page, level: (((tag >> 24) & 0xffff) as i32 - 32768) as i16, tx: ((tag >> 12) & 0xfff) as u16, ty: (tag & 0xfff) as u16 }
     }
@@ -76,11 +93,16 @@ fn preview_scale(page_pt: [f32; 2]) -> f32 {
     (PREVIEW_SIDE / page_pt[0].max(page_pt[1]).max(1.0)).min(2.0)
 }
 
+fn thumb_scale(page_pt: [f32; 2]) -> f32 {
+    (THUMB_SIDE / page_pt[0].max(page_pt[1]).max(1.0)).min(2.0)
+}
+
 /// The render request for a key.
 pub fn request(key: Key, page_pt: [f32; 2]) -> RenderRequest {
     let page = key.page() as usize;
     match key {
         Key::Preview { .. } => RenderRequest { page, scale: preview_scale(page_pt), tag: key.to_tag(), preview: true, ..RenderRequest::default() },
+        Key::Thumb { .. } => RenderRequest { page, scale: thumb_scale(page_pt), tag: key.to_tag(), preview: true, ..RenderRequest::default() },
         Key::Tile { level, tx, ty, .. } => {
             let scale = render_scale(page_pt, level);
             let (pw, ph) = (device_pixels(page_pt[0], scale), device_pixels(page_pt[1], scale));
@@ -105,6 +127,13 @@ pub struct Plan {
 }
 
 impl Plan {
+    /// The plan with every key pointed at the page `to` says (the page of the file it is drawn from), and those of pages that
+    /// are drawn from none (a blank page) left out.
+    pub fn mapped(&self, to: impl Fn(u32) -> Option<u32>) -> Plan {
+        let map = |keys: &[Key]| keys.iter().filter_map(|k| to(k.page()).map(|p| k.with_page(p))).collect::<Vec<_>>();
+        Plan { previews: map(&self.previews), visible: map(&self.visible), near_previews: map(&self.near_previews), prefetch: map(&self.prefetch) }
+    }
+
     /// Every wanted key in render order, without those for which `have` is true.
     pub fn queue(&self, mut have: impl FnMut(Key) -> bool) -> Vec<Key> {
         self.previews.iter().chain(&self.visible).chain(&self.near_previews).chain(&self.prefetch).copied().filter(|&k| !have(k)).collect()
@@ -266,6 +295,8 @@ mod tests {
         let keys = [
             Key::Preview { page: 0 },
             Key::Preview { page: 12345 },
+            Key::Thumb { page: 0 },
+            Key::Thumb { page: 1_048_575 },
             Key::Tile { page: 7, level: -500, tx: 3, ty: 15 },
             Key::Tile { page: 1_048_575, level: 1999, tx: 4095, ty: 4095 },
             Key::Tile { page: 0, level: 0, tx: 0, ty: 0 },
@@ -274,6 +305,32 @@ mod tests {
             assert_eq!(Key::from_tag(k.to_tag()), k);
             assert_eq!(k.to_tag() & (1 << 60), 0, "print-tag bit must stay clear for {k:?}");
         }
+    }
+
+    #[test]
+    fn a_plan_can_be_pointed_at_the_pages_of_the_file_and_leaves_out_the_blank_ones() {
+        let layout = Layout::new(&[[612.0, 792.0]; 4]);
+        let plan = plan(&layout, &View::new([800.0, 600.0]));
+        // Page 1 is blank (added), the others are drawn from the page of the file before them.
+        let mapped = plan.mapped(|p| (p != 1).then_some(p.saturating_sub(1)));
+        assert!(mapped.previews.iter().all(|k| k.page() != 1 || plan.previews.iter().all(|o| o.page() != 2)));
+        assert_eq!(mapped.previews.len(), plan.previews.iter().filter(|k| k.page() != 1).count());
+        assert!(mapped.visible.iter().all(|k| matches!(k, Key::Tile { .. })));
+        assert_eq!(Key::Tile { page: 3, level: 5, tx: 2, ty: 1 }.with_page(9), Key::Tile { page: 9, level: 5, tx: 2, ty: 1 });
+        assert_eq!(Key::Thumb { page: 3 }.with_page(0), Key::Thumb { page: 0 });
+    }
+
+    #[test]
+    fn a_thumbnail_is_a_small_picture_of_the_whole_page_whatever_its_size() {
+        for page in [[612.0, 792.0], [14_400.0, 200.0], [72.0, 72.0], [300.0, 400.0]] {
+            let r = request(Key::Thumb { page: 3 }, page);
+            assert_eq!((r.page, r.preview, r.tile), (3, true, None));
+            assert_eq!(Key::from_tag(r.tag), Key::Thumb { page: 3 });
+            let longest = page[0].max(page[1]) * r.scale;
+            assert!(longest <= THUMB_SIDE + 1.0, "{page:?} is {longest} px");
+            assert!(r.scale <= 2.0, "a tiny page is not blown up beyond twice its size");
+        }
+        assert_ne!(Key::Thumb { page: 1 }.to_tag(), Key::Preview { page: 1 }.to_tag(), "a thumbnail and a preview of the same page are two textures");
     }
 
     #[test]

@@ -198,9 +198,26 @@ fn corner(a: P, b: P, i: usize) -> Option<P> {
 /// The way an axis runs (`origin` and the ends are collinear for axes as drawn). Taken from the longest
 /// of the vectors between them, so that an axis shrunk almost to nothing does not drift off its line
 /// on rounding error.
-fn axis_direction(origin: P, end: [P; 2]) -> P {
+fn axis_direction(origin: P, end: [P; 2]) -> Option<P> {
     let longest = [sub(end[1], end[0]), sub(end[1], origin), sub(origin, end[0])].into_iter().max_by(|a, b| length(*a).total_cmp(&length(*b)));
-    longest.and_then(unit).unwrap_or([1.0, 0.0])
+    longest.and_then(unit)
+}
+
+/// The direction of each axis of an axes figure. An axis shrunk to nothing has none of its own: the first then runs across
+/// the second, and the second across the first (the two axes meet at a right angle however small either gets, so that an
+/// axis pulled out of nothing comes out the way it went in); with neither, they are left to right and up and down.
+fn axes_directions(origin: P, ends: &[[P; 2]]) -> Vec<P> {
+    let own: Vec<Option<P>> = ends.iter().map(|e| axis_direction(origin, *e)).collect();
+    let across = |d: P| [-d[1], d[0]];
+    (0..ends.len())
+        .map(|k| {
+            own[k].unwrap_or_else(|| match k {
+                0 => own.get(1).copied().flatten().map_or([1.0, 0.0], across),
+                1 => own.first().copied().flatten().map_or([0.0, 1.0], across),
+                _ => [1.0, 0.0],
+            })
+        })
+        .collect()
 }
 
 /// The handle of an open end `p` whose neighbour `q` has the handle `toward` on the side facing `p`: the end's
@@ -485,16 +502,16 @@ impl Figure {
                 }
             }
             (Figure::Axes { origin, ends }, Control::Anchor(0)) => {
-                for e in ends.iter_mut() {
-                    let dir = axis_direction(*origin, *e);
+                let dirs = axes_directions(*origin, ends);
+                for (e, dir) in ends.iter_mut().zip(dirs) {
                     *e = e.map(|p| onto_line(p, to, dir));
                 }
                 *origin = to;
             }
             (Figure::Axes { origin, ends }, Control::Anchor(i)) => {
-                if let Some(e) = ends.get_mut((i - 1) / 2) {
-                    let dir = axis_direction(*origin, *e);
-                    e[(i - 1) % 2] = onto_line(to, *origin, dir);
+                let dirs = axes_directions(*origin, ends);
+                if let (Some(e), Some(dir)) = (ends.get_mut((i - 1) / 2), dirs.get((i - 1) / 2)) {
+                    e[(i - 1) % 2] = onto_line(to, *origin, *dir);
                 }
             }
             _ => {}

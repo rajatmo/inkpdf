@@ -8,7 +8,7 @@
 //!   tools     tools             what a press on the page does; one file each
 //!   ui        toolbar           where the buttons are, how they look
 //!   domain    tool, input, requests, workspace, selection, settings
-//!   model     figure, ink, laser, links
+//!   model     figure, ink, laser, links, outline, pages
 //!   base      plane, scene, clock, geometry, colour, coords, view, text, smooth, clipboard
 //! ```
 //!
@@ -121,7 +121,7 @@ enum Layer {
 }
 
 /// Every top-level module of the program, and its layer. A new module is placed here or the test fails.
-const LAYERS: [(&str, Layer); 32] = [
+const LAYERS: [(&str, Layer); 34] = [
     ("plane", Layer::Base),
     ("scene", Layer::Base),
     ("clock", Layer::Base),
@@ -136,6 +136,8 @@ const LAYERS: [(&str, Layer); 32] = [
     ("ink", Layer::Model),
     ("laser", Layer::Model),
     ("links", Layer::Model),
+    ("outline", Layer::Model),
+    ("pages", Layer::Model),
     ("tool", Layer::Domain),
     ("input", Layer::Domain),
     ("requests", Layer::Domain),
@@ -279,6 +281,8 @@ fn the_domain_knows_nothing_of_tools_the_session_or_the_shell() {
         "colour.rs",
         "coords.rs",
         "links.rs",
+        "outline.rs",
+        "pages.rs",
         "workspace.rs",
         "selection.rs",
         "clipboard.rs",

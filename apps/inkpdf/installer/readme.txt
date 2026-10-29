@@ -79,11 +79,24 @@ Backspace takes away the point you touched last. The barrel button, the eraser e
 and middle buttons are shortcuts for select and erase; nothing needs them.
 The buttons: X closes the document and starts a blank page (it asks first if there is unsaved
 work); undo, redo, save; the bin deletes the page you are looking at, at once, with no question
-asked (it cannot be undone, and the last page there is stays; the file only loses the page when you
-save); + adds a page after the one you are looking at; then the pen, shape, text and pointer tools
+asked (the last page there is stays; undo brings it back, with its ink, until you save); + adds a
+page after the one you are looking at; the four small pages open the pages overview (below); then the pen, shape, text and pointer tools
 (a tool's button only chooses it; its settings are in the bar under the tools); a monitor or a tablet, which shows the
 mode in use (the tablet in blue) and switches to the other when pressed; full screen. (Under the tools:
 the bar described above.)
+
+PAGES OVERVIEW. The four-pages button opens a card over the document: a picture of every page (with its ink), its
+number, and on the left the PDF's own table of contents when it has one. The page you are looking at is ringed and
+its section lit. Tap a page to go to it; tap an entry of the contents to go there (its arrow folds it); scroll with the
+wheel, a finger or by dragging empty space. Header: + adds a page after the one you were looking at, the check mark is
+edit mode, undo and redo (the same as the document's), X closes (so do Esc and a tap on the dimmed document).
+In edit mode a tap chooses a page (a tick shows) or lets go of it, and a bar under the pages offers: Select all / none,
+duplicate, move earlier, move later and delete (all of it for the chosen pages). Dragging a page with the stylus or the
+mouse moves it (all the chosen ones together if it is one of them): the blue bar shows where it will land, and holding it
+near the top or bottom scrolls. A finger scrolls; use the arrows of the bar to move pages with it. The number under a page
+opens its menu: add a page before, add a page after, duplicate, delete. Every one of these is a step of the history. At a
+desk: Ctrl+A chooses every page, Ctrl+D duplicates the chosen ones, Delete deletes them, Ctrl+Z and Ctrl+Y undo and redo,
+and Esc steps out one level at a time (a drag, the chosen pages, edit mode, the overview).
 Your tools and their settings are kept in %APPDATA%\InkPDF\settings.txt.
 
 When InkPDF is your default PDF app (Settings > Apps > Default apps), Explorer shows the first

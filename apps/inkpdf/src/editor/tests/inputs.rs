@@ -45,9 +45,7 @@ fn the_mouse_does_nothing_to_the_page_with_any_tool_but_scroll_in_the_tablet_mod
             !(ed.requests.has(&Request::Save)
                 || ed.requests.has(&Request::Close)
                 || ed.requests.has(&Request::Fullscreen)
-                || ed.requests.has(&Request::AddPage)
-                || ed.requests.insert_page().is_some()
-                || ed.requests.delete_page().is_some())
+                || ed.requests.page_edit().is_some())
         );
         // The wheel scrolls, up and down, and sideways with a tilting wheel or a touchpad.
         ed.wheel(MouseScrollDelta::LineDelta(0.0, -3.0));

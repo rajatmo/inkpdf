@@ -21,6 +21,7 @@ fn every_item_is_hit_at_its_centre_and_there_are_no_others() {
             Item::Save,
             Item::DeletePage,
             Item::AddPage,
+            Item::Pages,
             Item::Tool(Tool::Pen),
             Item::Tool(Tool::Geometry),
             Item::Tool(Tool::Text),

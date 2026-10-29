@@ -22,6 +22,15 @@ impl Editor {
             self.prompt_event(&ev);
             return;
         }
+        if self.chrome.overview.is_some() {
+            if ev.device == Device::Pen {
+                self.palm.pen_event(&ev, (self.clock)());
+            }
+            if ev.device != Device::Mouse {
+                self.overview_event(&ev);
+            }
+            return;
+        }
         match ev.device {
             Device::Pen => {
                 self.palm.pen_event(&ev, (self.clock)());

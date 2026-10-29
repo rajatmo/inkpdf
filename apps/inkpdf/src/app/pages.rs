@@ -26,8 +26,8 @@ impl State {
         let level = tiles::level_for(zoom);
         let (top, bottom) = view.visible_y();
         let resident: HashSet<Key> = self.gpu.keys().collect();
-        for page in doc.layout.pages_in(top, bottom) {
-            let Some(r) = doc.layout.page(page) else { continue };
+        for page in self.ed.layout.pages_in(top, bottom) {
+            let Some(r) = self.ed.layout.page(page) else { continue };
             // Snap the page to whole pixels: its edges stay sharp, and a tile rendered at the
             // current zoom lands exactly on the pixel grid.
             let o = view.doc_to_screen([r.x, r.y]);
@@ -42,9 +42,11 @@ impl State {
             // When sharp tiles cover everything of this page that is on screen, nothing beneath
             // them is visible: skip the preview and the other zoom levels (less to draw, less
             // power).
-            let mut wanted = self.visible.iter().filter(|k| k.page() as usize == page).peekable();
+            // (Its pictures are those of the page of the file that draws it; a page that was added has none.)
+            let drawn_from = doc.render_page(page);
+            let mut wanted = self.visible.iter().filter(|k| Some(k.page()) == drawn_from).peekable();
             let covered = wanted.peek().is_some() && wanted.all(|k| resident.contains(k));
-            let preview = Key::Preview { page: page as u32 };
+            let preview = Key::Preview { page: drawn_from.unwrap_or(u32::MAX) };
             if !covered && resident.contains(&preview) {
                 scene.quads.push(Quad::page(preview, [ox, oy, ox + w, oy + h]));
                 scene.drawn.push(preview);
@@ -55,7 +57,7 @@ impl State {
             let mut tiles: Vec<(i32, Key)> = resident
                 .iter()
                 .filter_map(|&k| match k {
-                    Key::Tile { page: p, level: l, .. } if p as usize == page && (!covered || l == level) => {
+                    Key::Tile { page: p, level: l, .. } if Some(p) == drawn_from && (!covered || l == level) => {
                         Some(((i32::from(l) - i32::from(level)).abs(), k))
                     }
                     _ => None,

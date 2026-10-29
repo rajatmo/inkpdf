@@ -159,6 +159,8 @@ pub(super) struct CapsulePipeline {
     pub xf_layout: wgpu::BindGroupLayout,
     doc: Transform,
     screen: Transform,
+    /// One for each small picture of a page with ink in it, grown as they are needed.
+    thumbs: Vec<Transform>,
 }
 
 impl CapsulePipeline {
@@ -196,12 +198,24 @@ impl CapsulePipeline {
             cache: None,
         });
         let (doc, screen) = (Transform::new(device, "document transform", &xf_layout), Transform::new(device, "screen transform", &xf_layout));
-        Self { pipeline, xf_layout, doc, screen }
+        Self { pipeline, xf_layout, doc, screen, thumbs: Vec::new() }
     }
 
     pub fn set_transforms(&mut self, queue: &wgpu::Queue, scroll: [f32; 2], zoom: f32, viewport: [f32; 2]) {
         self.doc.update(queue, Xf::new(scroll, zoom, viewport));
         self.screen.update(queue, Xf::new([0.0; 2], 1.0, viewport));
+    }
+
+    /// Make picture `i`'s transform what it should be (making it first if it is the first time).
+    pub fn set_thumb(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, i: usize, xf: Xf) {
+        while self.thumbs.len() <= i {
+            self.thumbs.push(Transform::new(device, "picture transform", &self.xf_layout));
+        }
+        self.thumbs[i].update(queue, xf);
+    }
+
+    pub fn thumb_bind(&self, i: usize) -> Option<&wgpu::BindGroup> {
+        self.thumbs.get(i).map(|t| &t.bind)
     }
 
     pub fn doc_bind(&self) -> &wgpu::BindGroup {

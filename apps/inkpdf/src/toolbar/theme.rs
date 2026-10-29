@@ -19,11 +19,47 @@ pub(super) const TRACK: [u8; 4] = [20, 24, 40, 34];
 /// The rim of a colour dot or a slider thumb, so a white one still shows on a white panel.
 pub(super) const RIM: [u8; 4] = [20, 24, 40, 56];
 
-/// What the toolbar and its pop-ups are made of: rounded panels, drawn first, then lines over them.
+/// Which side of its position a label sits on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Align {
+    /// The position is the label's left edge.
+    Left,
+    /// The position is the label's middle.
+    Centre,
+}
+
+/// A line of text, in pixels: drawn by the app from the font it has, not made of lines.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Label {
+    pub text: String,
+    /// The size of the text, in pixels.
+    pub size: f32,
+    pub color: [u8; 4],
+    /// Where it is: `x` by `align`, `y` the middle of the line.
+    pub at: [f32; 2],
+    pub align: Align,
+}
+
+/// A picture of a page, with its ink, in pixels.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Image {
+    pub page: u32,
+    /// Where the whole picture would be.
+    pub full: [f32; 4],
+    /// The part of it that is shown (it can be cut off where it leaves the area it is in).
+    pub shown: [f32; 4],
+    /// How opaque it is, 0 to 1 (a page being dragged is see-through).
+    pub alpha: f32,
+}
+
+/// What the toolbar and its pop-ups are made of: rounded panels, drawn first, then pictures and text over them, then
+/// lines over those.
 #[derive(Default)]
 pub struct Ui {
     pub panels: Vec<Panel>,
     pub lines: Vec<Capsule>,
+    pub images: Vec<Image>,
+    pub labels: Vec<Label>,
 }
 
 impl Ui {

@@ -1,4 +1,4 @@
-# InkPDF architecture (v0.2.0)
+# InkPDF architecture
 
 A fast, pen-first PDF annotator for Windows. The application layer was rewritten in 0.2.0 from the plan
 below; the 0.1.11 source is in this repository's history. The layering rule and the tool contract are
@@ -51,7 +51,7 @@ ones below; no two modules may reach each other, directly or through others.
 | tools | `tools` |
 | ui | `toolbar` |
 | domain | `tool`, `input`, `requests`, `workspace`, `selection`, `settings` |
-| model | `figure`, `ink`, `laser`, `links` |
+| model | `figure`, `ink`, `laser`, `links`, `outline`, `pages` |
 | base | `plane`, `scene`, `clock`, `geometry`, `colour`, `coords`, `view`, `text`, `smooth`, `clipboard` |
 
 * `plane` holds the point type `P` and the plane arithmetic (distances, polygon tests, simplify, thin, `clamp_into`)
@@ -86,6 +86,53 @@ ones below; no two modules may reach each other, directly or through others.
    * `Editor` derefs to the document state read-only outside tests, so only the editor and the tools change it, and the
      shell asks for changes in the editor's terms (`set_dpr`, `document_saved`, `requests()`, ...);
    * the editor reads the time from its own clock, not from the pointer layer.
+## Pages: one edit, everything follows
+
+Before the pages overview a page edit was done six times, by hand, in `doc.rs`, `ink/store.rs`, `ink_io.rs`, `app/files.rs`,
+`editor/mod.rs` and `requests.rs`, and the page layout was kept twice (the document's and the editor's) and synced by the
+shell in a fixed order. Now:
+
+* **`pages.rs`** holds the one value, `PageEdit` (`Insert`, `Delete { grave }`, `Move`, `Arrange`, `Duplicate`, `Restore { grave }`),
+  and the one rule, `PageEdit::order` (which page each page of the result was). `apply`/`apply_with` carry any list kept by page
+  through an edit; `Layout::edited` is the layout after it; a `Remap` says where each page went, how far its place moved, and
+  which pages are copies. `inverse` is the edit that undoes it. Pure arithmetic, tested for every variant and for all inverses.
+* **The editor does every page edit** (`editor/pages.rs`, `Editor::edit_pages`): it ends what was under way, computes the
+  remap, hands it to the ink store as **one step of the history** (`Cmd::Pages`: the forward and backward remaps, the strokes
+  that were buried, the strokes made for copies), carries the links (`links::remap`/`copies`/`restore`) and the outline
+  (`outline::remap`/`restore`), keeps what a deletion took in a grave, brings the selection and the view along, and asks the shell
+  once (`Request::PagesEdited(edit)`). Undo and redo of such a step come back through the same follow-up
+  (`InkStore::take_page_edit` → `Editor::page_step_followed`).
+* **One linear history, so no old step is ever renumbered.** An older step is undone only after the page edit above it, when
+  the pages are numbered as they were when it was recorded.
+* **The shell** applies the same edit to the file's page table (`Doc::apply`: sizes, geometry, and a slot per page saying which
+  page of the renderer draws it and which page of the file it is, or is a copy of) and drops what was drawn for renumbered
+  pages. `Doc` no longer keeps a layout (it computes one) nor the links (the editor owns them).
+* **Saving** (`ink_io::save`) makes the file's pages the document's: copies are appended first (so a copy outlives a deleted
+  original, and ink saved on the original is removed from the copy), then deleted pages go, the rest are put in the document's
+  order with `move_pages`, blank pages are inserted, and our ink is rewritten on the pages that changed. Pages deleted before a
+  save cannot be undone (the file no longer has them): saving forgets those steps and the graves.
+* **The test of it**: `pages::tests` (every variant, every inverse), `ink::store::tests` (strokes follow, undo restores order),
+  `doc::tests` (files saved and reopened after moves, deletions undone, copies, mixed sessions, no doubled ink), editor tests
+  (links, outline, selection) and a storm that moves, deletes, duplicates and undoes pages at random with the document and
+  the editor checked page by page after every step.
+
+### The pages overview
+
+A modal card (like the prompt: while it is up every device talks to it and to nothing else) with a picture of every page, its
+number, the PDF's table of contents on the left when there is one, and an edit mode.
+
+* `toolbar/overview/layout.rs` — where everything is for a window and a scale (pure; the grid is arithmetic, so a million
+  pages cost what three do); `draw.rs` — what it looks like, as plain data in `toolbar::Ui` (panels, lines, and now `Image`s
+  and `Label`s). Anything half scrolled out of the grid is cut at its edge or left out.
+* `editor/overview.rs` — its state (scroll, folded entries, chosen pages, a drag, an open menu) and what every device does:
+  taps, drags (a pen or mouse carries a page; a finger scrolls), the wheel, keys, shortcuts. Page changes while it is up are
+  followed (`overview_follow`), and so are window changes (`overview_settled`).
+* `app/overview.rs` + `gpu` — text becomes bitmaps (as typed text does), pages become small renders (`tiles::Key::Thumb`), and the
+  GPU has a layer between the interface's panels and its lines for both, and draws a page's ink into its picture from the same
+  buffer as the document's (a transform and a scissor rectangle per picture).
+* `outline.rs` — the table of contents, read with `pdfcraft_organize::bookmarks`, flat, with `visible` (folding) and
+  `section_of` (the entry that holds a page).
+
 ## SOLID, concretely
 
 * **S** — `Tool`s (one interaction style each), `InputPolicy` (who may do what), `Workspace` (shared

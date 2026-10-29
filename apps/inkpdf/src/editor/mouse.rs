@@ -6,6 +6,7 @@
 
 use crate::input::{ButtonState, Device, MouseButton, PenButtons, Phase, Wheel};
 
+use super::modal::Modal;
 use super::{Act, Editor};
 
 /// Pixels one mouse-wheel notch scrolls.
@@ -23,17 +24,11 @@ pub(super) struct MousePress {
 impl Editor {
     pub(crate) fn mouse_moved(&mut self, pos: [f32; 2]) {
         self.cursor = pos;
-        if self.chrome.prompt.is_some() {
-            self.prompt_pointer(Device::Mouse, 0, Phase::Move, pos);
-            return;
-        }
-        if self.chrome.save_as.is_some() {
-            self.save_as_pointer(Device::Mouse, 0, Phase::Move, pos);
-            return;
-        }
-        if self.chrome.overview.is_some() {
-            self.overview_pointer(Device::Mouse, 0, Phase::Move, pos);
-            return;
+        match self.modal() {
+            Some(Modal::Prompt) => return self.prompt_pointer(Device::Mouse, 0, Phase::Move, pos),
+            Some(Modal::SaveAs) => return self.save_as_pointer(Device::Mouse, 0, Phase::Move, pos),
+            Some(Modal::Overview) => return self.overview_pointer(Device::Mouse, 0, Phase::Move, pos),
+            None => {}
         }
         self.update_hover(Some(pos));
         match self.chrome.act {
@@ -65,6 +60,7 @@ impl Editor {
     /// The window lost the keyboard focus: a button released elsewhere never reaches us, so what the mouse was
     /// in the middle of is ended now.
     pub(crate) fn focus_lost(&mut self) {
+        self.palm.reset();
         self.overview_gestures_lost();
         if self.mouse_press.take().is_some() {
             self.tools.end_all(&mut self.ws);
@@ -95,21 +91,15 @@ impl Editor {
             return;
         }
         let pressed = state == ButtonState::Pressed;
-        if self.chrome.save_as.is_some() {
+        if let Some(modal) = self.modal() {
+            // A modal layer answers the left button alone.
             if button == MouseButton::Left {
-                self.save_as_pointer(Device::Mouse, 0, if pressed { Phase::Down } else { Phase::Up }, self.cursor);
-            }
-            return;
-        }
-        if self.chrome.overview.is_some() {
-            if button == MouseButton::Left && self.chrome.prompt.is_none() {
-                self.overview_pointer(Device::Mouse, 0, if pressed { Phase::Down } else { Phase::Up }, self.cursor);
-            }
-            return;
-        }
-        if self.chrome.prompt.is_some() {
-            if button == MouseButton::Left {
-                self.prompt_pointer(Device::Mouse, 0, if pressed { Phase::Down } else { Phase::Up }, self.cursor);
+                let (phase, at) = (if pressed { Phase::Down } else { Phase::Up }, self.cursor);
+                match modal {
+                    Modal::Prompt => self.prompt_pointer(Device::Mouse, 0, phase, at),
+                    Modal::SaveAs => self.save_as_pointer(Device::Mouse, 0, phase, at),
+                    Modal::Overview => self.overview_pointer(Device::Mouse, 0, phase, at),
+                }
             }
             return;
         }
@@ -166,16 +156,11 @@ impl Editor {
 
     /// The wheel scrolls, up and down and (for a wheel that tilts or a touchpad) sideways.
     pub fn wheel(&mut self, delta: Wheel) {
-        if self.chrome.prompt.is_some() {
-            return;
-        }
-        if self.chrome.save_as.is_some() {
-            self.save_as_wheel(delta);
-            return;
-        }
-        if self.chrome.overview.is_some() {
-            self.overview_wheel(delta);
-            return;
+        match self.modal() {
+            Some(Modal::Prompt) => return,
+            Some(Modal::SaveAs) => return self.save_as_wheel(delta),
+            Some(Modal::Overview) => return self.overview_wheel(delta),
+            None => {}
         }
         match delta {
             Wheel::Lines(x, y) => self.ws.scroll_by_px(-x * WHEEL_NOTCH_PX, y * WHEEL_NOTCH_PX),

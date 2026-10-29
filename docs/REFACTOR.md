@@ -71,7 +71,9 @@ translates (it already does for keys). Then `architecture.rs` can forbid `winit`
 *Effect.* Any shell feeds one `Editor::handle(InputEvent)`. A recorded event stream replays identically on every OS
 (see R9). *Latency.* None (same data, one fewer enum conversion).
 
-### R2. One modal slot instead of 26 gates  *(medium, low risk)*
+### R2. One modal slot instead of 26 gates  *(medium, low risk; done: `editor/modal.rs`)*
+
+*Done.* `Editor::modal()` says which layer is on top (prompt, then Save As, then overview); every route matches on it. Side effect: a click now reaches the prompt when it is up over Save As (before, Save As got it).
 
 *Problem.* Each modal (prompt, overview, Save As) is checked separately at every entry point.
 *Change.* `chrome.modal: Option<Modal>` with `enum Modal { Prompt, Overview, SaveAs }` and one

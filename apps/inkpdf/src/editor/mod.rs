@@ -27,6 +27,7 @@ mod chrome;
 mod commands;
 mod context;
 mod dispatch;
+mod modal;
 mod motions;
 mod mouse;
 mod navigation;

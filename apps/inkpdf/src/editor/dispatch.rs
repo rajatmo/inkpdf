@@ -2,6 +2,7 @@
 
 use crate::input::{Device, InputEvent, PointerEvent, Sample};
 
+use super::modal::Modal;
 use super::{Act, Editor};
 
 impl Editor {
@@ -40,32 +41,39 @@ impl Editor {
 
     /// A pen or touch message from the Windows pointer layer.
     pub(crate) fn pointer_event(&mut self, ev: PointerEvent) {
-        if self.chrome.prompt.is_some() {
-            self.prompt_event(&ev);
-            return;
-        }
-        if self.chrome.save_as.is_some() {
-            if ev.device != Device::Mouse {
-                self.save_as_event(&ev);
+        match self.modal() {
+            Some(Modal::Prompt) => return self.prompt_event(&ev),
+            Some(Modal::SaveAs) => {
+                if ev.device != Device::Mouse {
+                    self.save_as_event(&ev);
+                }
+                return;
             }
-            return;
-        }
-        if self.chrome.overview.is_some() {
-            if ev.device == Device::Pen {
-                self.palm.pen_event(&ev, (self.clock)());
+            Some(Modal::Overview) => {
+                if ev.device == Device::Pen {
+                    self.pen_seen(&ev);
+                }
+                if ev.device != Device::Mouse {
+                    self.overview_event(&ev);
+                }
+                return;
             }
-            if ev.device != Device::Mouse {
-                self.overview_event(&ev);
-            }
-            return;
+            None => {}
         }
         match ev.device {
             Device::Pen => {
-                self.palm.pen_event(&ev, (self.clock)());
+                self.pen_seen(&ev);
                 self.pen_event(&ev);
             }
             Device::Touch => self.touch_event(&ev),
             Device::Mouse => {}
+        }
+    }
+
+    /// The palm guard takes note of the pen. If that gives up fingers that were down, what they had started stops.
+    fn pen_seen(&mut self, ev: &PointerEvent) {
+        if self.palm.pen_event(ev, (self.clock)()) {
+            self.cancel_touches();
         }
     }
 

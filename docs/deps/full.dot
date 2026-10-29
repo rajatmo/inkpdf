@@ -149,7 +149,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "settings" -> "tool" [color="#b8860b99", penwidth=1.30, tooltip="1 uses"];
 "smooth" -> "plane" [color="#4a7fb599", penwidth=1.30, tooltip="1 uses"];
 "store" -> "browse" [color="#b8860b99", penwidth=1.30, tooltip="1 uses"];
-"text" -> "plane" [color="#4a7fb599", penwidth=1.30, tooltip="1 uses"];
+"text" -> "plane" [color="#4a7fb599", penwidth=1.80, tooltip="3 uses"];
 "tiles" -> "view" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "tool" -> "figure" [color="#b8860b99", penwidth=1.30, tooltip="1 uses"];
 "tool" -> "ink" [color="#b8860b99", penwidth=1.30, tooltip="1 uses"];

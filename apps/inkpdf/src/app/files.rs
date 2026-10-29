@@ -44,8 +44,8 @@ impl State {
         self.ed.settle();
         if !self.ed.ink.is_dirty() {
             self.run(then);
-        } else if self.then.is_none() {
-            self.then = Some(then);
+        } else if self.session.then.is_none() {
+            self.session.then = Some(then);
             self.ed.ask_unsaved();
             self.window.request_redraw();
         }
@@ -53,7 +53,7 @@ impl State {
 
     fn run(&mut self, then: Then) {
         match then {
-            Then::Exit => self.exit = true,
+            Then::Exit => self.timing.exit = true,
             Then::Open(path) => self.open_now(path),
             Then::Blank => self.open_blank(),
         }
@@ -61,9 +61,9 @@ impl State {
 
     /// The prompt was answered.
     pub(super) fn answered(&mut self, choice: Choice) {
-        let Some(then) = self.then.take() else { return };
+        let Some(then) = self.session.then.take() else { return };
         // A document with no file yet is asked where to go: what was waiting follows when the file has been written.
-        if choice == Choice::Save && self.ed.ink.is_dirty() && self.doc.as_ref().is_some_and(|d| d.id.is_none()) {
+        if choice == Choice::Save && self.ed.ink.is_dirty() && self.session.doc.as_ref().is_some_and(|d| d.id.is_none()) {
             self.begin_save_as(Some(then));
             return;
         }
@@ -75,14 +75,14 @@ impl State {
     fn install(&mut self, mut doc: Doc, strokes: Vec<PageStroke>) {
         eprintln!("opened {} — {} pages, {} ink strokes, {} ms", doc.name, doc.page_count(), strokes.len(), doc.open_millis);
         self.gpu.clear_textures();
-        self.failed.clear();
+        self.session.failed.clear();
         self.ed.load(doc.layout(), strokes);
         self.ed.links = doc.take_links();
         self.ed.outline = doc.take_outline();
-        self.doc = Some(doc);
-        self.save_then = None;
-        self.ink_built = InkStamp::NEVER;
-        self.last_zoom = self.ed.view.zoom;
+        self.session.doc = Some(doc);
+        self.session.save_then = None;
+        self.layers.ink_built = InkStamp::NEVER;
+        self.timing.last_zoom = self.ed.view.zoom;
         self.title.clear();
         self.window.request_redraw();
     }
@@ -93,7 +93,7 @@ impl State {
     }
 
     fn open_now(&mut self, path: PathBuf) {
-        match Doc::open_from(&*self.files, &DocId::Path(path.clone())) {
+        match Doc::open_from(&*self.session.files, &DocId::Path(path.clone())) {
             Ok((doc, strokes)) => self.install(doc, strokes),
             Err(e) => {
                 eprintln!("could not open {}: {e}", path.display());
@@ -126,8 +126,8 @@ impl State {
             return;
         }
         self.ed.settle();
-        self.save_then = then;
-        let file = self.doc.as_ref().and_then(|d| d.path().map(Path::to_path_buf));
+        self.session.save_then = then;
+        let file = self.session.doc.as_ref().and_then(|d| d.path().map(Path::to_path_buf));
         let dir = file.as_deref().and_then(Path::parent).filter(|p| p.is_dir()).map_or_else(|| self.platform.documents_dir(), Path::to_path_buf);
         let name = file.as_deref().and_then(Path::file_name).map_or_else(|| format!("{UNTITLED}.pdf"), |n| n.to_string_lossy().into_owned());
         self.ed.ask_save_as(dir, &name, self.platform.places());
@@ -136,8 +136,8 @@ impl State {
 
     /// The Save As dialog was confirmed with the file `id`: the document is written there, and becomes that file.
     fn save_to(&mut self, id: DocId) {
-        let result = match &mut self.doc {
-            Some(doc) => doc.save_as_to(&*self.files, &id, &self.ed.ink),
+        let result = match &mut self.session.doc {
+            Some(doc) => doc.save_as_to(&*self.session.files, &id, &self.ed.ink),
             None => Err("there is no document to save".to_string()),
         };
         match result {
@@ -146,7 +146,7 @@ impl State {
                 self.ed.save_as_done(Ok(()));
                 self.title.clear();
                 self.window.request_redraw();
-                if let Some(then) = self.save_then.take() {
+                if let Some(then) = self.session.save_then.take() {
                     self.run(then);
                 }
             }
@@ -159,7 +159,7 @@ impl State {
 
     /// The folders the dialog asked for that have been read: handed to the editor.
     fn take_listings(&mut self) {
-        while let Ok(listed) = self.listings.1.try_recv() {
+        while let Ok(listed) = self.session.listings.1.try_recv() {
             self.ed.folder_listed(&listed.dir, listed.result);
         }
     }
@@ -171,15 +171,15 @@ impl State {
         if !self.ed.ink.is_dirty() {
             return true;
         }
-        let Some(has_file) = self.doc.as_ref().map(|d| d.id.is_some()) else { return true };
+        let Some(has_file) = self.session.doc.as_ref().map(|d| d.id.is_some()) else { return true };
         // A document with no file yet is saved where the person says: the dialog asks, and the write follows from it
         // (see `save_to`), so nothing has been saved yet.
         if !has_file {
             self.begin_save_as(None);
             return false;
         }
-        let Some(doc) = &mut self.doc else { return true };
-        match doc.save_to(&*self.files, &self.ed.ink) {
+        let Some(doc) = &mut self.session.doc else { return true };
+        match doc.save_to(&*self.session.files, &self.ed.ink) {
             Ok(()) => {
                 self.ed.document_saved();
                 self.title.clear();
@@ -208,20 +208,20 @@ impl State {
 
     /// The editor edited the pages: the file's page table follows, and what was drawn for the pages is out of date.
     fn pages_edited(&mut self, edit: &PageEdit) {
-        let Some(doc) = &mut self.doc else { return };
+        let Some(doc) = &mut self.session.doc else { return };
         if !doc.apply(edit) {
             eprintln!("the document could not follow the edit of its pages: {edit:?}");
             return;
         }
         // (What is on the GPU is kept by the page of the file that draws it: a change of the pages leaves it as it is.)
-        self.ink_built = InkStamp::NEVER;
+        self.layers.ink_built = InkStamp::NEVER;
     }
 
     pub(super) fn request_close(&mut self) {
         // Closing the window puts the Save As dialog away first (what it was for is not going to happen).
         if self.ed.save_as_open() {
             self.ed.cancel_save_as();
-            self.save_then = None;
+            self.session.save_then = None;
         }
         self.after_settling(Then::Exit);
     }
@@ -253,17 +253,17 @@ impl State {
                     self.save_now();
                 }
                 Request::SaveAs => self.begin_save_as(None),
-                Request::ListFolder(dir) => folders::spawn(dir, self.files.clone(), self.window.clone(), self.listings.0.clone()),
+                Request::ListFolder(dir) => folders::spawn(dir, self.session.files.clone(), self.window.clone(), self.session.listings.0.clone()),
                 Request::SaveTo(id) => self.save_to(id),
                 Request::SaveAsCancelled => {
-                    self.save_then = None;
+                    self.session.save_then = None;
                     self.window.request_redraw();
                 }
                 Request::Fullscreen => self.toggle_fullscreen(),
                 Request::Close => self.close_document(),
                 Request::PagesEdited(edit) => self.pages_edited(&edit),
                 Request::GravesForgotten(graves) => {
-                    if let Some(doc) = &mut self.doc {
+                    if let Some(doc) = &mut self.session.doc {
                         doc.forget_graves(&graves);
                     }
                 }

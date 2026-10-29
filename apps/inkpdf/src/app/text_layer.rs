@@ -67,12 +67,12 @@ fn ensure(gpu: &mut Gpu, text: &str, size: f32, rgba: [u8; 4], level: i16) -> u6
 impl State {
     /// Work out which text boxes to draw this frame and have their bitmaps ready.
     pub(super) fn sync_texts(&mut self) {
-        self.text_draws.clear();
+        self.layers.text_draws.clear();
         let ed = &self.ed;
-        self.text_index.refresh(ed);
-        if self.text_index.at.is_empty() && ed.text_edit().is_none() {
+        self.layers.text_index.refresh(ed);
+        if self.layers.text_index.at.is_empty() && ed.text_edit().is_none() {
             // No text boxes, but the pages overview's text is bitmaps too (a page number each): kept only as long as it is shown.
-            self.gpu.trim_texts(&self.overview.keys, KEEP_BITMAPS);
+            self.gpu.trim_texts(&self.layers.overview.keys, KEEP_BITMAPS);
             return;
         }
         let (top, bottom) = ed.view.visible_y();
@@ -84,7 +84,7 @@ impl State {
         let editing = ed.text_edit().and_then(|e| e.target);
         let mut used = HashSet::new();
         let strokes = ed.ink.strokes();
-        for s in self.text_index.at.iter().filter_map(|&i| strokes.get(i)) {
+        for s in self.layers.text_index.at.iter().filter_map(|&i| strokes.get(i)) {
             let (Some(block), Some(&corner)) = (&s.text, s.pts.first()) else { continue };
             if !visible.contains(&(s.page as usize)) || Some(s.id) == editing || ed.erasing.contains(&s.id) {
                 continue;
@@ -92,7 +92,7 @@ impl State {
             let moved = if ed.selection.contains(&s.id) { shift } else { [0.0, 0.0] };
             let key = ensure(&mut self.gpu, &block.text, block.size, s.style.rgba, level);
             used.insert(key);
-            self.text_draws.push(TextDraw {
+            self.layers.text_draws.push(TextDraw {
                 page: s.page,
                 key,
                 top_left: [corner[0] + moved[0], corner[1] + moved[1]],
@@ -104,15 +104,15 @@ impl State {
         {
             let key = ensure(&mut self.gpu, &edit.text, edit.size, edit.rgba, level);
             used.insert(key);
-            self.text_draws.push(TextDraw { page: edit.page, key, top_left: edit.top_left, size: text::measure(&edit.text, edit.size) });
+            self.layers.text_draws.push(TextDraw { page: edit.page, key, top_left: edit.top_left, size: text::measure(&edit.text, edit.size) });
         }
-        used.extend(self.overview.keys.iter().copied());
+        used.extend(self.layers.overview.keys.iter().copied());
         self.gpu.trim_texts(&used, KEEP_BITMAPS);
     }
 
     /// The quads of the text boxes on `page`.
     pub(super) fn text_quads(&self, page: usize, out: &mut Vec<Quad>) {
-        for d in self.text_draws.iter().filter(|d| d.page as usize == page) {
+        for d in self.layers.text_draws.iter().filter(|d| d.page as usize == page) {
             if let Some(rect) = self.text_rect(d) {
                 out.push(Quad::text(d.key, rect));
             }
@@ -129,7 +129,7 @@ impl State {
     /// `scale` is its pixels to a point, and what is outside the part of the picture that is in view is cut off. The keys
     /// of the bitmaps used are added to `keys`, to be kept.
     pub(super) fn thumb_text_quads(&mut self, image: &Image, scale: f32, keys: &mut HashSet<u64>, out: &mut Vec<Quad>) {
-        if self.text_index.at.is_empty() {
+        if self.layers.text_index.at.is_empty() {
             return;
         }
         let (page, origin, shown, alpha) = (image.page, [image.full[0], image.full[1]], image.shown, image.alpha);
@@ -137,7 +137,7 @@ impl State {
         // The bitmaps are made at the size they are shown, so that they are crisp and small.
         let level = tiles::level_for(scale);
         let strokes = self.ed.ink.strokes();
-        for s in self.text_index.at.iter().filter_map(|&i| strokes.get(i)) {
+        for s in self.layers.text_index.at.iter().filter_map(|&i| strokes.get(i)) {
             let (Some(block), Some(&corner)) = (&s.text, s.pts.first()) else { continue };
             if s.page != page {
                 continue;

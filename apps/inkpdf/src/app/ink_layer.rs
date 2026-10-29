@@ -127,12 +127,12 @@ impl State {
     /// being erased. Selected strokes are left out: they are drawn as an overlay.
     pub(super) fn sync_committed(&mut self) {
         let now = InkStamp::of(&self.ed);
-        match plan_refresh(&self.ink_built, &now, &self.ed.ink, self.ink_pages.len()) {
+        match plan_refresh(&self.layers.ink_built, &now, &self.ed.ink, self.layers.ink_pages.len()) {
             Refresh::Current => return,
             Refresh::Append { from } if self.append_committed(from) => {}
             Refresh::Append { .. } | Refresh::Rebuild => self.rebuild_committed(),
         }
-        self.ink_built = now;
+        self.layers.ink_built = now;
     }
 
     /// Add the strokes from index `from` on to the end of the buffer. `false` when they do not fit
@@ -151,7 +151,7 @@ impl State {
             return false;
         }
         for (page, range) in ranges {
-            push_range(&mut self.ink_pages, page, range);
+            push_range(&mut self.layers.ink_pages, page, range);
         }
         true
     }
@@ -164,11 +164,11 @@ impl State {
         let mut shown: Vec<&Stroke> = ed.ink.strokes().iter().filter(|s| !hidden.contains(&s.id)).collect();
         shown.sort_by_key(|s| s.page);
         let mut all = Vec::with_capacity(shown.len() * 32);
-        self.ink_pages.clear();
+        self.layers.ink_pages.clear();
         for s in shown {
             let start = all.len() as u32;
             stroke_capsules(s, [0.0, 0.0], &mut all);
-            push_range(&mut self.ink_pages, s.page, start..all.len() as u32);
+            push_range(&mut self.layers.ink_pages, s.page, start..all.len() as u32);
         }
         self.gpu.set_committed(&all);
     }
@@ -176,7 +176,7 @@ impl State {
     pub(super) fn visible_ink_ranges(&self) -> Vec<Range<u32>> {
         let (top, bottom) = self.ed.view.visible_y();
         let pages = self.ed.layout.pages_in(top, bottom);
-        self.ink_pages.iter().filter(|(p, _)| pages.contains(&(*p as usize))).map(|(_, r)| r.clone()).collect()
+        self.layers.ink_pages.iter().filter(|(p, _)| pages.contains(&(*p as usize))).map(|(_, r)| r.clone()).collect()
     }
 
     /// Rebuild the toolbars and pen panel on the GPU when their look has changed: a different state,
@@ -203,7 +203,7 @@ impl State {
             look: ed.toolbar_look(),
             bar_in: ed.motions.bar_amount().to_bits(),
         };
-        if self.ui_built.as_ref() == Some(&stamp) {
+        if self.layers.ui_built.as_ref() == Some(&stamp) {
             return;
         }
         let mut ui = Ui::default();
@@ -235,7 +235,7 @@ impl State {
             PromptLayout::new(ed.view.viewport, ed.dpr).draw_with(view, f32::from_bits(bits), &mut ui);
         }
         self.gpu.set_ui(&ui.panels, &ui.lines);
-        self.ui_built = Some(stamp);
+        self.layers.ui_built = Some(stamp);
     }
     /// Line work drawn over the committed ink, as `(document space, screen pixels)`; `now_ms` is
     /// the pen clock, for the laser's fading trail.

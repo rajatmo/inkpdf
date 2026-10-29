@@ -98,7 +98,7 @@ impl ApplicationHandler for App {
     fn window_event(&mut self, el: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         if let Some(state) = &mut self.state {
             state.window_event(event);
-            if state.exit {
+            if state.exiting() {
                 el.exit();
             }
         }

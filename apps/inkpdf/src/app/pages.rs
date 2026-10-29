@@ -20,7 +20,7 @@ impl State {
     /// The quads to draw, the textures they use, and how many visible pages have nothing to show.
     pub(super) fn scene(&self) -> Scene {
         let mut scene = Scene { quads: Vec::new(), drawn: Vec::new(), blank_pages: 0 };
-        let Some(doc) = &self.doc else { return scene };
+        let Some(doc) = &self.session.doc else { return scene };
         let view = &self.ed.view;
         let zoom = view.zoom;
         let level = tiles::level_for(zoom);
@@ -44,7 +44,7 @@ impl State {
             // power).
             // (Its pictures are those of the page of the file that draws it; a page that was added has none.)
             let drawn_from = doc.render_page(page);
-            let mut wanted = self.visible.iter().filter(|k| Some(k.page()) == drawn_from).peekable();
+            let mut wanted = self.layers.visible.iter().filter(|k| Some(k.page()) == drawn_from).peekable();
             let covered = wanted.peek().is_some() && wanted.all(|k| resident.contains(k));
             let preview = Key::Preview { page: drawn_from.unwrap_or(u32::MAX) };
             if !covered && resident.contains(&preview) {

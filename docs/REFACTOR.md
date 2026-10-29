@@ -113,7 +113,9 @@ folder. `text::set_font(bytes)` is called at start from `platform::system_font()
 measures the same on every OS and the tests no longer depend on the machine. `clock`, `gpu/device`, `doc` take their per-OS fact from `platform`.
 *Effect.* `base` and `domain` become I/O-free and the layering test can say so. Saved text-box geometry no longer varies by machine.
 
-### R6. Split the shell's `State`  *(medium, low risk)*
+### R6. Split the shell's `State`  *(medium, low risk; done)*
+
+*Done.* `State` keeps the window, GPU, editor and platform, and three plain structs: `FrameLoop` (`timing`), `DocumentSession` (`session`) and `UiLayers` (`layers`). Fields, not objects: nothing is added to the frame path.
 
 *Change.* `FrameLoop` (timing, bench, latency stats), `DocumentSession` (doc, `then`, `save_then`, files), `UiLayers` (the GPU-side
 caches and bitmaps), plus window and GPU. Plain structs holding fields, no extra indirection on the frame path.

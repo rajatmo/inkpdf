@@ -71,7 +71,7 @@ impl Bench {
 impl State {
     /// Advance the scripted benchmark: scroll, zoom in and out, scroll again, then report.
     pub(super) fn drive_bench(&mut self, dt: f32) {
-        let Some(bench) = &mut self.bench else { return };
+        let Some(bench) = &mut self.timing.bench else { return };
         let ed = &mut self.ed;
         let t = bench.started.elapsed().as_secs_f32();
         let centre = ed.viewport_centre();
@@ -91,12 +91,12 @@ impl State {
         }
         if t >= 10.2 {
             self.report_bench();
-            self.exit = true;
+            self.timing.exit = true;
         }
     }
 
     fn report_bench(&mut self) {
-        let Some(bench) = self.bench.take() else { return };
+        let Some(bench) = self.timing.bench.take() else { return };
         let mut ms = bench.frame_ms;
         ms.sort_by(f32::total_cmp);
         let n = ms.len().max(1);
@@ -130,14 +130,14 @@ impl State {
     }
 
     pub(super) fn report_latency(&mut self) {
-        let mut age = std::mem::take(&mut self.read_age_ms);
+        let mut age = std::mem::take(&mut self.timing.read_age_ms);
         age.sort_by(f32::total_cmp);
         if let (Some(&mid), Some(&high)) = (age.get(age.len() / 2), age.get((age.len() as f32 * 0.95) as usize).or(age.last())) {
             println!(
                 "newest pen sample's age when the frame read it, ms: p50 {mid:.1}  p95 {high:.1}  (the rest of the latency is the frame's own work)"
             );
         }
-        let mut ms = std::mem::take(&mut self.latency_ms);
+        let mut ms = std::mem::take(&mut self.timing.latency_ms);
         if ms.is_empty() {
             println!("pen latency: no pen samples were drawn");
             return;

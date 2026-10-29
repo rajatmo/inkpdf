@@ -42,33 +42,33 @@ impl State {
             // Just put away: it goes out, drawn as it was, a little clearer each frame.
             let leaving = self.ed.overview_leaving();
             if leaving > 0.0
-                && let Some(ghost) = &self.overview.ghost
+                && let Some(ghost) = &self.layers.overview.ghost
             {
                 let mut ui = ghost.clone();
                 ui.fade(leaving);
                 self.gpu.set_ui(&ui.panels, &ui.lines);
-                self.overview.images = ui.images;
-                self.overview.labels = ui.labels;
-                self.ui_built = None;
+                self.layers.overview.images = ui.images;
+                self.layers.overview.labels = ui.labels;
+                self.layers.ui_built = None;
                 return true;
             }
-            self.overview.ghost = None;
-            if !self.overview.images.is_empty() || !self.overview.labels.is_empty() {
-                self.overview.images.clear();
-                self.overview.labels.clear();
-                self.overview.keys.clear();
-                self.ui_built = None;
+            self.layers.overview.ghost = None;
+            if !self.layers.overview.images.is_empty() || !self.layers.overview.labels.is_empty() {
+                self.layers.overview.images.clear();
+                self.layers.overview.labels.clear();
+                self.layers.overview.keys.clear();
+                self.layers.ui_built = None;
             }
             return false;
         }
         let mut ui = Ui::default();
         self.ed.draw_overview(&mut ui);
         self.gpu.set_ui(&ui.panels, &ui.lines);
-        self.overview.ghost = Some(ui.clone());
-        self.overview.images = ui.images;
-        self.overview.labels = ui.labels;
+        self.layers.overview.ghost = Some(ui.clone());
+        self.layers.overview.images = ui.images;
+        self.layers.overview.labels = ui.labels;
         // What the interface was built from is gone from the GPU: it is built afresh when the overview leaves.
-        self.ui_built = None;
+        self.layers.ui_built = None;
         true
     }
 
@@ -81,26 +81,26 @@ impl State {
         let mut ui = Ui::default();
         self.ed.draw_save_as(&mut ui);
         self.gpu.set_ui(&ui.panels, &ui.lines);
-        self.overview.images.clear();
-        self.overview.labels = ui.labels;
+        self.layers.overview.images.clear();
+        self.layers.overview.labels = ui.labels;
         // What the interface was built from is gone from the GPU: it is built afresh when the dialog leaves.
-        self.ui_built = None;
+        self.layers.ui_built = None;
         true
     }
 
     /// The quads of the overview's text and pictures, and the ink in the pictures, for this frame; the bitmaps and the
     /// small renders they need are made sure of first.
     pub(super) fn overview_frame(&mut self) {
-        self.overview.quads.clear();
-        self.overview.thumbs.clear();
-        if !self.ed.overview_open() && self.overview.images.is_empty() && self.overview.labels.is_empty() {
+        self.layers.overview.quads.clear();
+        self.layers.overview.thumbs.clear();
+        if !self.ed.overview_open() && self.layers.overview.images.is_empty() && self.layers.overview.labels.is_empty() {
             return;
         }
         let viewport = self.ed.view.viewport;
         // (The ink in the pictures is drawn once the overview is all there, and not while it goes out.)
         let appear = if self.ed.overview_open() { self.ed.overview_appear() } else { 0.0 };
         let mut used = HashSet::new();
-        for label in &self.overview.labels {
+        for label in &self.layers.overview.labels {
             let key = label_key(label);
             if self.gpu.text_size(key).is_none()
                 && let Some(bitmap) = text::raster(&label.text, label.size, 1.0, label.color)
@@ -116,25 +116,28 @@ impl State {
                 Align::Centre => label.at[0] - width / 2.0,
             };
             let (x, y) = ((left - text::PAD).round(), (label.at[1] - height / 2.0 - text::PAD).round());
-            self.overview.quads.push(Quad { color: [label.alpha.clamp(0.0, 1.0); 4], ..Quad::text(key, [x, y, x + bw as f32, y + bh as f32]) });
+            self.layers
+                .overview
+                .quads
+                .push(Quad { color: [label.alpha.clamp(0.0, 1.0); 4], ..Quad::text(key, [x, y, x + bw as f32, y + bh as f32]) });
         }
-        self.overview.keys = used;
+        self.layers.overview.keys = used;
         let mut thumb_keys = HashSet::new();
         let mut thumb_texts = Vec::new();
         // (Taken for the loop, which needs the shell for the bitmaps of the text, and put back.)
-        let images = std::mem::take(&mut self.overview.images);
+        let images = std::mem::take(&mut self.layers.overview.images);
         for image in &images {
             let (full, shown) = (image.full, image.shown);
             let (w, h) = ((full[2] - full[0]).max(1.0), (full[3] - full[1]).max(1.0));
             // The picture of the page the file draws it from, once it is there: not for a page that was added (it is
             // blank), nor yet for one that is still being rendered. What is drawn on the page shows either way.
             // (It is kept under the page of the file that draws the page.)
-            let key = self.doc.as_ref().and_then(|d| d.render_page(image.page as usize)).map(|p| Key::Thumb { page: p });
+            let key = self.session.doc.as_ref().and_then(|d| d.render_page(image.page as usize)).map(|p| Key::Thumb { page: p });
             if let Some(key) = key.filter(|&k| self.gpu.has(k)) {
-                self.gpu.touch(key, self.frame);
+                self.gpu.touch(key, self.timing.frame);
                 let uv = [(shown[0] - full[0]) / w, (shown[1] - full[1]) / h, (shown[2] - full[0]) / w, (shown[3] - full[1]) / h];
                 let a = image.alpha.clamp(0.0, 1.0);
-                self.overview.quads.push(Quad { uv, color: [a; 4], ..Quad::page(key, shown) });
+                self.layers.overview.quads.push(Quad { uv, color: [a; 4], ..Quad::page(key, shown) });
             }
             let Some(page) = self.ed.layout.page(image.page as usize) else { continue };
             if page.w <= 0.0 {
@@ -143,7 +146,7 @@ impl State {
             let scale = w / page.w;
             // The typed text on the page (bitmaps, like the labels), over its picture.
             self.thumb_text_quads(image, scale, &mut thumb_keys, &mut thumb_texts);
-            let ranges: Vec<_> = self.ink_pages.iter().filter(|(p, _)| *p == image.page).map(|(_, r)| r.clone()).collect();
+            let ranges: Vec<_> = self.layers.ink_pages.iter().filter(|(p, _)| *p == image.page).map(|(_, r)| r.clone()).collect();
             if ranges.is_empty() {
                 continue;
             }
@@ -152,7 +155,7 @@ impl State {
             let clip = [clip_x0, clip_y0, shown[2].ceil().min(viewport[0]) - clip_x0, shown[3].ceil().min(viewport[1]) - clip_y0];
             // (The ink in a picture is drawn once the overview is fully there: it cannot be faded with it.)
             if clip[2] > 0.0 && clip[3] > 0.0 && appear >= 1.0 {
-                self.overview.thumbs.push(InkThumb {
+                self.layers.overview.thumbs.push(InkThumb {
                     ranges,
                     origin: [page.x - full[0] / scale, page.y - full[1] / scale],
                     scale,
@@ -160,8 +163,8 @@ impl State {
                 });
             }
         }
-        self.overview.images = images;
-        self.overview.quads.append(&mut thumb_texts);
-        self.overview.keys.extend(thumb_keys);
+        self.layers.overview.images = images;
+        self.layers.overview.quads.append(&mut thumb_texts);
+        self.layers.overview.keys.extend(thumb_keys);
     }
 }

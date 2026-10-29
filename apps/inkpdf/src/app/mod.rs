@@ -74,34 +74,46 @@ pub struct Options {
     pub mode: Option<Mode>,
 }
 
-pub struct State {
-    window: Arc<Window>,
-    gpu: Gpu,
-    doc: Option<Doc>,
-    ed: Editor,
+/// The frame loop's own business: its clock, what it is waiting for, how long things took.
+struct FrameLoop {
     frame: u64,
     last_frame: Instant,
     last_zoom: f32,
     last_zoom_change: Instant,
-    failed: HashSet<Key>,
-    /// The sharp tiles the current view needs, from the last plan.
-    visible: Vec<Key>,
-    title: String,
     wake_at: Option<Instant>,
     bench: Option<Bench>,
     exit_at: Option<Instant>,
-    pub exit: bool,
-    /// The OS's own pen and touch reader (see `platform`); `None` when it could not be installed, and winit's basic input is used.
-    pointer: Option<Box<dyn PointerSource>>,
-    /// What this operating system provides (folders, clipboard, error boxes, the pen reader); built once at start.
-    platform: Box<dyn Platform>,
-    /// Where files are read and written (see `store`); the platform's.
-    files: Arc<dyn FileStore>,
+    exit: bool,
     print_stats: bool,
     /// Milliseconds from a pen sample's timestamp to the frame carrying it being handed to the GPU.
     latency_ms: Vec<f32>,
     /// Milliseconds from a pen sample's timestamp to the moment the frame read it (the input queue's share).
     read_age_ms: Vec<f32>,
+    /// Whether a frame is being drawn right now (see `redraw`).
+    drawing: bool,
+    /// The app is in the background and has no window to draw to (Android): nothing is drawn, and nothing asks to be.
+    suspended: bool,
+}
+
+/// The open document and what waits on it: the file, the store it lives in, and the questions asked about unsaved work.
+struct DocumentSession {
+    doc: Option<Doc>,
+    /// Where files are read and written (see `store`); the platform's.
+    files: Arc<dyn FileStore>,
+    /// Tiles the renderer could not draw, so they are not asked for again.
+    failed: HashSet<Key>,
+    /// What is waiting on the unsaved-changes prompt.
+    then: Option<files::Then>,
+    /// What is waiting on the Save As dialog: it follows when the file is written, and is dropped if the dialog is cancelled.
+    save_then: Option<files::Then>,
+    /// The folders read for the Save As dialog arrive here, from threads of their own (see [`folders`]).
+    listings: (Sender<folders::Listed>, Receiver<folders::Listed>),
+}
+
+/// What is on the GPU for the window, and what it was last built from.
+struct UiLayers {
+    /// The sharp tiles the current view needs, from the last plan.
+    visible: Vec<Key>,
     /// What the GPU's committed-ink buffer was last built from, and which pages own which part.
     ink_built: InkStamp,
     ink_pages: Vec<(u32, Range<u32>)>,
@@ -114,18 +126,24 @@ pub struct State {
     /// The text boxes to draw this frame, and where the ink's own are.
     text_draws: Vec<text_layer::TextDraw>,
     text_index: text_layer::TextIndex,
-    /// Whether a frame is being drawn right now (see `redraw`).
-    drawing: bool,
-    /// What is waiting on the unsaved-changes prompt.
-    then: Option<files::Then>,
-    /// The app is in the background and has no window to draw to (Android): nothing is drawn, and nothing asks to be.
-    suspended: bool,
+}
+
+/// The shell: the window and the GPU, the editor, and three plain groups of what the shell keeps (no indirection on the frame
+/// path: they are fields, not objects).
+pub struct State {
+    window: Arc<Window>,
+    gpu: Gpu,
+    ed: Editor,
+    timing: FrameLoop,
+    session: DocumentSession,
+    layers: UiLayers,
+    title: String,
+    /// The OS's own pen and touch reader (see `platform`); `None` when it could not be installed, and winit's basic input is used.
+    pointer: Option<Box<dyn PointerSource>>,
+    /// What this operating system provides (folders, clipboard, error boxes, the pen reader); built once at start.
+    platform: Box<dyn Platform>,
     /// Whether the on-screen keyboard was last asked for (see `platform::set_text_input`).
     keyboard_shown: bool,
-    /// What is waiting on the Save As dialog: it follows when the file is written, and is dropped if the dialog is cancelled.
-    save_then: Option<files::Then>,
-    /// The folders read for the Save As dialog arrive here, from threads of their own (see [`folders`]).
-    listings: (Sender<folders::Listed>, Receiver<folders::Listed>),
     /// The mode was chosen on the command line, so a change of posture does not change it.
     mode_forced: bool,
     /// Which of Ctrl, Shift, … are held (for the desktop mode's shortcuts).
@@ -133,6 +151,11 @@ pub struct State {
 }
 
 impl State {
+    /// Whether the app has been asked to end (by its window, a command-line limit, or the benchmark finishing).
+    pub fn exiting(&self) -> bool {
+        self.timing.exit
+    }
+
     pub fn new(el: &ActiveEventLoop, opts: Options) -> Result<State, String> {
         let mut attrs = Window::default_attributes().with_title("InkPDF").with_inner_size(LogicalSize::new(1100.0, 900.0)).with_maximized(true);
         if opts.topmost {
@@ -163,37 +186,43 @@ impl State {
             ed: Editor::new([size.width.max(1) as f32, size.height.max(1) as f32], window.scale_factor() as f32),
             window,
             gpu,
-            doc: None,
-            frame: 0,
-            last_frame: now,
-            last_zoom: 1.0,
-            last_zoom_change: now,
-            failed: HashSet::new(),
-            visible: Vec::new(),
+            timing: FrameLoop {
+                frame: 0,
+                last_frame: now,
+                last_zoom: 1.0,
+                last_zoom_change: now,
+                wake_at: None,
+                bench: opts.bench.then(|| Bench::new(now)),
+                exit_at: opts.exit_after.map(|d| now + d),
+                exit: false,
+                print_stats: opts.stats,
+                latency_ms: Vec::new(),
+                read_age_ms: Vec::new(),
+                drawing: false,
+                suspended: false,
+            },
+            session: DocumentSession {
+                doc: None,
+                files: platform.file_store(),
+                failed: HashSet::new(),
+                then: None,
+                save_then: None,
+                listings: std::sync::mpsc::channel(),
+            },
+            layers: UiLayers {
+                visible: Vec::new(),
+                ink_built: InkStamp::NEVER,
+                ink_pages: Vec::new(),
+                ui_built: None,
+                overview: overview::Shown::default(),
+                overlay_buf: ink_layer::Overlays::default(),
+                text_draws: Vec::new(),
+                text_index: text_layer::TextIndex::default(),
+            },
             title: String::new(),
-            wake_at: None,
-            bench: opts.bench.then(|| Bench::new(now)),
-            exit_at: opts.exit_after.map(|d| now + d),
-            exit: false,
             pointer,
-            files: platform.file_store(),
             platform,
-            print_stats: opts.stats,
-            latency_ms: Vec::new(),
-            read_age_ms: Vec::new(),
-            ink_built: InkStamp::NEVER,
-            ink_pages: Vec::new(),
-            ui_built: None,
-            overview: overview::Shown::default(),
-            overlay_buf: ink_layer::Overlays::default(),
-            text_draws: Vec::new(),
-            text_index: text_layer::TextIndex::default(),
-            drawing: false,
-            then: None,
-            suspended: false,
             keyboard_shown: false,
-            save_then: None,
-            listings: std::sync::mpsc::channel(),
             mode_forced: opts.mode.is_some(),
             modifiers: ModifiersState::empty(),
         };
@@ -209,7 +238,7 @@ impl State {
         }
         if let Some(path) = opts.path {
             state.open(path);
-            if state.doc.is_none() {
+            if state.session.doc.is_none() {
                 state.open_blank();
             }
             if opts.select_all {
@@ -236,7 +265,7 @@ impl State {
 
     /// The window was taken away (the app went to the background): no drawing until [`Self::resumed`].
     pub fn suspended(&mut self) {
-        self.suspended = true;
+        self.timing.suspended = true;
         self.gpu.pause();
     }
 
@@ -245,7 +274,7 @@ impl State {
         let size = self.window.inner_size();
         self.gpu.resume(size.width, size.height);
         self.ed.set_viewport([size.width.max(1) as f32, size.height.max(1) as f32]);
-        self.suspended = false;
+        self.timing.suspended = false;
         self.window.request_redraw();
     }
 
@@ -332,11 +361,11 @@ impl State {
             self.set_mode(self.platform.detect_mode());
         }
         // `--exit-after` must fire even when the window is idle and nothing is redrawing.
-        if self.exit_at.is_some_and(|t| Instant::now() >= t) {
-            self.exit = true;
+        if self.timing.exit_at.is_some_and(|t| Instant::now() >= t) {
+            self.timing.exit = true;
         }
-        if self.exit {
-            if std::mem::take(&mut self.print_stats) {
+        if self.timing.exit {
+            if std::mem::take(&mut self.timing.print_stats) {
                 self.report_latency();
             }
             if let Some(pointer) = &mut self.pointer {
@@ -345,10 +374,10 @@ impl State {
             el.exit();
             return;
         }
-        let mut wake = self.exit_at;
-        if let Some(t) = self.wake_at {
+        let mut wake = self.timing.exit_at;
+        if let Some(t) = self.timing.wake_at {
             if Instant::now() >= t {
-                self.wake_at = None;
+                self.timing.wake_at = None;
                 self.window.request_redraw();
             } else {
                 wake = Some(wake.map_or(t, |w| w.min(t)));

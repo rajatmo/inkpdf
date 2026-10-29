@@ -6,9 +6,9 @@ use std::ops::Range;
 
 use crate::editor::Editor;
 use crate::ink::{InkStore, P, Stroke};
-use crate::scene::Capsule;
+use crate::scene::{Capsule, Xform};
 use crate::smooth::curve_through;
-use crate::toolbar::{self, ContextState, PanelView, PromptLayout, PromptView, Ui};
+use crate::toolbar::{self, ContextState, Look, PanelView, PromptLayout, PromptView, Ui};
 use crate::tools::Painter;
 use crate::tools::paint::CURVE_STEP;
 
@@ -87,10 +87,14 @@ pub(super) struct UiStamp {
     state: toolbar::State,
     viewport: [u32; 2],
     dpr: u32,
-    panel: Option<PanelView>,
-    prompt: Option<PromptView>,
+    panel: Option<(PanelView, u32)>,
+    prompt: Option<(PromptView, u32)>,
     /// The bar under the tools.
     context: Option<ContextState>,
+    /// The toolbar's buttons, in the middle of whatever is moving in them.
+    look: Look,
+    /// How far the bar under the tools has come in.
+    bar_in: u32,
 }
 
 /// Line work drawn over the committed ink.
@@ -185,27 +189,47 @@ impl State {
         let ed = &self.ed;
         let state = ed.toolbar_state();
         let [w, h] = ed.view.viewport.map(f32::to_bits);
-        let stamp =
-            UiStamp { state, viewport: [w, h], dpr: ed.dpr.to_bits(), panel: ed.panel_view(), prompt: ed.chrome.prompt, context: ed.context_view() };
+        // (What comes and goes is drawn as far in as it is: how far is part of what the interface was built from.)
+        let stamp = UiStamp {
+            state,
+            viewport: [w, h],
+            dpr: ed.dpr.to_bits(),
+            panel: ed.panel_look().map(|(view, amount)| (view, amount.to_bits())),
+            prompt: ed.prompt_look().map(|(view, amount)| (view, amount.to_bits())),
+            context: ed.context_view(),
+            look: ed.toolbar_look(),
+            bar_in: ed.motions.bar_amount().to_bits(),
+        };
         if self.ui_built.as_ref() == Some(&stamp) {
             return;
         }
         let mut ui = Ui::default();
         // The prompt takes over the window: the toolbars step out of the way.
-        if let Some(view) = ed.chrome.prompt {
-            PromptLayout::new(ed.view.viewport, ed.dpr).draw(view, &mut ui);
-        } else {
+        if ed.chrome.prompt.is_none() {
             let bar = ed.toolbar();
-            bar.draw(&state, &mut ui);
-            let panel = bar.tool_panel(ed.tool, ed.view.viewport[0], ed.chrome.panel.is_some_and(|p| p.editing.is_some()));
-            let unfolded = stamp.panel.as_ref().zip(panel.as_ref());
-            // The bar under the tools; with the panel unfolded they are one card, drawn before the panel's contents.
+            bar.draw_with(&state, &stamp.look, &mut ui);
+            let coming = ui.mark();
+            let unfolded = stamp.panel.and_then(|(view, bits)| Some((view, f32::from_bits(bits), bar.tool_panel(view.tool, ed.view.viewport[0], view.editing.is_some())?)));
+            // The bar under the tools; with the panel unfolded they are one card, drawn before the panel's contents. The card
+            // grows to hold the panel as the panel comes in, and the panel's contents appear when there is room for them.
             if let (Some(context), Some(view)) = (ed.context_bar(), &stamp.context) {
-                context.draw(view, unfolded.and_then(|(_, p)| ed.drawer().map(|d| d[3].max(p.rect[3]))), &mut ui);
+                let end = unfolded.as_ref().filter(|(_, amount, _)| *amount > 0.02).map(|(_, amount, panel)| {
+                    let full = context.card(panel.rect[3] + 0.2 * panel.unit())[3].max(panel.rect[3]);
+                    context.rect[3] + (full - context.rect[3]) * amount
+                });
+                context.draw(view, end, &mut ui);
             }
-            if let Some((view, panel)) = unfolded {
+            if let Some((view, amount, panel)) = &unfolded {
+                let contents = ui.mark();
                 panel.draw(view, &mut ui);
+                ui.apply(contents, Xform::fade(((amount - 0.5) * 2.0).clamp(0.0, 1.0)));
             }
+            // The bar comes down into place as it comes in.
+            let came = f32::from_bits(stamp.bar_in);
+            ui.apply(coming, Xform::slide([0.0, -(1.0 - came) * 8.0 * ed.dpr], came));
+        }
+        if let Some((view, bits)) = stamp.prompt {
+            PromptLayout::new(ed.view.viewport, ed.dpr).draw_with(view, f32::from_bits(bits), &mut ui);
         }
         self.gpu.set_ui(&ui.panels, &ui.lines);
         self.ui_built = Some(stamp);

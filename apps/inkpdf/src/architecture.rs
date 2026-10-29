@@ -9,7 +9,7 @@
 //!   ui        toolbar           where the buttons are, how they look
 //!   domain    tool, input, requests, workspace, selection, settings
 //!   model     figure, ink, laser, links, outline, pages
-//!   base      plane, scene, clock, geometry, colour, coords, view, text, smooth, clipboard
+//!   base      plane, motion, scene, clock, geometry, colour, coords, view, text, smooth, clipboard
 //! ```
 //!
 //! The one thing the layer table cannot say yet is in [`KNOWN_EXCEPTIONS`]: edges that point up and are still there.
@@ -121,8 +121,9 @@ enum Layer {
 }
 
 /// Every top-level module of the program, and its layer. A new module is placed here or the test fails.
-const LAYERS: [(&str, Layer); 34] = [
+const LAYERS: [(&str, Layer); 35] = [
     ("plane", Layer::Base),
+    ("motion", Layer::Base),
     ("scene", Layer::Base),
     ("clock", Layer::Base),
     ("geometry", Layer::Base),

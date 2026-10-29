@@ -1,7 +1,7 @@
 //! The look of the interface: a light, floating style (white rounded panels with soft shadows,
 //! slate icons, one blue accent), and the small drawing helpers the toolbar and pop-ups share.
 
-use crate::scene::{Capsule, Panel};
+use crate::scene::{Capsule, Panel, Xform};
 
 /// Panels: plain white, so page text never ghosts through them.
 pub(super) const PANEL: [u8; 4] = [255, 255, 255, 255];
@@ -38,6 +38,8 @@ pub struct Label {
     /// Where it is: `x` by `align`, `y` the middle of the line.
     pub at: [f32; 2],
     pub align: Align,
+    /// How opaque it is, 0 to 1 (not in what the bitmap is made of: a fade does not make a bitmap for every step of it).
+    pub alpha: f32,
 }
 
 /// A picture of a page, with its ink, in pixels.
@@ -52,9 +54,24 @@ pub struct Image {
     pub alpha: f32,
 }
 
+/// What of `items` is from index `from` on (none if there are not that many).
+fn tail<T>(items: &mut [T], from: usize) -> &mut [T] {
+    let from = from.min(items.len());
+    &mut items[from..]
+}
+
+/// A place in what is drawn (see [`Ui::mark`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Mark {
+    panels: usize,
+    lines: usize,
+    images: usize,
+    labels: usize,
+}
+
 /// What the toolbar and its pop-ups are made of: rounded panels, drawn first, then pictures and text over them, then
 /// lines over those.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Ui {
     pub panels: Vec<Panel>,
     pub lines: Vec<Capsule>,
@@ -63,23 +80,39 @@ pub struct Ui {
 }
 
 impl Ui {
-    /// Everything drawn `f` (0 to 1) as opaque as it was: the interface coming into view. (Labels are bitmaps drawn as
-    /// quads, which are faded where they are drawn, not here.)
-    pub fn fade(&mut self, f: f32) {
-        if f >= 1.0 {
+    /// Where what is drawn so far ends: what is drawn after it can be given a change of place or opacity on its own
+    /// (see [`Ui::apply`]).
+    pub fn mark(&self) -> Mark {
+        Mark { panels: self.panels.len(), lines: self.lines.len(), images: self.images.len(), labels: self.labels.len() }
+    }
+
+    /// Put `x` over everything drawn since `since`: the interface coming into view, going out, growing from a button.
+    pub fn apply(&mut self, since: Mark, x: Xform) {
+        if x.is_identity() {
             return;
         }
-        let f = f.clamp(0.0, 1.0);
-        let scale = |a: u8| (f32::from(a) * f).round() as u8;
-        for p in &mut self.panels {
-            p.color[3] = scale(p.color[3]);
+        let alpha = x.alpha.clamp(0.0, 1.0);
+        for p in tail(&mut self.panels, since.panels) {
+            *p = p.transformed(&x);
         }
-        for c in &mut self.lines {
-            c.color[3] = scale(c.color[3]);
+        for c in tail(&mut self.lines, since.lines) {
+            *c = c.transformed(&x);
         }
-        for i in &mut self.images {
-            i.alpha *= f;
+        for i in tail(&mut self.images, since.images) {
+            i.full = x.rect(i.full);
+            i.shown = x.rect(i.shown);
+            i.alpha *= alpha;
         }
+        for l in tail(&mut self.labels, since.labels) {
+            // (The size of the text stays what it was drawn at; the position and the opacity follow.)
+            l.at = x.point(l.at);
+            l.alpha *= alpha;
+        }
+    }
+
+    /// Everything drawn `f` (0 to 1) as opaque as it was: the interface coming into view.
+    pub fn fade(&mut self, f: f32) {
+        self.apply(Mark::default(), Xform::fade(f));
     }
 
     /// A filled circle of `diameter`.

@@ -8,5 +8,5 @@
 mod draw;
 mod layout;
 
-pub use draw::{DragView, Hover, OverviewView, draw};
+pub use draw::{DragView, Hover, OverviewView, PageMotion, draw};
 pub use layout::{Action, Control, MenuItem, OverviewLayout, TocHit, TocRow};

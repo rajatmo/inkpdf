@@ -24,6 +24,7 @@ mod ink_io;
 mod input;
 mod laser;
 mod links;
+mod motion;
 mod native;
 mod outline;
 mod pages;

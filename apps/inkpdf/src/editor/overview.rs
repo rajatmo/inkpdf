@@ -13,6 +13,7 @@ use winit::event::MouseScrollDelta;
 
 use crate::input::{Device, Phase, PointerEvent};
 use crate::outline;
+use crate::motion::{Curve, Slides, Tween, seconds};
 use crate::pages::{MAX_PAGES, PageEdit, Remap};
 use crate::tools::Key;
 use crate::toolbar::{
@@ -25,9 +26,8 @@ use super::Editor;
 /// How far a pointer must move before a press is a drag, in logical pixels.
 const DRAG_PX: f32 = 6.0;
 /// How long the pages and the table of contents take to settle where the wheel or a key sent them (the time in which
-/// they cover nine tenths of the way), and how long the overview takes to come into view, in seconds.
+/// they cover nine tenths of the way), in seconds.
 const GLIDE_SECONDS: f32 = 0.11;
-const APPEAR_SECONDS: f32 = 0.16;
 /// What one notch of a wheel scrolls, in units of the overview's interface.
 const WHEEL_UNITS: f32 = 2.4;
 /// How near the edge of the pages a dragged page is held to scroll them, and how fast, in units.
@@ -58,12 +58,6 @@ struct Drag {
     slot: usize,
 }
 
-/// A slow start and a soft stop for a motion that goes from 0 to 1.
-fn ease(t: f32) -> f32 {
-    let t = t.clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
-}
-
 /// The overview's own state, while it is open.
 #[derive(Default)]
 pub struct OverviewState {
@@ -74,7 +68,14 @@ pub struct OverviewState {
     goal: Option<f32>,
     toc_goal: Option<f32>,
     /// How much of the way into view the overview is, 0 to 1.
-    appear: f32,
+    appear: Tween,
+    /// Pages that were moved are away from where they belong, and go there; new ones (and ticks just made) are still
+    /// coming, which is the part of them still to come (see [`crate::toolbar::PageMotion`]). By the page's number now.
+    slides: Slides<usize>,
+    grows: Slides<usize>,
+    ticks: Slides<usize>,
+    /// The pages that have a tick, to see which are new.
+    ticked: BTreeSet<usize>,
     /// The entries of the table of contents that are folded closed, by their index in the outline.
     folded: HashSet<usize>,
     /// The rows of the table that are shown, made when first wanted and again when an entry is folded or unfolded (an
@@ -104,6 +105,22 @@ impl OverviewState {
         self.drag.is_some()
     }
 
+    /// How far a page is from where it belongs, and how much of it and of its tick is still to come, for tests.
+    #[cfg(test)]
+    pub fn slides_for_tests(&self, page: usize) -> [f32; 2] {
+        self.slides.offset(page)
+    }
+
+    #[cfg(test)]
+    pub fn grows_for_tests(&self, page: usize) -> f32 {
+        self.grows.offset(page)[0]
+    }
+
+    #[cfg(test)]
+    pub fn ticks_for_tests(&self, page: usize) -> f32 {
+        self.ticks.offset(page)[0]
+    }
+
     /// What the pointer is over, for tests.
     #[cfg(test)]
     pub fn hover_for_tests(&self) -> Option<Hover> {
@@ -130,8 +147,10 @@ impl Editor {
         self.chrome.act = super::Act::Idle;
         self.chrome.panel = None;
         self.chrome.hover = None;
-        // (Under the tests' clocks, which do not run, it is simply there.)
-        let mut state = OverviewState { appear: if cfg!(test) { 1.0 } else { 0.0 }, ..OverviewState::default() };
+        let prefs = self.motions.prefs();
+        let mut state = OverviewState::default();
+        state.appear.go(1.0, prefs.time(seconds::MEDIUM), Curve::Decelerate);
+        self.motions.overview_back();
         let current = self.ws.view.current_page(&self.ws.layout);
         let layout = self.overview_layout_for(false);
         state.scroll = layout.show(current, self.ws.layout.len(), 0.0);
@@ -142,6 +161,8 @@ impl Editor {
 
     pub fn close_overview(&mut self) {
         if self.chrome.overview.take().is_some() {
+            // (It goes out over a moment, drawn as it was: see `Motions::overview_leaving`.)
+            self.motions.overview_left();
             self.ws.redraw = true;
         }
     }
@@ -191,6 +212,7 @@ impl Editor {
     /// One frame of the overview's own motion: the pages and the table of contents glide to where they were sent, and it
     /// comes into view. Whether it is still moving.
     pub(super) fn step_overview(&mut self, dt: f32) -> bool {
+        let time = self.motions.prefs().time(seconds::SHORT);
         let Some(state) = &mut self.chrome.overview else { return false };
         // The share of the way covered in this step, for a motion that covers nine tenths in `seconds`.
         let share = |seconds: f32| 1.0 - (-dt.max(0.0) * std::f32::consts::LN_10 / seconds).exp();
@@ -206,10 +228,18 @@ impl Editor {
                 }
             }
         }
-        if state.appear < 1.0 {
-            state.appear = (state.appear + dt.max(0.0) / APPEAR_SECONDS).min(1.0);
-            moving = true;
+        moving |= state.appear.step(dt);
+        // A page newly chosen gets its tick popping in; one let go of loses it.
+        for &page in &state.selected {
+            if state.ticked.insert(page) {
+                state.ticks.start(page, [1.0, 0.0], time);
+            }
         }
+        let chosen = &state.selected;
+        state.ticked.retain(|p| chosen.contains(p));
+        moving |= state.slides.step(dt);
+        moving |= state.grows.step(dt);
+        moving |= state.ticks.step(dt);
         if moving {
             self.ws.redraw = true;
         }
@@ -218,7 +248,13 @@ impl Editor {
 
     /// How much of the way into view the overview is, 0 to 1.
     pub fn overview_appear(&self) -> f32 {
-        self.chrome.overview.as_ref().map_or(1.0, |o| ease(o.appear))
+        self.chrome.overview.as_ref().map_or(1.0, |o| o.appear.value())
+    }
+
+    /// How much of the overview that has just been put away is still there, 0 to 1: it goes out over a moment, and the
+    /// shell draws it as it was meanwhile.
+    pub fn overview_leaving(&self) -> f32 {
+        if self.chrome.overview.is_some() { 0.0 } else { self.motions.overview_leaving() }
     }
 
     /// Which of the bar's actions can be done now, in the order of [`Action::ALL`].
@@ -263,9 +299,10 @@ impl Editor {
             enabled: self.overview_enabled(),
             menu: state.menu,
             menu_enabled: [true, true, self.ws.layout.len() < MAX_PAGES, self.ws.layout.len() > 1],
+            motion: &|page| toolbar::PageMotion { shift: state.slides.offset(page), grow: state.grows.offset(page)[0], tick: state.ticks.offset(page)[0] },
         };
         toolbar::draw_overview(&view, &layout, ui);
-        ui.fade(ease(state.appear));
+        ui.fade(state.appear.value());
     }
 
     /// The pages whose pictures the overview shows now, with a row more on each side so that scrolling finds them ready.
@@ -444,6 +481,10 @@ impl Editor {
 
     /// Send the pages (or the table of contents) `dy` pixels further than they are going: they glide there.
     fn glide_overview_by(&mut self, dy: f32, toc: bool) {
+        // (With motion reduced the pages go where they are sent at once.)
+        if self.motions.prefs().reduced {
+            return self.scroll_overview_by(dy, toc);
+        }
         let layout = self.overview_layout();
         let (pages, rows) = (self.ws.layout.len(), self.toc_rows().len());
         if let Some(state) = &mut self.chrome.overview {
@@ -706,11 +747,40 @@ impl Editor {
     /// After the pages changed while the overview is up (a page added, or an undo that put pages back or took them
     /// away), or after its mode changed: what it keeps still makes sense. `map` is what the change did to the pages, if it
     /// was one: the pages chosen go where their pages went.
-    pub(super) fn overview_follow(&mut self, map: Option<&Remap>) {
+    pub(super) fn overview_follow(&mut self, map: Option<&Remap>, before: usize) {
+        let was = self.chrome.overview.as_ref().map(|s| s.scroll);
         if let (Some(state), Some(map)) = (&mut self.chrome.overview, map) {
             state.selected = state.selected.iter().filter_map(|&p| map.page(p)).collect();
+            state.ticked = state.selected.clone();
+            state.ticks = Slides::default();
         }
         self.overview_settled();
+        if let (Some(map), Some(was)) = (map, was) {
+            self.overview_slide(map, before, was);
+        }
+    }
+
+    /// The pages of a change made while the overview is up go from where their pictures were to where they are: a page
+    /// that moved slides, a new one (or a copy) grows in.
+    fn overview_slide(&mut self, map: &Remap, before: usize, was: f32) {
+        let layout = self.overview_layout();
+        let count = self.ws.layout.len();
+        let prefs = self.motions.prefs();
+        let Some(state) = &mut self.chrome.overview else { return };
+        let now = state.scroll;
+        state.slides.rekey(|page| map.page(page));
+        state.grows.rekey(|page| map.page(page));
+        for old in layout.visible_pages(before, was) {
+            if let Some(new) = map.page(old) {
+                let (from, to) = (layout.cell(old, was), layout.cell(new, now));
+                state.slides.start(new, [from[0] - to[0], from[1] - to[1]], prefs.time(seconds::MEDIUM));
+            }
+        }
+        let new_pages = map.added().iter().copied().chain(map.copies().iter().map(|c| c.page));
+        for page in new_pages.filter(|&p| p < count) {
+            state.grows.start(page, [1.0, 0.0], prefs.time(seconds::MEDIUM));
+        }
+        self.ws.redraw = true;
     }
 
     /// What the overview keeps is brought back into range.

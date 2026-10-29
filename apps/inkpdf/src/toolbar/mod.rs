@@ -9,6 +9,7 @@
 
 mod context_bar;
 mod icons;
+mod look;
 mod overview;
 mod prompt;
 mod theme;
@@ -26,9 +27,10 @@ use crate::tool::{PALETTE, Tool, width_range};
 pub use context_bar::{ContextBar, ContextItem, ContextState};
 use icons::icons;
 pub use overview::{
-    Action as OverviewAction, Control as OverviewControl, DragView, Hover as OverviewHover, MenuItem as OverviewMenuItem, OverviewLayout, OverviewView, TocHit, TocRow,
+    Action as OverviewAction, Control as OverviewControl, DragView, Hover as OverviewHover, MenuItem as OverviewMenuItem, OverviewLayout, OverviewView, PageMotion, TocHit, TocRow,
     draw as draw_overview,
 };
+pub use look::Look;
 pub use prompt::{PromptLayout, PromptView};
 pub use theme::{Align, Image, Label, Ui};
 use theme::{ACCENT, ACCENT_WASH, HOVER_WASH, INK, INK_DIM, RIM, SEPARATOR};
@@ -97,6 +99,8 @@ pub struct State {
     pub text_colour: [u8; 4],
     /// The button the mouse is over.
     pub hover: Option<Item>,
+    /// The button being pressed.
+    pub pressed: Option<Item>,
 }
 
 impl Default for State {
@@ -113,6 +117,7 @@ impl Default for State {
             shape_colour: PALETTE[1],
             text_colour: PALETTE[0],
             hover: None,
+            pressed: None,
         }
     }
 }
@@ -134,7 +139,7 @@ const MIDDLE: [Option<Item>; 4] =
 const RIGHT: [Option<Item>; 2] = [Some(Item::ModeSwitch), Some(Item::Fullscreen)];
 
 /// Buttons in all.
-const BUTTONS: usize = 13;
+pub const BUTTONS: usize = 13;
 
 pub struct Toolbar {
     /// The three pills, `[x0, y0, x1, y1]` in pixels: left, middle, right.
@@ -189,6 +194,11 @@ impl Toolbar {
         (context_bar::CONTEXT_GAP + 2.0 * context_bar::CONTEXT_PAD) * self.dpr + self.unit
     }
 
+    /// Where `item` is among the buttons (what a [`Look`] is indexed by).
+    pub fn slot(&self, item: Item) -> Option<usize> {
+        self.items.iter().position(|(i, _)| *i == item)
+    }
+
     #[cfg(test)]
     fn button(&self, item: Item) -> Option<[f32; 4]> {
         self.items.iter().find(|(i, _)| *i == item).map(|(_, r)| *r)
@@ -209,7 +219,13 @@ impl Toolbar {
         self.items.iter().find(|(_, r)| rect_contains(*r, p)).map(|(i, _)| *i)
     }
 
+    /// Drawn as it rests: nothing moving.
+    #[cfg(test)]
     pub fn draw(&self, state: &State, ui: &mut Ui) {
+        self.draw_with(state, &Look::resting(state, self), ui);
+    }
+
+    pub fn draw_with(&self, state: &State, look: &Look, ui: &mut Ui) {
         let u = self.unit;
         let px = self.dpr;
         for pill in self.pills {
@@ -217,8 +233,13 @@ impl Toolbar {
         }
         let icons = icons();
         let line = (u * 0.04).max(1.4 * px);
+        // The mark of the tool in use: one wash that slides from button to button.
+        if let Some(rect) = self.mark_of_tool(look.tool) {
+            let (cx, cy) = ((rect[0] + rect[2]) / 2.0, (rect[1] + rect[3]) / 2.0);
+            ui.panel([cx - 0.46 * u, cy - 0.46 * u, cx + 0.46 * u, cy + 0.46 * u], 0.3 * u, ACCENT_WASH);
+        }
         let mut last_end: Option<(usize, f32)> = None;
-        for &(item, r) in &self.items {
+        for (slot, &(item, r)) in self.items.iter().enumerate() {
             let (cx, cy) = ((r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0);
             let pill = self.pills.iter().position(|&p| rect_contains(p, [cx, cy])).unwrap_or(0);
             if let Some((was, end)) = last_end
@@ -229,32 +250,26 @@ impl Toolbar {
                 ui.line([x, cy - 0.32 * u], [x, cy + 0.32 * u], px.max(1.0), SEPARATOR);
             }
             last_end = Some((pill, r[2]));
-            let active = item == Item::Tool(state.tool);
-            let enabled = match item {
-                Item::Undo => state.can_undo,
-                Item::Redo => state.can_redo,
-                Item::DeletePage => state.can_delete,
-                _ => true,
-            };
-            // The wash behind a button: blue for the tool in use, grey under the mouse.
-            let wash = if active {
-                Some(ACCENT_WASH)
-            } else if state.hover == Some(item) && enabled {
-                Some(HOVER_WASH)
-            } else {
-                None
-            };
-            if let Some(colour) = wash {
-                ui.panel([cx - 0.46 * u, cy - 0.46 * u, cx + 0.46 * u, cy + 0.46 * u], 0.3 * u, colour);
+            // The grey wash of the pointer being over a button, as lit as the look says; a press spreading from its middle.
+            let square = [cx - 0.46 * u, cy - 0.46 * u, cx + 0.46 * u, cy + 0.46 * u];
+            if look.hover[slot] > 0.0 {
+                ui.panel(square, 0.3 * u, look::mix([HOVER_WASH[0], HOVER_WASH[1], HOVER_WASH[2], 0], HOVER_WASH, look.hover[slot]));
+            }
+            let spread = look.ripple[slot];
+            if spread > 0.0 && spread < 1.0 {
+                let reach = 0.46 * u * (1.0 - (1.0 - spread) * (1.0 - spread));
+                let colour = look::mix(ACCENT_WASH, [ACCENT[0], ACCENT[1], ACCENT[2], 0], spread);
+                ui.panel([cx - reach, cy - reach, cx + reach, cy + reach], (0.3 * u).min(reach), colour);
             }
             let half = 0.33 * u;
-            let ink = |on: bool| if on { INK } else { INK_DIM };
+            let ink = |amount: f32| look::mix(INK_DIM, INK, amount);
+            let tool_ink = |index: usize| look::mix(INK, ACCENT, look::nearness(look.tool, index));
             match item {
-                Item::Undo => icons.undo.draw(&mut ui.lines, cx, cy, half, line, ink(state.can_undo)),
-                Item::Redo => icons.redo.draw(&mut ui.lines, cx, cy, half, line, ink(state.can_redo)),
-                Item::Save => icons.save.draw(&mut ui.lines, cx, cy, half, line, if state.unsaved { ACCENT } else { INK }),
+                Item::Undo => icons.undo.draw(&mut ui.lines, cx, cy, half, line, ink(look.enabled[slot])),
+                Item::Redo => icons.redo.draw(&mut ui.lines, cx, cy, half, line, ink(look.enabled[slot])),
+                Item::Save => icons.save.draw(&mut ui.lines, cx, cy, half, line, look::mix(INK, ACCENT, look.unsaved)),
                 Item::Close => icons.close.draw(&mut ui.lines, cx, cy, half, line, INK),
-                Item::DeletePage => icons.trash.draw(&mut ui.lines, cx, cy, half, line, ink(state.can_delete)),
+                Item::DeletePage => icons.trash.draw(&mut ui.lines, cx, cy, half, line, ink(look.enabled[slot])),
                 Item::AddPage => icons.plus.draw(&mut ui.lines, cx, cy, half, line, INK),
                 Item::Pages => icons.pages.draw(&mut ui.lines, cx, cy, half, line, INK),
                 // The mode in use, drawn as the machine it is for; the tablet in the accent colour, as the one you chose
@@ -268,20 +283,33 @@ impl Toolbar {
                     icon.draw(&mut ui.lines, cx, cy, half, line, INK);
                 }
                 Item::Tool(tool @ (Tool::Pen | Tool::Geometry | Tool::Text)) => {
-                    let (icon, colour) = match tool {
-                        Tool::Pen => (&icons.pen, state.pen_colour),
-                        Tool::Geometry => (&icons.geometry, state.shape_colour),
-                        _ => (&icons.text, state.text_colour),
+                    let (icon, colour, index) = match tool {
+                        Tool::Pen => (&icons.pen, state.pen_colour, 0),
+                        Tool::Geometry => (&icons.geometry, state.shape_colour, 1),
+                        _ => (&icons.text, state.text_colour, 2),
                     };
-                    icon.draw(&mut ui.lines, cx, cy, half * 1.05, line, if active { ACCENT } else { INK });
+                    icon.draw(&mut ui.lines, cx, cy, half * 1.05, line, tool_ink(index));
                     // The colour the tool writes in, as a dot on its corner.
                     let dot = [r[2] - 0.2 * u, r[3] - 0.2 * u];
                     ui.disc(dot, 0.3 * u, [255, 255, 255, 255]);
                     ui.disc(dot, 0.24 * u, RIM);
                     ui.disc(dot, 0.2 * u, colour);
                 }
-                Item::Tool(Tool::Laser) => icons.laser.draw(&mut ui.lines, cx, cy, half * 1.05, line, if active { ACCENT } else { INK }),
+                Item::Tool(Tool::Laser) => icons.laser.draw(&mut ui.lines, cx, cy, half * 1.05, line, tool_ink(3)),
             }
         }
+    }
+
+    /// Where the mark of the tool in use is when it is `position` along the tools' buttons (between two while it slides).
+    fn mark_of_tool(&self, position: f32) -> Option<[f32; 4]> {
+        let rect = |index: usize| self.button_rect(Item::Tool(look::TOOLS[index.min(look::TOOLS.len() - 1)]));
+        let position = position.clamp(0.0, (look::TOOLS.len() - 1) as f32);
+        let (a, b) = (rect(position.floor() as usize)?, rect(position.ceil() as usize)?);
+        let t = position - position.floor();
+        Some([0, 1, 2, 3].map(|i| a[i] + (b[i] - a[i]) * t))
+    }
+
+    fn button_rect(&self, item: Item) -> Option<[f32; 4]> {
+        self.items.iter().find(|(i, _)| *i == item).map(|(_, r)| *r)
     }
 }

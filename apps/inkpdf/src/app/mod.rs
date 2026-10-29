@@ -168,6 +168,7 @@ impl State {
             modifiers: ModifiersState::empty(),
         };
         state.ed.apply_settings(&settings::load());
+        state.ed.motions.set_prefs(crate::native::motion_prefs());
         // Text copied from a box can be pasted anywhere, and text copied anywhere into a box.
         if let Some(clipboard) = crate::native::SystemClipboard::new(&state.window) {
             state.ed.set_text_clipboard(Box::new(clipboard));
@@ -213,6 +214,8 @@ impl State {
             }
             WindowEvent::CursorLeft { .. } => self.ed.mouse_left(),
             WindowEvent::Focused(false) => self.ed.focus_lost(),
+            // (What was asked of motion in Windows' settings is read again when the window is come back to.)
+            WindowEvent::Focused(true) => self.ed.motions.set_prefs(crate::native::motion_prefs()),
             WindowEvent::ModifiersChanged(m) => self.modifiers = m.state(),
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => self.ed.set_dpr(scale_factor as f32),
             WindowEvent::RedrawRequested => self.redraw(),

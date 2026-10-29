@@ -27,6 +27,7 @@ mod chrome;
 mod commands;
 mod context;
 mod dispatch;
+mod motions;
 mod mouse;
 mod navigation;
 mod overview;
@@ -90,6 +91,8 @@ pub struct Editor {
     pub tools: ToolSet,
     /// The window's own controls (see [`Chrome`]).
     pub chrome: Chrome,
+    /// Every animation of the interface (see [`motions`]).
+    pub motions: motions::Motions,
     /// How the machine is being used: what the mouse and keyboard do depends on it.
     mode: Mode,
     /// Milliseconds now, on the clock the pointer messages are stamped with (see [`crate::clock`]); a field so that tests can give another.
@@ -119,6 +122,7 @@ impl Editor {
             graves: HashMap::new(),
             tools: ToolSet::new(),
             chrome: Chrome::default(),
+            motions: motions::Motions::default(),
             mode: Mode::default(),
             clock: crate::clock::now_ms,
             mouse_press: None,
@@ -177,7 +181,27 @@ impl Editor {
             shape_colour: self.colour_of(self.ws.shape_style),
             text_colour: self.colour_of(self.ws.text_style),
             hover: self.chrome.hover,
+            pressed: match self.chrome.act {
+                Act::Toolbar { item, .. } => item,
+                _ => None,
+            },
         }
+    }
+
+    /// The toolbar as it looks now, in the middle of whatever is moving in it.
+    pub fn toolbar_look(&self) -> toolbar::Look {
+        let rest = toolbar::Look::resting(&self.toolbar_state(), &self.toolbar());
+        self.motions.toolbar_look(&rest)
+    }
+
+    /// The prompt as it is drawn now, and how much of it: it comes in and goes out over a moment.
+    pub fn prompt_look(&self) -> Option<(toolbar::PromptView, f32)> {
+        self.motions.prompt_look(self.chrome.prompt)
+    }
+
+    /// The tool's panel as it is drawn now, and how much of it.
+    pub fn panel_look(&self) -> Option<(toolbar::PanelView, f32)> {
+        self.motions.panel_look(self.panel_view())
     }
 
     /// Everything the tool panel's look depends on, while it is open.
@@ -240,7 +264,17 @@ impl Editor {
     /// One frame of the view's glide and zoom animation: whether it is still moving.
     pub fn step_view(&mut self, dt: f32) -> bool {
         let overview = self.step_overview(dt);
-        self.ws.step_view(dt) || overview
+        let interface = self.step_motions(dt);
+        self.ws.step_view(dt) || overview || interface
+    }
+
+    /// One frame of the interface's own animations: they are told where the toolbar is heading, and move there.
+    fn step_motions(&mut self, dt: f32) -> bool {
+        let (state, bar) = (self.toolbar_state(), self.toolbar());
+        let rest = toolbar::Look::resting(&state, &bar);
+        self.motions.retarget_toolbar(&rest, state.pressed.and_then(|item| bar.slot(item)));
+        self.motions.retarget_drawers(self.chrome.prompt, self.panel_view(), self.context_bar().is_some());
+        self.motions.step(dt)
     }
 
     /// The window changed size: the view follows it.

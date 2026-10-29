@@ -1904,6 +1904,22 @@ fn check_overview(ed: &Editor, doc: &Doc, what: &str) {
     assert!(ui.images.len() <= count, "{what}: a picture for every page at most");
 }
 
+/// What must hold of everything that moves, whatever the frames between were like: a number, within its ends.
+fn check_motion(ed: &Editor, what: &str) {
+    let unit = |v: f32| v.is_finite() && (-1e-3..=1.0 + 1e-3).contains(&v);
+    let look = ed.toolbar_look();
+    assert!(look.hover.iter().chain(&look.enabled).chain(&look.ripple).all(|&v| unit(v)), "{what}: {look:?}");
+    assert!(look.tool.is_finite() && (-1e-3..=3.0 + 1e-3).contains(&look.tool) && unit(look.unsaved), "{what}: {look:?}");
+    assert!(unit(ed.overview_appear()) && unit(ed.overview_leaving()) && unit(ed.motions.bar_amount()), "{what}");
+    assert!(ed.prompt_look().is_none_or(|(_, a)| unit(a)) && ed.panel_look().is_none_or(|(_, a)| unit(a)), "{what}");
+    if ed.overview_open() {
+        let mut ui = Ui::default();
+        ed.draw_overview(&mut ui);
+        assert!(ui.labels.iter().all(|l| unit(l.alpha)) && ui.images.iter().all(|i| unit(i.alpha)), "{what}: opacity");
+        assert!(ui.panels.iter().all(|p| p.rect.iter().all(|v| v.is_finite()) && p.radius.is_finite()), "{what}");
+    }
+}
+
 #[test]
 fn stress_the_pages_overview_under_hostile_input_keeps_the_pages_the_selection_and_the_file_consistent() {
     let dir = temp_dir("overview");
@@ -1915,10 +1931,14 @@ fn stress_the_pages_overview_under_hostile_input_keeps_the_pages_the_selection_a
     ed.outline = doc.take_outline();
     ed.links = doc.take_links();
     let mut rng = Rng::new(808);
+    // (With motion on, and frames of any length in between: what moves must stay a number and within its ends.)
+    ed.motions.set_prefs(crate::motion::Prefs::FULL);
     let (mut opened, mut edits, mut saves, mut carried) = (0, 0, 0, 0);
     // (More rounds than this find nothing new: a document of this size saves slower and slower, not differently.)
     for round in 0..(8_000 * scale().min(3)) {
         let what = format!("round {round}");
+        ed.step_view(rng.pick(&[0.0, 0.004, 0.016, 0.016, 0.033, 0.5, 5.0, -1.0, f32::NAN, f32::INFINITY]));
+        check_motion(&ed, &what);
         let was_open = ed.overview_open();
         // (A real document does not grow without end; a long storm would otherwise spend its time on thousands of pages.)
         if ed.layout.len() > 60 {
@@ -2208,3 +2228,132 @@ fn stress_hostile_outlines_and_page_trees_open_or_are_refused_and_what_opens_edi
     let _ = outline::read; // (the reader under test, named so that a rename here is noticed)
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// What a document and its overview have come to: nothing of how long it took to get there.
+#[derive(Debug, PartialEq)]
+struct Outcome {
+    pages: Vec<[u32; 2]>,
+    strokes: Vec<(u64, u32, usize)>,
+    selection: Vec<u64>,
+    tool: Tool,
+    can_undo: bool,
+    can_redo: bool,
+    overview: Option<(bool, Vec<usize>, u32)>,
+    prompt: bool,
+}
+
+fn outcome(ed: &Editor) -> Outcome {
+    Outcome {
+        pages: (0..ed.layout.len()).filter_map(|i| ed.layout.page(i)).map(|p| [p.w.to_bits(), p.h.to_bits()]).collect(),
+        strokes: ed.ink.strokes().iter().map(|s| (s.id, s.page, s.pts.len())).collect(),
+        selection: ed.selection.clone(),
+        tool: ed.tool,
+        can_undo: ed.ink.can_undo(),
+        can_redo: ed.ink.can_redo(),
+        overview: ed.chrome.overview.as_ref().map(|o| (o.edit, o.selected.iter().copied().collect(), o.scroll.to_bits())),
+        prompt: ed.chrome.prompt.is_some(),
+    }
+}
+
+/// Let everything that moves arrive (frames of a sixtieth of a second until nothing asks for another).
+fn arrive(ed: &mut Editor) {
+    for _ in 0..600 {
+        if !ed.step_view(1.0 / 60.0) {
+            break;
+        }
+    }
+}
+
+/// The same random events, one at a time with everything arriving in between, once with motion reduced and once not: the
+/// document and its overview must be in the same place after each.
+fn run_with(prefs: crate::motion::Prefs, seed: u64, rounds: usize) -> Vec<Outcome> {
+    let mut ed = Editor::new([1280.0, 800.0], 1.25);
+    ed.load(crate::view::Layout::new(&[[612.0, 792.0]; 12]), vec![]);
+    ed.motions.set_prefs(prefs);
+    let mut rng = Rng::new(seed);
+    let mut seen = Vec::new();
+    for round in 0..rounds {
+        if ed.layout.len() > 30 {
+            let n = ed.layout.len();
+            ed.edit_pages(PageEdit::Delete { pages: (15..n).collect(), grave: 0 });
+        }
+        let size = ed.view.viewport;
+        let (layout, open) = (ed.overview_layout(), ed.overview_open());
+        let spot = |rng: &mut Rng| -> [f32; 2] {
+            if open && rng.chance(0.8) {
+                [rng.range(layout.card[0], layout.card[2]), rng.range(layout.card[1], layout.card[3])]
+            } else {
+                [rng.range(0.0, size[0]), rng.range(0.0, size[1])]
+            }
+        };
+        match rng.below(14) {
+            0 | 1 => ed.open_overview(),
+            2..=4 => {
+                let at = spot(&mut rng);
+                mouse_click(&mut ed, at);
+            }
+            5 => {
+                let (a, b) = (spot(&mut rng), spot(&mut rng));
+                mouse_drag(&mut ed, a, b, 1 + rng.below(6));
+            }
+            6 => {
+                ed.mouse_moved(spot(&mut rng));
+                ed.wheel(MouseScrollDelta::LineDelta(0.0, rng.range(-4.0, 4.0)));
+            }
+            7 => {
+                ed.press(rng.pick(&[Key::Escape, Key::Delete, Key::Home(false), Key::End(false), Key::Arrow(Dir::Down, false)]));
+            }
+            8 => {
+                ed.shortcut(rng.pick(&["a", "d", "z", "y"]), false);
+            }
+            9 => {
+                let n = ed.layout.len();
+                let edit = match rng.below(4) {
+                    0 => PageEdit::Insert { at: rng.below(n + 1), size: [612.0, 792.0] },
+                    1 => PageEdit::delete(rng.below(n)),
+                    2 => PageEdit::Duplicate { pages: vec![rng.below(n)] },
+                    _ => PageEdit::Move { pages: vec![rng.below(n)], to: rng.below(n) },
+                };
+                ed.edit_pages(edit);
+            }
+            10 => {
+                let at = ed.toolbar().centre_of(crate::toolbar::Item::Tool(rng.pick(&Tool::ALL)));
+                mouse_click(&mut ed, at);
+            }
+            11 => {
+                let path: Vec<[f32; 2]> = (0..3 + rng.below(4)).map(|_| spot(&mut rng)).collect();
+                pen_path(&mut ed, PenButtons { in_range: true, contact: true, eraser: false, barrel: false }, &path);
+            }
+            12 => {
+                let at = spot(&mut rng);
+                tap_pen(&mut ed, at, 1000.0);
+            }
+            _ => {
+                if round % 40 == 0 && !ed.overview_open() {
+                    ed.ask_unsaved();
+                } else {
+                    ed.undo();
+                }
+            }
+        }
+        arrive(&mut ed);
+        seen.push(outcome(&ed));
+    }
+    seen
+}
+
+#[test]
+fn stress_motion_changes_how_long_things_take_and_never_where_they_end_up() {
+    for seed in [3, 77, 2024] {
+        let rounds = 400 * scale().min(3);
+        let still = run_with(crate::motion::Prefs::REDUCED, seed, rounds);
+        let moving = run_with(crate::motion::Prefs::FULL, seed, rounds);
+        // (It has to have done something: the overview was up and edited, pages changed, ink was drawn.)
+        assert!(moving.iter().any(|o| o.overview.as_ref().is_some_and(|v| v.0)), "seed {seed}: edit mode was reached");
+        assert!(moving.iter().any(|o| !o.strokes.is_empty()) && moving.windows(2).any(|w| w[0].pages != w[1].pages), "seed {seed}");
+        for (round, (a, b)) in still.iter().zip(&moving).enumerate() {
+            assert_eq!(a, b, "seed {seed}, round {round}: with motion on, things came to something else");
+        }
+    }
+}
+

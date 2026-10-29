@@ -52,7 +52,7 @@ ones below; no two modules may reach each other, directly or through others.
 | ui | `toolbar` |
 | domain | `tool`, `input`, `requests`, `workspace`, `selection`, `settings` |
 | model | `figure`, `ink`, `laser`, `links`, `outline`, `pages` |
-| base | `plane`, `scene`, `clock`, `geometry`, `colour`, `coords`, `view`, `text`, `smooth`, `clipboard` |
+| base | `plane`, `motion`, `scene`, `clock`, `geometry`, `colour`, `coords`, `view`, `text`, `smooth`, `clipboard` |
 
 * `plane` holds the point type `P` and the plane arithmetic (distances, polygon tests, simplify, thin, `clamp_into`)
   that `ink`, `figure`, `smooth`, `text` and `laser` all stand on; `ink` re-exports the common ones. `geometry` is only
@@ -132,6 +132,32 @@ number, the PDF's table of contents on the left when there is one, and an edit m
   buffer as the document's (a transform and a scissor rectangle per picture).
 * `outline.rs` — the table of contents, read with `pdfcraft_organize::bookmarks`, flat, with `visible` (folding) and
   `section_of` (the entry that holds a page).
+
+## Motion: time lives in one place, drawing stays time-free
+
+Everything in the interface that moves (a button's wash, a press spreading, the mark of the tool in use sliding, the bar and
+the tool panel coming in and folding up, the prompt, the pages overview coming in, going out and its pages sliding after an
+edit) is made of the same few pieces:
+
+* `motion.rs` (base: it depends on nothing) — `Curve` (Material's standard, decelerate and accelerate), `Tween` (a value that
+  goes to a target over a time and, given a new target on the way, from where it has got to; saying the same target again
+  does not start it over), `Presence` (kept while it goes out, so that it can be drawn so after the state it came from has
+  moved on), `Slides` (things away from where they belong, going there), `Prefs` (reduced motion: every duration nothing).
+  Time is an argument and a step is capped, so every animation is a test.
+* `editor/motions.rs` (session) owns every animation in one registry (`Motions`), is told where things are heading once a
+  frame (`Editor::step_view` → `step_motions`) and says whether anything is still moving; the shell asks for another frame
+  only then, so an idle window still costs nothing. The values it hands out are plain numbers.
+* `toolbar` (ui) draws from those numbers and knows nothing of time: `Look` for the buttons (`Look::resting` is what a state
+  settles to), `PageMotion` for a page's picture in the overview. `scene::Xform` (scale about a point, a shift, a fade) is put
+  over a group of what was drawn with `Ui::mark` / `Ui::apply`, which is how things come in, go out and slide without the
+  drawing code changing.
+* The shell (`app`) keeps what a thing was drawn as while it goes out (the overview's `ghost`) and reads the Windows
+  "animations" setting (`native::motion_prefs`; `INKPDF_MOTION=off|on` overrides it for a run).
+* Tests run with reduced motion (what they look at is where things end up); `editor/tests/motions.rs` and the overview tests
+  turn it on and drive the frames. `stress_motion_changes_how_long_things_take_and_never_where_they_end_up` runs the same
+  random events with motion off and on, letting everything arrive after each, and requires the same document, selection and
+  overview; the hostile overview storm runs with motion on and frames of every length (zero, negative, not a number, five
+  seconds) and requires every moving value to be a number within its ends.
 
 ## SOLID, concretely
 

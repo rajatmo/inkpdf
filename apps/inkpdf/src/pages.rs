@@ -259,7 +259,6 @@ impl Remap {
     }
 
     /// The pages that are new, by their numbers now.
-    #[cfg(test)]
     pub fn added(&self) -> &[usize] {
         &self.added
     }

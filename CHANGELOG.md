@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.0.0
+
+Motion, the Material way: the interface now moves instead of switching.
+
+- Buttons: the wash under the pointer fades in and out, a press spreads from the middle of the button, the mark of the tool
+  in use slides from one tool to the next (its icon changes colour as it passes), and undo, redo, delete page and save fade
+  between their states.
+- The bar under the tools comes down into place; the settings panel unfolds from it (the card grows, then the contents
+  appear) and folds up again; the "save your changes?" prompt grows in over a clearing scrim and goes out as it was.
+- The pages overview fades in and goes out; after a page is added, copied, moved or deleted the pages slide to their new
+  places and a new one grows in; a page you choose pops its tick; the wheel and the keys glide the pages.
+- Less motion on request: it follows Windows' "Show animations" setting (and `INKPDF_MOTION=off` or `on` for one run). With it
+  off nothing takes any time at all. An idle window still costs no CPU, and the pen's latency is as it was.
+- Inside: one small module of curves and tweens (`motion.rs`), one registry that owns every animation
+  (`editor/motions.rs`), and transforms put over groups of what is drawn (`scene::Xform`, `Ui::apply`); the drawing code
+  receives plain numbers. New tests: curves and tweens, each animation, the equivalence of motion on and off, and a hostile
+  storm with motion on.
+
 ## 0.7.0
 
 Pages overview (the candidate for 1.0): a card over the document, opened from the new pages button at the end of the left

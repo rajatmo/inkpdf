@@ -8,7 +8,7 @@ use windows_sys::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
 use windows_sys::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, GetClipboardData, OpenClipboard, SetClipboardData};
 use windows_sys::Win32::System::Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock};
 use windows_sys::Win32::UI::Shell::ShellExecuteW;
-use windows_sys::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MessageBoxW, SW_SHOWNORMAL};
+use windows_sys::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MessageBoxW, SPI_GETCLIENTAREAANIMATION, SW_SHOWNORMAL, SystemParametersInfoW};
 use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use winit::window::Window;
 
@@ -47,6 +47,20 @@ pub fn report_fatal(text: &str) {
     let (text, caption) = (wide(text), wide("InkPDF"));
     // SAFETY: both strings are NUL-terminated and live across the call; no owner window.
     unsafe { MessageBoxW(std::ptr::null_mut(), text.as_ptr(), caption.as_ptr(), MB_ICONERROR) };
+}
+
+/// What the user has asked of motion: `INKPDF_MOTION` (`off` or `on`) says it for this run, and otherwise Windows does
+/// ("Show animations in Windows", under Accessibility > Visual effects).
+pub fn motion_prefs() -> crate::motion::Prefs {
+    match std::env::var("INKPDF_MOTION").ok().as_deref() {
+        Some("off") => return crate::motion::Prefs::REDUCED,
+        Some("on") => return crate::motion::Prefs::FULL,
+        _ => {}
+    }
+    let mut animations: i32 = 1;
+    // SAFETY: the value is a BOOL the call fills in, which lives across the call; no flags are set.
+    let known = unsafe { SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, (&mut animations as *mut i32).cast(), 0) } != 0;
+    crate::motion::Prefs { reduced: known && animations == 0 }
 }
 
 /// Open a web address in the system's default program for it (a browser, or a mail app). The

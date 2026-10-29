@@ -3,6 +3,7 @@
 //! the top) is cut off at its edge or left out, so nothing of the grid is ever drawn over the header.
 
 use crate::outline::OutlineItem;
+use crate::scene::Xform;
 use crate::text;
 use crate::view::Layout;
 
@@ -39,6 +40,17 @@ pub struct DragView<'a> {
     pub slot: usize,
 }
 
+/// How a page's picture is moving, as plain numbers (see `editor::overview`): drawn at rest when all are nothing.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct PageMotion {
+    /// How far it is from where it belongs, in pixels (a page that was moved slides in).
+    pub shift: [f32; 2],
+    /// How much of a new page is still to come, 0 to 1: it grows in from smaller and clearer.
+    pub grow: f32,
+    /// The same for the tick that a page chosen has.
+    pub tick: f32,
+}
+
 /// Everything the overview shows.
 pub struct OverviewView<'a> {
     pub layout: &'a Layout,
@@ -67,6 +79,8 @@ pub struct OverviewView<'a> {
     /// The page whose menu is open, and which of its items can be used, in the order of [`MenuItem::ALL`].
     pub menu: Option<usize>,
     pub menu_enabled: [bool; 4],
+    /// How each page's picture is moving.
+    pub motion: &'a dyn Fn(usize) -> PageMotion,
 }
 
 /// `rect` cut to `bounds`; `None` if nothing is left.
@@ -167,7 +181,7 @@ fn menu(view: &OverviewView<'_>, l: &OverviewLayout, page: usize, ui: &mut Ui) {
             MenuItem::Delete => "Delete",
         };
         let color = if !enabled { INK_DIM } else if item == MenuItem::Delete { DANGER } else { INK };
-        ui.labels.push(Label { text: text.to_string(), size: 0.5 * u, color, at: [r[0] + 0.5 * u, (r[1] + r[3]) / 2.0], align: Align::Left });
+        ui.labels.push(Label { text: text.to_string(), size: 0.5 * u, color, at: [r[0] + 0.5 * u, (r[1] + r[3]) / 2.0], align: Align::Left, alpha: 1.0 });
     }
 }
 
@@ -187,7 +201,7 @@ fn header(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
         size: 0.62 * u,
         color: INK,
         at: [l.card[0] + 1.8 * u, centre_y],
-        align: Align::Left,
+        align: Align::Left, alpha: 1.0,
     });
     for (control, r) in l.controls {
         let centre = [(r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0];
@@ -227,7 +241,7 @@ fn contents(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
     let (u, px) = (l.unit(), l.px());
     let Some(toc) = l.toc else { return };
     ui.line([toc[2], toc[1]], [toc[2], toc[3] - 0.9 * u], px, SEPARATOR);
-    ui.labels.push(Label { text: "Contents".to_string(), size: 0.46 * u, color: INK_DIM, at: [toc[0] + 0.9 * u, toc[1] + 0.6 * u], align: Align::Left });
+    ui.labels.push(Label { text: "Contents".to_string(), size: 0.46 * u, color: INK_DIM, at: [toc[0] + 0.9 * u, toc[1] + 0.6 * u], align: Align::Left, alpha: 1.0 });
     let size = 0.46 * u;
     for k in l.toc_visible(view.rows.len(), view.toc_scroll) {
         let row = view.rows[k];
@@ -252,7 +266,7 @@ fn contents(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
         let color = if section { ACCENT } else if item.page.is_some() { INK } else { INK_DIM };
         let title = fit(&item.title, size, r[2] - x - 0.2 * u);
         if !title.is_empty() {
-            ui.labels.push(Label { text: title, size, color, at: [x, centre_y], align: Align::Left });
+            ui.labels.push(Label { text: title, size, color, at: [x, centre_y], align: Align::Left, alpha: 1.0 });
         }
     }
 }
@@ -268,6 +282,7 @@ fn pages(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
         let whole = within(l.grid, thumb);
         let hovered = view.hover == Some(Hover::Page(i));
         let current = i == view.current;
+        let (mark, motion) = (ui.mark(), (view.motion)(i));
         // The paper behind the picture, with a hairline edge: what shows until the picture is there.
         if whole {
             ui.panels.push(crate::scene::Panel::new([thumb[0] - px, thumb[1] - px + 2.0 * px, thumb[2] + px, thumb[3] + px + 2.0 * px], 2.0 * px, 6.0 * px, [16, 20, 44, 36]));
@@ -289,6 +304,7 @@ fn pages(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
             if view.edit {
                 // A circle to tick in the top right corner (where a page has the least on it): filled once the page is chosen.
                 let centre = [thumb[2] - 0.55 * u, thumb[1] + 0.55 * u];
+                let tick = ui.mark();
                 if selected(i) {
                     ui.disc(centre, 0.8 * u, ACCENT);
                     ui.line([centre[0] - 0.2 * u, centre[1] + 0.02 * u], [centre[0] - 0.05 * u, centre[1] + 0.18 * u], 2.0 * px, [255, 255, 255, 255]);
@@ -299,6 +315,8 @@ fn pages(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
                     ring(ui, centre, 0.7 * u, 3.6 * px, [255, 255, 255, 200]);
                     ring(ui, centre, 0.7 * u, 1.8 * px, INK_DIM);
                 }
+                // A tick just made pops in: it grows from half its size as it clears.
+                ui.apply(tick, Xform::grow(centre, 1.0 - 0.5 * motion.tick, 1.0 - motion.tick));
             }
         }
         // The number, under the picture.
@@ -311,10 +329,13 @@ fn pages(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
                 ui.panels.push(crate::scene::Panel::solid([centre_x - half - 0.5 * u, row[1] + 0.15 * u, centre_x + half + 0.5 * u, row[3] - 0.05 * u], 0.4 * u, HOVER_WASH));
             }
             let text = (i + 1).to_string();
-            ui.labels.push(Label { text: text.clone(), size: 0.5 * u, color, at: [centre_x - 0.2 * u, centre_y], align: Align::Centre });
+            ui.labels.push(Label { text: text.clone(), size: 0.5 * u, color, at: [centre_x - 0.2 * u, centre_y], align: Align::Centre, alpha: 1.0 });
             let after = centre_x - 0.2 * u + text::measure(&text, 0.5 * u)[0] / 2.0 + 0.35 * u;
             chevron(ui, [after, centre_y], 0.12 * u, view.menu == Some(i), 1.4 * px, INK_DIM);
         }
+        // The page as a whole: sliding from where it was, or growing in as a new one.
+        let middle = [(thumb[0] + thumb[2]) / 2.0, (thumb[1] + thumb[3]) / 2.0];
+        ui.apply(mark, Xform { origin: middle, scale: 1.0 - 0.4 * motion.grow, shift: motion.shift, alpha: 1.0 - motion.grow });
     }
     // A thin bar at the edge when there is more than fits.
     let max = l.max_scroll(count);
@@ -359,7 +380,7 @@ fn bar(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
             Action::SelectAll => {
                 let all = !view.layout.is_empty() && view.selected.len() == view.layout.len();
                 let text = if all { "Select none" } else { "Select all" };
-                ui.labels.push(Label { text: text.to_string(), size: 0.5 * u, color, at: centre, align: Align::Centre });
+                ui.labels.push(Label { text: text.to_string(), size: 0.5 * u, color, at: centre, align: Align::Centre, alpha: 1.0 });
                 continue;
             }
             Action::Duplicate => &icons().duplicate,
@@ -391,7 +412,7 @@ fn dragging(view: &OverviewView<'_>, l: &OverviewLayout, drag: &DragView<'_>, ui
     if drag.pages.len() > 1 {
         let badge = [rect[2], rect[1]];
         ui.disc(badge, 0.9 * u, ACCENT);
-        ui.labels.push(Label { text: drag.pages.len().to_string(), size: 0.46 * u, color: [255, 255, 255, 255], at: badge, align: Align::Centre });
+        ui.labels.push(Label { text: drag.pages.len().to_string(), size: 0.46 * u, color: [255, 255, 255, 255], at: badge, align: Align::Centre, alpha: 1.0 });
     }
 }
 
@@ -423,6 +444,7 @@ mod tests {
             enabled: [true; 5],
             menu: None,
             menu_enabled: [true; 4],
+            motion: &|_| PageMotion::default(),
         }
     }
 

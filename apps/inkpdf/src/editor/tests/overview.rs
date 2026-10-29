@@ -885,6 +885,7 @@ fn a_page_with_ink_is_duplicated_with_it_from_the_menu_and_the_last_page_cannot_
 #[test]
 fn the_wheel_sends_the_pages_gliding_and_they_arrive_without_overshooting_and_a_finger_moves_them_at_once() {
     let mut ed = many(120);
+    ed.motions.set_prefs(crate::motion::Prefs::FULL);
     open(&mut ed, Press::Mouse);
     let layout = ed.overview_layout();
     ed.mouse_moved([layout.grid[0] + 200.0, layout.grid[1] + 200.0]);
@@ -949,4 +950,126 @@ fn in_edit_mode_a_page_not_chosen_has_a_visible_ring_to_tick() {
     assert!(after >= before + 4 * 12, "{after} against {before}: a ring for each of the pages whole in view");
     let covering = |ui: &crate::toolbar::Ui| ui.lines.iter().filter(|c| solid(c) && c.color[0] > 250 && c.color[3] > 0).count();
     assert_eq!(covering(&editing), covering(&plain), "no white disc is laid over the page");
+}
+
+fn page_motion(ed: &Editor, page: usize) -> crate::toolbar::PageMotion {
+    let state = ed.chrome.overview.as_ref().expect("open");
+    crate::toolbar::PageMotion { shift: state.slides_for_tests(page), grow: state.grows_for_tests(page), tick: state.ticks_for_tests(page) }
+}
+
+#[test]
+fn the_overview_fades_in_from_clear_and_is_whole_when_it_has_come() {
+    let mut ed = many(4);
+    ed.motions.set_prefs(crate::motion::Prefs::FULL);
+    open(&mut ed, Press::Mouse);
+    assert_eq!(ed.overview_appear(), 0.0, "it starts clear");
+    ed.step_view(0.016);
+    let early = ed.overview_appear();
+    assert!(early > 0.0 && early < 1.0, "{early}");
+    let mut last = early;
+    let mut frames = 0;
+    while ed.step_view(0.016) && frames < 100 {
+        let now = ed.overview_appear();
+        assert!(now >= last);
+        last = now;
+        frames += 1;
+    }
+    assert_eq!(ed.overview_appear(), 1.0);
+    assert!(frames < 40, "a short moment: {frames} frames");
+    // Faded, what it draws is as clear as it is.
+    let mut ui = crate::toolbar::Ui::default();
+    ed.draw_overview(&mut ui);
+    assert!(ui.labels.iter().all(|l| l.alpha == 1.0) && ui.images.iter().all(|i| i.alpha == 1.0));
+}
+
+#[test]
+fn what_is_put_away_goes_out_over_a_moment_and_is_then_gone() {
+    let mut ed = many(4);
+    ed.motions.set_prefs(crate::motion::Prefs::FULL);
+    open(&mut ed, Press::Mouse);
+    glide_done(&mut ed);
+    assert_eq!(ed.overview_leaving(), 0.0, "up: none of it is going out");
+    ed.close_overview();
+    assert_eq!(ed.overview_leaving(), 1.0, "as it was");
+    ed.step_view(0.016);
+    let going = ed.overview_leaving();
+    assert!(going > 0.0 && going < 1.0, "{going}");
+    for _ in 0..40 {
+        ed.step_view(0.016);
+    }
+    assert_eq!(ed.overview_leaving(), 0.0);
+    assert!(!ed.step_view(0.016), "idle");
+    // Opened again while going out: none of it is going out.
+    ed.close_overview();
+    open(&mut ed, Press::Mouse);
+    assert_eq!(ed.overview_leaving(), 0.0);
+    // With motion reduced it is gone at once.
+    let mut still = many(4);
+    open(&mut still, Press::Mouse);
+    still.close_overview();
+    assert_eq!(still.overview_leaving(), 0.0);
+}
+
+#[test]
+fn a_page_that_moves_slides_from_where_it_was_and_a_new_one_grows_in() {
+    let mut ed = many(10);
+    ed.motions.set_prefs(crate::motion::Prefs::FULL);
+    open(&mut ed, Press::Mouse);
+    glide_done(&mut ed);
+    // The first page goes to the end: the others each move a place up, and the page itself goes across the grid.
+    assert!(ed.edit_pages(PageEdit::Move { pages: vec![0], to: 9 }));
+    let layout = ed.overview_layout();
+    let before = layout.cell(1, 0.0);
+    let after = layout.cell(0, 0.0);
+    // What was page 1 is page 0 now, and starts where page 1 was.
+    let slid = page_motion(&ed, 0).shift;
+    assert!((slid[0] - (before[0] - after[0])).abs() < 1.0 && (slid[1] - (before[1] - after[1])).abs() < 1.0, "{slid:?}");
+    let moved = page_motion(&ed, 9).shift;
+    assert!(moved[0].abs() > 1.0 || moved[1].abs() > 1.0, "the page that was first comes from where it was: {moved:?}");
+    for _ in 0..40 {
+        ed.step_view(0.016);
+    }
+    assert!((0..10).all(|p| page_motion(&ed, p) == crate::toolbar::PageMotion::default()), "all arrived");
+    // A page added grows in; the others do not.
+    assert!(ed.edit_pages(PageEdit::Insert { at: 3, size: [612.0, 792.0] }));
+    assert!(page_motion(&ed, 3).grow > 0.9, "new: {:?}", page_motion(&ed, 3));
+    assert_eq!(page_motion(&ed, 2).grow, 0.0);
+    ed.step_view(0.016);
+    let (early, _) = (page_motion(&ed, 3).grow, ());
+    assert!(early > 0.0 && early < 1.0);
+    for _ in 0..40 {
+        ed.step_view(0.016);
+    }
+    assert_eq!(page_motion(&ed, 3).grow, 0.0);
+    // A copy grows in too.
+    assert!(ed.edit_pages(PageEdit::Duplicate { pages: vec![5] }));
+    assert!(page_motion(&ed, 6).grow > 0.9, "{:?}", page_motion(&ed, 6));
+}
+
+#[test]
+fn a_page_chosen_has_its_tick_pop_in_and_with_motion_reduced_nothing_moves() {
+    let mut ed = many(6);
+    ed.motions.set_prefs(crate::motion::Prefs::FULL);
+    open(&mut ed, Press::Mouse);
+    ed.chrome.overview.as_mut().expect("open").edit = true;
+    let at = cell_centre(&ed, 2);
+    tap(&mut ed, Press::Mouse, at);
+    ed.step_view(0.016);
+    let early = page_motion(&ed, 2).tick;
+    assert!(early > 0.0 && early < 1.0, "{early}");
+    assert_eq!(page_motion(&ed, 1).tick, 0.0, "only the page chosen");
+    for _ in 0..30 {
+        ed.step_view(0.016);
+    }
+    assert_eq!(page_motion(&ed, 2).tick, 0.0);
+    // The same with motion reduced.
+    let mut still = many(6);
+    open(&mut still, Press::Mouse);
+    still.chrome.overview.as_mut().expect("open").edit = true;
+    let at = cell_centre(&still, 2);
+    tap(&mut still, Press::Mouse, at);
+    still.step_view(0.016);
+    assert_eq!(page_motion(&still, 2), crate::toolbar::PageMotion::default());
+    assert!(still.edit_pages(PageEdit::Move { pages: vec![0], to: 5 }));
+    assert!((0..6).all(|p| page_motion(&still, p) == crate::toolbar::PageMotion::default()));
 }

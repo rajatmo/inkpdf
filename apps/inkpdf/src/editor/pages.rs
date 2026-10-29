@@ -132,7 +132,7 @@ impl Editor {
         self.ws.prune_selection();
         self.tools.pointer.laser.clear();
         self.ws.scroll_to_page(shown);
-        self.overview_follow(map.as_ref());
+        self.overview_follow(map.as_ref(), before.len());
         self.ws.requests.push(Request::PagesEdited(edit.clone()));
         self.ws.redraw = true;
     }

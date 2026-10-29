@@ -8,6 +8,7 @@
 use crate::requests::Choice;
 
 use super::icons::icons;
+use crate::scene::Xform;
 use super::theme::{ACCENT, INK, Ui};
 
 /// What is highlighted while the prompt is up.
@@ -59,9 +60,17 @@ impl PromptLayout {
         self.buttons.iter().find(|(_, r)| crate::ink::rect_contains(*r, p)).map(|(c, _)| *c)
     }
 
+    #[cfg(test)]
     pub fn draw(&self, view: PromptView, ui: &mut Ui) {
+        self.draw_with(view, 1.0, ui);
+    }
+
+    /// Drawn `amount` (0 to 1) of the way in: the scrim clears, and the card grows from a little smaller as it does.
+    pub fn draw_with(&self, view: PromptView, amount: f32, ui: &mut Ui) {
         let u = self.unit;
         ui.panel([0.0, 0.0, self.viewport[0], self.viewport[1]], 0.0, SCRIM);
+        ui.fade(amount);
+        let card = ui.mark();
         ui.floating(self.card, 0.5 * u, self.px);
         let icons = icons();
         let line = (0.05 * u).max(1.5 * self.px);
@@ -89,6 +98,8 @@ impl PromptLayout {
             };
             icon.draw(&mut ui.lines, (r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0, 0.36 * u, line, ink);
         }
+        let middle = [(self.card[0] + self.card[2]) / 2.0, (self.card[1] + self.card[3]) / 2.0];
+        ui.apply(card, Xform::grow(middle, 0.92 + 0.08 * amount, amount));
     }
 }
 

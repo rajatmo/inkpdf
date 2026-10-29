@@ -24,6 +24,8 @@ pub(super) struct Shown {
     pub(super) thumbs: Vec<InkThumb>,
     /// The bitmaps of the text being shown: kept on the GPU however many other bitmaps there are.
     pub(super) keys: HashSet<u64>,
+    /// The overview as it was drawn last, kept while it goes out over a moment after it is put away.
+    ghost: Option<Ui>,
 }
 
 fn label_key(label: &Label) -> u64 {
@@ -37,6 +39,20 @@ impl State {
     /// `true` if it is up and has taken the interface's place.
     pub(super) fn sync_overview_ui(&mut self) -> bool {
         if !self.ed.overview_open() {
+            // Just put away: it goes out, drawn as it was, a little clearer each frame.
+            let leaving = self.ed.overview_leaving();
+            if leaving > 0.0
+                && let Some(ghost) = &self.overview.ghost
+            {
+                let mut ui = ghost.clone();
+                ui.fade(leaving);
+                self.gpu.set_ui(&ui.panels, &ui.lines);
+                self.overview.images = ui.images;
+                self.overview.labels = ui.labels;
+                self.ui_built = None;
+                return true;
+            }
+            self.overview.ghost = None;
             if !self.overview.images.is_empty() || !self.overview.labels.is_empty() {
                 self.overview.images.clear();
                 self.overview.labels.clear();
@@ -48,6 +64,7 @@ impl State {
         let mut ui = Ui::default();
         self.ed.draw_overview(&mut ui);
         self.gpu.set_ui(&ui.panels, &ui.lines);
+        self.overview.ghost = Some(ui.clone());
         self.overview.images = ui.images;
         self.overview.labels = ui.labels;
         // What the interface was built from is gone from the GPU: it is built afresh when the overview leaves.
@@ -60,11 +77,12 @@ impl State {
     pub(super) fn overview_frame(&mut self) {
         self.overview.quads.clear();
         self.overview.thumbs.clear();
-        if !self.ed.overview_open() {
+        if !self.ed.overview_open() && self.overview.images.is_empty() && self.overview.labels.is_empty() {
             return;
         }
         let viewport = self.ed.view.viewport;
-        let appear = self.ed.overview_appear();
+        // (The ink in the pictures is drawn once the overview is all there, and not while it goes out.)
+        let appear = if self.ed.overview_open() { self.ed.overview_appear() } else { 0.0 };
         let mut used = HashSet::new();
         for label in &self.overview.labels {
             let key = label_key(label);
@@ -82,7 +100,7 @@ impl State {
                 Align::Centre => label.at[0] - width / 2.0,
             };
             let (x, y) = ((left - text::PAD).round(), (label.at[1] - height / 2.0 - text::PAD).round());
-            self.overview.quads.push(Quad { color: [appear; 4], ..Quad::text(key, [x, y, x + bw as f32, y + bh as f32]) });
+            self.overview.quads.push(Quad { color: [label.alpha.clamp(0.0, 1.0); 4], ..Quad::text(key, [x, y, x + bw as f32, y + bh as f32]) });
         }
         self.overview.keys = used;
         let mut thumb_keys = HashSet::new();

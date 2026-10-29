@@ -48,7 +48,7 @@ def sources(d):
         elif p.endswith('.rs'): yield p
 
 
-skip = {'main','bin','stress','architecture','testutil'}
+skip = {'main','lib','bin','stress','architecture','testutil'}
 mods = set()
 for e in os.listdir(SRC):
     name = e[:-3] if e.endswith('.rs') else e

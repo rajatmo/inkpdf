@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use super::*;
 use crate::browse::{Entry, MAX_ENTRIES, Place};
+use crate::store::DocId;
 use crate::stress::Rng;
 use crate::toolbar::{SaveAsHit, SaveAsLayout, Ui};
 use crate::tools::{Dir, Key};
@@ -110,7 +111,7 @@ fn the_name_offered_can_be_saved_as_it_is_with_every_device_so_a_slate_needs_onl
     for (by, mode) in WAYS {
         let mut ed = asking(mode);
         tap(&mut ed, by, SaveAsHit::Save);
-        assert!(ed.requests.take(&Request::SaveTo(PathBuf::from(DOCUMENTS).join("Untitled.pdf"))), "{by:?} in {mode:?}");
+        assert!(ed.requests.take(&Request::SaveTo(DocId::Path(PathBuf::from(DOCUMENTS).join("Untitled.pdf")))), "{by:?} in {mode:?}");
         assert!(ed.save_as_open(), "it stays until the shell says how the write went");
     }
 }
@@ -120,12 +121,12 @@ fn the_keyboard_alone_names_the_file_and_enter_saves_it() {
     let mut ed = asking(Mode::Desktop);
     assert!(ed.press(Key::Text("My report")), "the first thing typed replaces the stem that was offered");
     assert!(ed.press(Key::Text("\n")));
-    assert!(ed.requests.take(&Request::SaveTo(PathBuf::from(DOCUMENTS).join("My report.pdf"))));
+    assert!(ed.requests.take(&Request::SaveTo(DocId::Path(PathBuf::from(DOCUMENTS).join("My report.pdf")))));
     // A wrong name is said, and nothing is asked.
     let mut ed = asking(Mode::Desktop);
     ed.press(Key::Text("a/b"));
     ed.press(Key::Text("\n"));
-    assert!(!ed.requests.has(&Request::SaveTo(PathBuf::from(DOCUMENTS).join("a/b.pdf"))));
+    assert!(!ed.requests.has(&Request::SaveTo(DocId::Path(PathBuf::from(DOCUMENTS).join("a/b.pdf")))));
     let mut ui = Ui::default();
     ed.draw_save_as(&mut ui);
     assert!(ui.labels.iter().any(|l| l.text.contains('/') && l.text.contains("cannot")), "the reason is on the card");
@@ -150,12 +151,12 @@ fn a_tap_on_a_pdf_takes_its_name_and_saving_over_it_is_asked_twice() {
         let mut ed = asking(mode);
         tap(&mut ed, by, SaveAsHit::Row(2));
         tap(&mut ed, by, SaveAsHit::Save);
-        assert!(!ed.requests.has(&Request::SaveTo(PathBuf::from(DOCUMENTS).join("old.pdf"))), "not at once: {by:?}");
+        assert!(!ed.requests.has(&Request::SaveTo(DocId::Path(PathBuf::from(DOCUMENTS).join("old.pdf")))), "not at once: {by:?}");
         let mut ui = Ui::default();
         ed.draw_save_as(&mut ui);
         assert!(ui.labels.iter().any(|l| l.text == "Replace"), "the button says what it will do");
         tap(&mut ed, by, SaveAsHit::Save);
-        assert!(ed.requests.take(&Request::SaveTo(PathBuf::from(DOCUMENTS).join("old.pdf"))), "the second press: {by:?}");
+        assert!(ed.requests.take(&Request::SaveTo(DocId::Path(PathBuf::from(DOCUMENTS).join("old.pdf")))), "the second press: {by:?}");
     }
 }
 
@@ -258,14 +259,14 @@ fn the_answers_of_the_shell_are_taken_and_a_failed_write_leaves_the_dialog_for_a
     ed.draw_save_as(&mut ui);
     assert!(!ui.labels.iter().any(|l| l.text == "x"));
     tap(&mut ed, By::Mouse, SaveAsHit::Save);
-    ed.requests.take(&Request::SaveTo(PathBuf::from(DOCUMENTS).join("Untitled.pdf")));
+    ed.requests.take(&Request::SaveTo(DocId::Path(PathBuf::from(DOCUMENTS).join("Untitled.pdf"))));
     ed.save_as_done(Err("Could not save: disk full".into()));
     assert!(ed.save_as_open(), "still there");
     let mut ui = Ui::default();
     ed.draw_save_as(&mut ui);
     assert!(ui.labels.iter().any(|l| l.text.contains("disk full")), "with the reason");
     tap(&mut ed, By::Mouse, SaveAsHit::Save);
-    assert!(ed.requests.take(&Request::SaveTo(PathBuf::from(DOCUMENTS).join("Untitled.pdf"))), "and can be tried again");
+    assert!(ed.requests.take(&Request::SaveTo(DocId::Path(PathBuf::from(DOCUMENTS).join("Untitled.pdf")))), "and can be tried again");
     ed.save_as_done(Ok(()));
     assert!(!ed.save_as_open(), "written: it goes");
     ed.save_as_done(Ok(()));

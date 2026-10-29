@@ -54,11 +54,11 @@ ones below; no two modules may reach each other, directly or through others.
 
 | Layer | Modules |
 |---|---|
-| adapter | `app`, `gpu`, `platform`, `doc`, `ink_io`, `tiles`, `thumbnail` |
+| adapter | `app`, `gpu`, `platform`, `doc`, `path_store`, `ink_io`, `tiles`, `thumbnail` |
 | session | `editor` |
 | tools | `tools` |
 | ui | `toolbar` |
-| domain | `tool`, `browse`, `input`, `requests`, `workspace`, `selection`, `settings` |
+| domain | `tool`, `browse`, `input`, `requests`, `workspace`, `selection`, `settings`, `store` |
 | model | `figure`, `ink`, `laser`, `links`, `outline`, `pages` |
 | base | `plane`, `motion`, `scene`, `clock`, `geometry`, `colour`, `coords`, `view`, `text`, `smooth`, `clipboard` |
 

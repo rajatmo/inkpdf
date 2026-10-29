@@ -116,6 +116,10 @@ impl super::Platform for FakePlatform {
         crate::motion::Prefs::FULL
     }
 
+    fn file_store(&self) -> std::sync::Arc<dyn crate::store::FileStore> {
+        std::sync::Arc::new(crate::path_store::PathStore)
+    }
+
     fn system_font(&self) -> Option<Vec<u8>> {
         None
     }

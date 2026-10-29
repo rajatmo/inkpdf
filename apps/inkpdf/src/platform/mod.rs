@@ -30,6 +30,8 @@ use crate::browse::Place;
 use crate::clipboard::TextClipboard;
 use crate::input::{Mode, PointerEvent};
 use crate::motion::Prefs;
+use crate::path_store::PathStore;
+use crate::store::FileStore;
 
 /// Asks the event loop for a frame from any thread (a native input callback uses it to wake a sleeping loop).
 pub type Waker = Arc<dyn Fn() + Send + Sync>;
@@ -48,6 +50,8 @@ pub trait Platform {
     fn detect_mode(&self) -> Mode;
     /// What the user has asked of motion.
     fn motion_prefs(&self) -> Prefs;
+    /// Where this platform keeps files: by path on the file system, or in whatever its own picker hands out.
+    fn file_store(&self) -> Arc<dyn FileStore>;
     /// The bytes of the font the system draws text in, if its widths are the ones PDF readers use (Arial). Without one the program's
     /// own Liberation Sans is used, which is as wide.
     fn system_font(&self) -> Option<Vec<u8>>;
@@ -112,6 +116,10 @@ impl Platform for Native {
 
     fn motion_prefs(&self) -> Prefs {
         os::motion_prefs()
+    }
+
+    fn file_store(&self) -> Arc<dyn FileStore> {
+        Arc::new(PathStore)
     }
 
     fn system_font(&self) -> Option<Vec<u8>> {

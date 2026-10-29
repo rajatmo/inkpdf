@@ -6,6 +6,7 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 
 use crate::pages::PageEdit;
+use crate::store::DocId;
 
 /// What the person can answer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -27,7 +28,7 @@ pub enum Request {
     /// The Save As dialog wants the folder's PDFs and subfolders: answered with `Editor::folder_listed`.
     ListFolder(PathBuf),
     /// The Save As dialog was confirmed with this file: written, and answered with `Editor::save_as_done`.
-    SaveTo(PathBuf),
+    SaveTo(DocId),
     /// The Save As dialog was put away without saving.
     SaveAsCancelled,
     /// Switch between windowed and full screen.

@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 use crate::browse::{self, Entry, Place};
 use crate::input::{Device, Phase, PointerEvent, Wheel};
 use crate::requests::Request;
+use crate::store::DocId;
 use crate::toolbar::{ListingView, SaveAsHit, SaveAsLayout, SaveAsView, Ui};
 use crate::tools::{Dir, Key};
 
@@ -203,7 +204,7 @@ impl SaveAsState {
         }
         self.busy = true;
         self.message = None;
-        Outcome::Ask(Request::SaveTo(self.dir.join(file)))
+        Outcome::Ask(Request::SaveTo(DocId::Path(self.dir.join(file))))
     }
 
     /// How much of the name is its stem: all of it but a `.pdf`.
@@ -554,7 +555,7 @@ mod tests {
 
     fn saved_as(outcome: Outcome) -> Option<PathBuf> {
         match outcome {
-            Outcome::Ask(Request::SaveTo(path)) => Some(path),
+            Outcome::Ask(Request::SaveTo(DocId::Path(path))) => Some(path),
             _ => None,
         }
     }

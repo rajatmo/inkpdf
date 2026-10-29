@@ -38,6 +38,7 @@ use crate::editor::Editor;
 use crate::gpu::{Gpu, GpuChoice};
 use crate::input::{InputEvent, Mode};
 use crate::platform::{self, Platform, PointerSource};
+use crate::store::FileStore;
 use crate::text;
 use crate::tiles::Key;
 use bench::Bench;
@@ -94,6 +95,8 @@ pub struct State {
     pointer: Option<Box<dyn PointerSource>>,
     /// What this operating system provides (folders, clipboard, error boxes, the pen reader); built once at start.
     platform: Box<dyn Platform>,
+    /// Where files are read and written (see `store`); the platform's.
+    files: Arc<dyn FileStore>,
     print_stats: bool,
     /// Milliseconds from a pen sample's timestamp to the frame carrying it being handed to the GPU.
     latency_ms: Vec<f32>,
@@ -173,6 +176,7 @@ impl State {
             exit_at: opts.exit_after.map(|d| now + d),
             exit: false,
             pointer,
+            files: platform.file_store(),
             platform,
             print_stats: opts.stats,
             latency_ms: Vec::new(),

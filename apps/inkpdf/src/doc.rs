@@ -1,8 +1,7 @@
 //! An open PDF: its page layout, the pool that renders its tiles, and saving.
 
 use std::collections::HashMap;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -15,6 +14,9 @@ use crate::ink_io;
 use crate::links::Link;
 use crate::outline::OutlineItem;
 use crate::pages::PageEdit;
+#[cfg(test)]
+use crate::path_store::PathStore;
+use crate::store::{DocId, FileStore};
 use crate::tiles::{self, Key};
 use crate::view::Layout;
 
@@ -45,8 +47,8 @@ struct Buried {
 }
 
 pub struct Doc {
-    /// Where it is saved; `None` for a new document that has not been saved yet.
-    pub path: Option<PathBuf>,
+    /// Which file it is saved in; `None` for a new document that has not been saved yet.
+    pub id: Option<DocId>,
     pub name: String,
     /// Displayed size of each page in points.
     pub sizes: Vec<[f32; 2]>,
@@ -74,11 +76,22 @@ pub struct Doc {
 }
 
 impl Doc {
-    /// Open a PDF. Also returns the ink this app saved in it earlier.
+    /// Open a PDF from the file system. Also returns the ink this app saved in it earlier. (The program opens through its
+    /// platform's store; the tests, which use the file system, through this.)
+    #[cfg(test)]
     pub fn open(path: &Path) -> Result<(Doc, Vec<PageStroke>), String> {
-        let bytes = fs::read(path).map_err(|e| format!("could not read {}: {e}", path.display()))?;
-        let name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
-        Self::from_bytes(Arc::new(bytes), Some(path.to_path_buf()), name)
+        Self::open_from(&PathStore, &DocId::Path(path.to_path_buf()))
+    }
+
+    /// Open the PDF `id` names in `files`. Also returns the ink this app saved in it earlier.
+    pub fn open_from(files: &dyn FileStore, id: &DocId) -> Result<(Doc, Vec<PageStroke>), String> {
+        let bytes = files.read(id)?;
+        Self::from_bytes(Arc::new(bytes), Some(id.clone()), id.name())
+    }
+
+    /// The file's path, if it is kept by path and has been saved.
+    pub fn path(&self) -> Option<&Path> {
+        self.id.as_ref().and_then(DocId::as_path)
     }
 
     /// A new document of one blank page `size` points across, with no file yet: where you can just
@@ -90,7 +103,7 @@ impl Doc {
         Self::from_bytes(Arc::new(bytes), None, UNTITLED.into()).map(|(doc, _)| doc)
     }
 
-    fn from_bytes(bytes: Arc<Vec<u8>>, path: Option<PathBuf>, name: String) -> Result<(Doc, Vec<PageStroke>), String> {
+    fn from_bytes(bytes: Arc<Vec<u8>>, id: Option<DocId>, name: String) -> Result<(Doc, Vec<PageStroke>), String> {
         let started = Instant::now();
         let info = inspect(bytes.clone(), None).map_err(|e| e.to_string())?;
         if info.pages.is_empty() {
@@ -116,7 +129,7 @@ impl Doc {
         let slots = (0..sizes.len()).map(|i| Slot { render: Some(i), file: Some(i), dup_of: None }).collect();
         let file_pages = sizes.len();
         let doc = Doc {
-            path,
+            id,
             name,
             sizes,
             geoms,
@@ -270,47 +283,40 @@ impl Doc {
         self.pool.try_recv()
     }
 
-    /// Write the ink (and any added pages) into the file. `Err` for a document with no file yet:
-    /// use [`Doc::save_as`].
-    pub fn save(&mut self, store: &InkStore) -> Result<(), String> {
-        let path = self.path.clone().ok_or("this document has not been saved anywhere yet")?;
-        self.write_to(&path, store)
+    /// Write the ink (and any added pages) into the file, in `files`. `Err` for a document with no file yet: use
+    /// [`Doc::save_as_to`].
+    pub fn save_to(&mut self, files: &dyn FileStore, store: &InkStore) -> Result<(), String> {
+        let id = self.id.clone().ok_or("this document has not been saved anywhere yet")?;
+        self.write_to(files, &id, store)
     }
 
-    /// Save to `path`, which becomes where the document lives.
+    /// [`Doc::save_to`] on the file system.
+    #[cfg(test)]
+    pub fn save(&mut self, store: &InkStore) -> Result<(), String> {
+        self.save_to(&PathStore, store)
+    }
+
+    /// Save to `path` on the file system, which becomes where the document lives.
+    #[cfg(test)]
     pub fn save_as(&mut self, path: &Path, store: &InkStore) -> Result<(), String> {
-        self.write_to(path, store)?;
-        self.name = path.file_name().map_or_else(|| path.display().to_string(), |n| n.to_string_lossy().into_owned());
-        self.path = Some(path.to_path_buf());
+        self.save_as_to(&PathStore, &DocId::Path(path.to_path_buf()), store)
+    }
+
+    /// Save as the file `id` names in `files`, which becomes where the document lives.
+    pub fn save_as_to(&mut self, files: &dyn FileStore, id: &DocId, store: &InkStore) -> Result<(), String> {
+        self.write_to(files, id, store)?;
+        self.name = id.name();
+        self.id = Some(id.clone());
         Ok(())
     }
 
-    /// The new file is written beside the old one and swapped in, so a failure part-way leaves the
-    /// original as it was.
-    fn write_to(&mut self, path: &Path, store: &InkStore) -> Result<(), String> {
+    /// The new file is written whole or not at all (see [`FileStore::write_atomic`]), so a failure part-way leaves the original as
+    /// it was.
+    fn write_to(&mut self, files: &dyn FileStore, id: &DocId, store: &InkStore) -> Result<(), String> {
         let copies: Vec<(usize, usize)> =
             self.slots.iter().enumerate().filter_map(|(page, s)| s.dup_of.filter(|_| s.file.is_none()).map(|from| (page, from))).collect();
         let bytes = ink_io::save(&self.base, store, &self.geoms, &self.layout(), store.dirty_pages(), &self.doc_of_file(), &copies)?;
-        let dir = path.parent().filter(|d| !d.as_os_str().is_empty()).map_or_else(|| PathBuf::from("."), Path::to_path_buf);
-        let file = path.file_name().map_or_else(|| "document.pdf".into(), |n| n.to_string_lossy().into_owned());
-        let tmp = dir.join(format!(".{file}.inkpdf-saving"));
-        // Windows will not replace a read-only file, but a rename on Linux does, so a file made read-only is refused here,
-        // and the file that replaces it keeps its permissions.
-        #[cfg(not(windows))]
-        let kept = fs::metadata(path).ok().map(|m| m.permissions());
-        #[cfg(not(windows))]
-        if kept.as_ref().is_some_and(fs::Permissions::readonly) {
-            return Err(format!("could not replace {}: it is read-only", path.display()));
-        }
-        fs::write(&tmp, &bytes).map_err(|e| format!("could not write {}: {e}", tmp.display()))?;
-        #[cfg(not(windows))]
-        if let Some(permissions) = kept {
-            let _ = fs::set_permissions(&tmp, permissions);
-        }
-        if let Err(e) = fs::rename(&tmp, path) {
-            let _ = fs::remove_file(&tmp);
-            return Err(format!("could not replace {}: {e}", path.display()));
-        }
+        files.write_atomic(id, &bytes)?;
         self.base = Arc::new(bytes);
         // The file now has exactly these pages, in this order.
         self.slots.iter_mut().enumerate().for_each(|(i, s)| (s.file, s.dup_of) = (Some(i), None));
@@ -327,6 +333,9 @@ fn render_threads() -> usize {
 }
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::path::PathBuf;
+
     use super::*;
     use crate::ink::Style;
     use crate::pages::Remap;
@@ -421,7 +430,7 @@ mod tests {
         let mut doc = Doc::blank(BLANK_PAGE).expect("blank");
         assert_eq!(doc.page_count(), 1);
         assert_eq!(doc.page_size(0), [595.0, 842.0], "A4");
-        assert_eq!((doc.path.as_ref(), doc.name.as_str()), (None, UNTITLED));
+        assert_eq!((doc.path(), doc.name.as_str()), (None, UNTITLED));
         assert!(doc.take_links().is_empty());
     }
 
@@ -436,7 +445,7 @@ mod tests {
 
         let path = dir.join("notes.pdf");
         doc.save_as(&path, &store).expect("save as");
-        assert_eq!((doc.path.as_deref(), doc.name.as_str()), (Some(path.as_path()), "notes.pdf"));
+        assert_eq!((doc.path(), doc.name.as_str()), (Some(path.as_path()), "notes.pdf"));
         store.mark_clean();
 
         let (reopened, strokes) = Doc::open(&path).expect("reopen");

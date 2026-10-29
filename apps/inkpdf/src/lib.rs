@@ -27,6 +27,7 @@ mod links;
 mod motion;
 mod outline;
 mod pages;
+mod path_store;
 mod plane;
 mod platform;
 mod requests;
@@ -34,6 +35,7 @@ mod scene;
 mod selection;
 mod settings;
 mod smooth;
+mod store;
 #[cfg(test)]
 mod stress;
 #[cfg(test)]

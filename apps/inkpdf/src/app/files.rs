@@ -9,6 +9,7 @@ use crate::editor::Request;
 use crate::ink::PageStroke;
 use crate::pages::PageEdit;
 use crate::requests::Choice;
+use crate::store::DocId;
 use super::config;
 
 use super::{InkStamp, State, folders};
@@ -62,7 +63,7 @@ impl State {
     pub(super) fn answered(&mut self, choice: Choice) {
         let Some(then) = self.then.take() else { return };
         // A document with no file yet is asked where to go: what was waiting follows when the file has been written.
-        if choice == Choice::Save && self.ed.ink.is_dirty() && self.doc.as_ref().is_some_and(|d| d.path.is_none()) {
+        if choice == Choice::Save && self.ed.ink.is_dirty() && self.doc.as_ref().is_some_and(|d| d.id.is_none()) {
             self.begin_save_as(Some(then));
             return;
         }
@@ -92,7 +93,7 @@ impl State {
     }
 
     fn open_now(&mut self, path: PathBuf) {
-        match Doc::open(&path) {
+        match Doc::open_from(&*self.files, &DocId::Path(path.clone())) {
             Ok((doc, strokes)) => self.install(doc, strokes),
             Err(e) => {
                 eprintln!("could not open {}: {e}", path.display());
@@ -126,17 +127,17 @@ impl State {
         }
         self.ed.settle();
         self.save_then = then;
-        let file = self.doc.as_ref().and_then(|d| d.path.clone());
+        let file = self.doc.as_ref().and_then(|d| d.path().map(Path::to_path_buf));
         let dir = file.as_deref().and_then(Path::parent).filter(|p| p.is_dir()).map_or_else(|| self.platform.documents_dir(), Path::to_path_buf);
         let name = file.as_deref().and_then(Path::file_name).map_or_else(|| format!("{UNTITLED}.pdf"), |n| n.to_string_lossy().into_owned());
         self.ed.ask_save_as(dir, &name, self.platform.places());
         self.window.request_redraw();
     }
 
-    /// The Save As dialog was confirmed with `path`: the document is written there, and becomes that file.
-    fn save_to(&mut self, path: PathBuf) {
+    /// The Save As dialog was confirmed with the file `id`: the document is written there, and becomes that file.
+    fn save_to(&mut self, id: DocId) {
         let result = match &mut self.doc {
-            Some(doc) => doc.save_as(&path, &self.ed.ink),
+            Some(doc) => doc.save_as_to(&*self.files, &id, &self.ed.ink),
             None => Err("there is no document to save".to_string()),
         };
         match result {
@@ -170,7 +171,7 @@ impl State {
         if !self.ed.ink.is_dirty() {
             return true;
         }
-        let Some(has_file) = self.doc.as_ref().map(|d| d.path.is_some()) else { return true };
+        let Some(has_file) = self.doc.as_ref().map(|d| d.id.is_some()) else { return true };
         // A document with no file yet is saved where the person says: the dialog asks, and the write follows from it
         // (see `save_to`), so nothing has been saved yet.
         if !has_file {
@@ -178,7 +179,7 @@ impl State {
             return false;
         }
         let Some(doc) = &mut self.doc else { return true };
-        match doc.save(&self.ed.ink) {
+        match doc.save_to(&*self.files, &self.ed.ink) {
             Ok(()) => {
                 self.ed.document_saved();
                 self.title.clear();
@@ -252,8 +253,8 @@ impl State {
                     self.save_now();
                 }
                 Request::SaveAs => self.begin_save_as(None),
-                Request::ListFolder(dir) => folders::spawn(dir, self.window.clone(), self.listings.0.clone()),
-                Request::SaveTo(path) => self.save_to(path),
+                Request::ListFolder(dir) => folders::spawn(dir, self.files.clone(), self.window.clone(), self.listings.0.clone()),
+                Request::SaveTo(id) => self.save_to(id),
                 Request::SaveAsCancelled => {
                     self.save_then = None;
                     self.window.request_redraw();

@@ -1160,7 +1160,7 @@ fn stress_documents_grow_save_and_reopen_without_losing_a_page_or_a_stroke() {
         let mut store = InkStore::new();
         let mut strokes_on: Vec<usize> = vec![0; doc.page_count()];
         let check = |doc: &Doc, strokes_on: &[usize], what: &str| {
-            let (back, strokes) = Doc::open(doc.path.as_ref().expect("saved")).expect("reopen");
+            let (back, strokes) = Doc::open(doc.path().expect("saved")).expect("reopen");
             assert_eq!(back.page_count(), strokes_on.len(), "round {round} {what}: pages");
             for (page, &n) in strokes_on.iter().enumerate() {
                 assert_eq!(strokes.iter().filter(|s| s.0 as usize == page).count(), n, "round {round} {what}: strokes on page {page}");

@@ -93,7 +93,9 @@ built once in `main`, held by `State`. Window handles come from `raw-window-hand
 *Effect.* The shell becomes testable with a fake platform; a new OS or backend is one `impl`; the contract is checked by the compiler.
 *Latency.* None: only `PointerSource` is on the pen path and it already is a trait object.
 
-### R4. A storage port, so a file need not be a path  *(medium, medium risk)*
+### R4. A storage port, so a file need not be a path  *(medium, medium risk; done)*
+
+*Done.* `store` (domain) has `DocId::{Path, Uri}` and `trait FileStore { read, write_atomic, list }`; `path_store::PathStore` (adapter) holds today's behaviour, moved whole (the temp-and-rename, the read-only refusal, the folder listing with its hidden-file rules and tests). `Doc` keeps an `Option<DocId>` and reads and writes only through a store (`open_from`, `save_to`, `save_as_to`; the path-taking ones remain for tests). `Request::SaveTo` carries a `DocId`; `Platform::file_store()` hands the shell its store, so Android's picker is one `impl`. The Save As dialog still browses by path (an Android picker would replace the dialog, not feed it).
 
 *Problem.* `Doc::open(path)` and `write_to` use `std::fs` directly (including the atomic temp-and-rename and, now, the
 read-only check). Android hands out `content://` URIs; sandboxes forbid paths.

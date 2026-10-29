@@ -121,7 +121,7 @@ enum Layer {
 }
 
 /// Every top-level module of the program, and its layer. A new module is placed here or the test fails.
-const LAYERS: [(&str, Layer); 34] = [
+const LAYERS: [(&str, Layer); 36] = [
     ("plane", Layer::Base),
     ("motion", Layer::Base),
     ("scene", Layer::Base),
@@ -146,6 +146,7 @@ const LAYERS: [(&str, Layer); 34] = [
     ("workspace", Layer::Domain),
     ("selection", Layer::Domain),
     ("settings", Layer::Domain),
+    ("store", Layer::Domain),
     ("toolbar", Layer::Ui),
     ("tools", Layer::Tools),
     ("editor", Layer::Session),
@@ -153,6 +154,7 @@ const LAYERS: [(&str, Layer); 34] = [
     ("gpu", Layer::Adapter),
     ("platform", Layer::Adapter),
     ("doc", Layer::Adapter),
+    ("path_store", Layer::Adapter),
     ("ink_io", Layer::Adapter),
     ("tiles", Layer::Adapter),
     ("thumbnail", Layer::Adapter),

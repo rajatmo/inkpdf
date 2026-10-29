@@ -2,8 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, linux-android-port]
   pull_request:
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -74,3 +75,39 @@ jobs:
         with:
           name: inkpdf-android-test-apk
           path: inkpdf-android-test.apk
+
+  android-emulator:
+    # Runs the APK on an Android emulator (x86_64, with KVM, which GitHub's Linux runners have) and leaves screenshots, logcat and a
+    # verdict as an artifact: tools/android/emulator-test.sh says what it checks. It is the nearest thing to a device in CI.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - name: Build the APK for the emulator
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+          export ANDROID_BUILD_TOOLS="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          export ANDROID_JAR="$(ls -d "$ANDROID_HOME"/platforms/android-3* | sort -V | tail -1)/android.jar"
+          ABIS=x86_64 tools/android/build-apk.sh release "$PWD/inkpdf-emulator.apk"
+      - name: Allow the emulator to use KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_tablet
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: tools/android/emulator-test.sh inkpdf-emulator.apk emulator-out
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-emulator-output
+          path: emulator-out

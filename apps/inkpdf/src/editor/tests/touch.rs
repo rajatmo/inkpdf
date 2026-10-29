@@ -75,3 +75,17 @@ fn a_big_contact_is_ignored_as_a_palm() {
     ed.pointer_event(touch(1, Phase::Move, [600.0, 300.0], 300.0));
     assert_eq!(ed.view.scroll, before);
 }
+
+#[test]
+fn a_finger_panning_when_the_pen_comes_near_stops_and_leaves_nothing_stuck() {
+    let mut ed = editor();
+    ed.palm = crate::input::PalmGuard::default();
+    ed.pointer_event(touch(1, Phase::Down, [600.0, 500.0], 30.0));
+    ed.pointer_event(touch(1, Phase::Move, [600.0, 450.0], 30.0));
+    let panned = ed.view.scroll;
+    ed.pointer_event(pen(Phase::Hover, HOVER, &[on_page(&ed, 300.0, 300.0)]));
+    ed.pointer_event(touch(1, Phase::Move, [600.0, 200.0], 30.0));
+    assert_eq!(ed.view.scroll, panned, "the finger no longer pans");
+    assert_eq!(ed.fingers.fingers(), 0, "and no phantom finger is left to turn the next pan into a pinch");
+    assert!(ed.is_idle());
+}

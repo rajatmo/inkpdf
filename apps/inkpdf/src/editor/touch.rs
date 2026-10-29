@@ -86,6 +86,24 @@ impl Editor {
         self.ws.redraw = true;
     }
 
+    /// Every finger's business is called off, as when the pen comes near: no pan, pinch, toolbar press or fling goes on, and
+    /// nothing is activated.
+    pub(super) fn cancel_touches(&mut self) {
+        self.fingers = crate::input::TouchGestures::default();
+        self.end_pull();
+        if matches!(
+            self.chrome.act,
+            Act::Toolbar { dev: Device::Touch, .. }
+                | Act::Context { dev: Device::Touch, .. }
+                | Act::Slider { dev: Device::Touch, .. }
+                | Act::Swallow { dev: Device::Touch, .. }
+        ) {
+            self.end_act();
+        }
+        self.overview_gestures_lost();
+        self.ws.redraw = true;
+    }
+
     /// Fingers moved: two or more pinch and pan, one pans (and may pull a new page in).
     fn apply_touch(&mut self, d: GestureDelta) {
         if d.fingers >= 2 {

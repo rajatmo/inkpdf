@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Palm rejection follows the pen's hover, as note-taking apps do: touch is off for as long as the pen is above the screen or
+  touching it, and fingers already down when it arrives are given up cleanly (before, they could stay stuck as a phantom
+  finger). A pen whose screen does not report hover no longer locks touch out after a stroke: it gets a short grace instead.
 - Save As is the app's own card, on every platform (it replaces the system's save window, which stays hidden when raised from a
   pen tap and looks different everywhere): it opens on the Documents folder (the one Windows names, which may be in OneDrive;
   on Linux the desktop's own; the document's folder when it already has a file), offers `Untitled.pdf` with its name selected,

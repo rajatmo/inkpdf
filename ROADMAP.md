@@ -251,7 +251,7 @@ a diff report, `tools/corpus/`). Write it as a generic `backend_contract(make: &
 break the pdfcraft implementation on purpose. (CI runs it on all three jobs; the render tolerance is set so the Windows and Linux
 rasterisers agree.)
 
-**K3. The upgrade rule, the numbers, and the decision record.**
+**K3. The upgrade rule, the numbers, and the decision record.** *(Done 2026-10-29: `tools/pdfcraft/bump.sh`, the ignored `measure_the_backend` test, and `docs/PDF-BACKEND.md` with the numbers (Linux only: Windows and Android are still to measure), what the suite pinned down, the risks and the criteria for reconsidering.)*
 *Work:* (1) `tools/pdfcraft/bump.sh REV` changes every `rev` line and the `PDFCRAFT_REV` comment together (they must agree), runs the
 corpus and prints what changed; the rule, written in `docs/PDF-BACKEND.md`: bump only with the corpus green, in its own commit.
 (2) Measure and record, per platform where you can: time to render a tile, a preview and a thumbnail, extraction time per page, memory,

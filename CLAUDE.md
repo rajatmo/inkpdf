@@ -14,4 +14,5 @@ per-OS.
 - Layering is enforced by `apps/inkpdf/src/architecture.rs`: a new module goes in its `LAYERS` table and in `ARCHITECTURE.md`,
   and `python3 tools/deps/graph.py` redraws `docs/deps/` (CI runs it with `--check`).
 - Input promise: every tool works with only the left mouse button and keyboard (desktop) or the stylus tip (tablet).
-- Do not bump the version, push to `main`, or touch the pinned pdfcraft revision unless the task says so.
+- Do not bump the version, push to `main`, or touch the pinned pdfcraft revision unless the task says so. (A pdfcraft bump goes through
+  `tools/pdfcraft/bump.sh` and the conformance suite; the PDF engine is named only under `src/pdf/`, see `docs/PDF-BACKEND.md`.)

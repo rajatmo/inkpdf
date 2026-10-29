@@ -465,3 +465,95 @@ fn the_suite_fails_for_a_backend_that_is_wrong() {
     assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| check_geometry(&wrong))).is_err(), "a wrong page width is caught");
     assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| check_text(&wrong))).is_ok(), "and what it got right still passes");
 }
+
+// ── numbers, not checks ──────────────────────────────────────────────────────────────────────────
+
+/// Times and memory of the backend on a dense generated document (`inkpdf-gen out.pdf 200 --outline`; give its path in
+/// `INKPDF_MEASURE_PDF`): what `docs/PDF-BACKEND.md` records, and what to compare before moving to another version. Run it on the
+/// machine you care about, in release: `INKPDF_MEASURE_PDF=... cargo test -p inkpdf --lib --release measure -- --ignored --nocapture`.
+#[test]
+#[ignore = "prints numbers: run by hand, in release, with INKPDF_MEASURE_PDF"]
+fn measure_the_backend() {
+    use std::time::Instant;
+    let Ok(path) = std::env::var("INKPDF_MEASURE_PDF") else { return eprintln!("set INKPDF_MEASURE_PDF to a PDF made by inkpdf-gen") };
+    let b = native();
+    let bytes = arc(std::fs::read(path).expect("read the PDF"));
+    let rss = || -> u64 {
+        let status = std::fs::read_to_string("/proc/self/status").unwrap_or_default();
+        let kb =
+            |key: &str| status.lines().find(|l| l.starts_with(key)).and_then(|l| l.split_whitespace().nth(1)).and_then(|v| v.parse::<u64>().ok());
+        kb("VmHWM:").unwrap_or(0) / 1024
+    };
+    let ms = |t: Instant| t.elapsed().as_secs_f64() * 1000.0;
+    let summary = |mut v: Vec<f64>| -> String {
+        v.sort_by(f64::total_cmp);
+        format!("median {:.2} ms, p95 {:.2} ms, worst {:.2} ms ({} samples)", v[v.len() / 2], v[v.len() * 95 / 100], v[v.len() - 1], v.len())
+    };
+    let t = Instant::now();
+    let geoms = b.inspect(&bytes).expect("inspect");
+    eprintln!("file: {} bytes, {} pages; inspect {:.1} ms; peak RSS so far {} MB", bytes.len(), geoms.len(), ms(t), rss());
+    let t = Instant::now();
+    let doc = b.open(&bytes).expect("open");
+    eprintln!("open for change {:.1} ms; outline {} items, links {}", ms(t), doc.outline().len(), doc.links().len());
+    // The pool, one thread, a mix as the frame asks for it: a preview, a thumbnail and the sharp tiles of a page, over many pages.
+    let n = geoms.len().min(60);
+    let mut requests = Vec::new();
+    let mut tag = 0;
+    for (page, geom) in geoms.iter().enumerate().take(n) {
+        let [w, h] = [geom.width, geom.height];
+        let tiles = crate::tiles::request(crate::tiles::Key::Preview { page: page as u32 }, [w, h]);
+        let thumb = crate::tiles::request(crate::tiles::Key::Thumb { page: page as u32 }, [w, h]);
+        let tile = crate::tiles::request(crate::tiles::Key::Tile { page: page as u32, level: 2, tx: 1, ty: 1 }, [w, h]);
+        for r in [tiles, thumb, tile] {
+            tag += 1;
+            requests.push(RenderRequest { tag, ..r });
+        }
+    }
+    let pool = b.render_pool(bytes.clone(), 1);
+    let (mut per, mut last) = (Vec::new(), Instant::now());
+    pool.set_queue(requests.clone());
+    let started = Instant::now();
+    while per.len() < requests.len() && started.elapsed().as_secs() < 300 {
+        if let Some(r) = pool.try_recv() {
+            assert!(r.error.is_none(), "{:?}", r.error);
+            per.push(ms(last));
+            last = Instant::now();
+        } else {
+            std::thread::sleep(std::time::Duration::from_micros(200));
+        }
+    }
+    eprintln!(
+        "pool, 1 thread, {} requests (preview, thumbnail and a sharp tile of each of {n} pages): {}; total {:.0} ms",
+        requests.len(),
+        summary(per),
+        ms(started)
+    );
+    // Whole-page renders and text, each from a fresh parse (what a single call costs).
+    let one = |r: RenderRequest| {
+        let t = Instant::now();
+        let p = b.render_now(bytes.clone(), &r);
+        assert!(p.error.is_none());
+        ms(t)
+    };
+    let pages: Vec<usize> = (0..n).step_by(5).collect();
+    eprintln!(
+        "render_now at 1.0, parse included: {}",
+        summary(pages.iter().map(|&p| one(RenderRequest { page: p, scale: 1.0, ..RenderRequest::default() })).collect())
+    );
+    eprintln!(
+        "render_now at 2.0, parse included: {}",
+        summary(pages.iter().map(|&p| one(RenderRequest { page: p, scale: 2.0, ..RenderRequest::default() })).collect())
+    );
+    let text: Vec<f64> = pages
+        .iter()
+        .map(|&p| {
+            let t = Instant::now();
+            let text = b.page_text(&bytes, p).expect("text");
+            let found = text.find("stylus", false, false, 5000).len();
+            assert!(text.glyph_count() > 100 && found > 0, "page {p}");
+            ms(t)
+        })
+        .collect();
+    eprintln!("page_text + find, parse included: {}", summary(text));
+    eprintln!("peak RSS {} MB", rss());
+}

@@ -147,7 +147,7 @@ clock's source) is handed to them.
   is the trait for one page's text (`PageTextView`) that the text tools will use; the pdfcraft side implements it. `pdf::native()` is the
   backend the program was built with. `pdf/contract.rs` is the conformance suite (geometry, sizing, text and find, outline and links, annotations
   written and read back, organized pages, renders checked by a few pixels, a render pool, damaged files): a backend must pass it, and a test
-  shows it can fail.
+  shows it can fail. The upgrade rule, the numbers and the criteria for reconsidering the engine are in `docs/PDF-BACKEND.md`.
 * `pdf_read.rs` (adapter) places what the engine hands over on the layout (links in document space, an outline with tidy titles) for the
   model, which (`links.rs`, `outline.rs`) keeps it and carries it through edits. `ink_io.rs` is the policy for ink: which annotations are
   ours (`inkpdf-` names), how strokes and shapes are written, in terms of `PdfDocument`.

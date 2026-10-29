@@ -121,7 +121,7 @@ tools/                 Android and Linux packaging, end-to-end checks, dependenc
 
 Layering is enforced by a test (`src/architecture.rs`): nothing below the adapters touches a file, the environment, an OS, a PDF
 crate, `wgpu` or `winit`. More: [ARCHITECTURE.md](apps/inkpdf/ARCHITECTURE.md) (layers, patterns, latency),
-[docs/PORTING.md](docs/PORTING.md) (Linux and Android), [docs/REFACTOR.md](docs/REFACTOR.md) and
+[docs/PORTING.md](docs/PORTING.md) (Linux and Android), [docs/PDF-BACKEND.md](docs/PDF-BACKEND.md) (the PDF engine seam, the upgrade rule, the numbers), [docs/REFACTOR.md](docs/REFACTOR.md) and
 [docs/SIMPLIFY.md](docs/SIMPLIFY.md) (design reviews), [docs/deps](docs/deps) (dependency graphs), [ROADMAP.md](ROADMAP.md),
 [CHANGELOG.md](CHANGELOG.md).
 

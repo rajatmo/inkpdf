@@ -180,8 +180,21 @@ fn menu(view: &OverviewView<'_>, l: &OverviewLayout, page: usize, ui: &mut Ui) {
             MenuItem::Duplicate => "Duplicate",
             MenuItem::Delete => "Delete",
         };
-        let color = if !enabled { INK_DIM } else if item == MenuItem::Delete { DANGER } else { INK };
-        ui.labels.push(Label { text: text.to_string(), size: 0.5 * u, color, at: [r[0] + 0.5 * u, (r[1] + r[3]) / 2.0], align: Align::Left, alpha: 1.0 });
+        let color = if !enabled {
+            INK_DIM
+        } else if item == MenuItem::Delete {
+            DANGER
+        } else {
+            INK
+        };
+        ui.labels.push(Label {
+            text: text.to_string(),
+            size: 0.5 * u,
+            color,
+            at: [r[0] + 0.5 * u, (r[1] + r[3]) / 2.0],
+            align: Align::Left,
+            alpha: 1.0,
+        });
     }
 }
 
@@ -201,7 +214,8 @@ fn header(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
         size: 0.62 * u,
         color: INK,
         at: [l.card[0] + 1.8 * u, centre_y],
-        align: Align::Left, alpha: 1.0,
+        align: Align::Left,
+        alpha: 1.0,
     });
     for (control, r) in l.controls {
         let centre = [(r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0];
@@ -223,7 +237,13 @@ fn header(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
         if let Some(color) = wash {
             ui.panels.push(crate::scene::Panel::solid(r, (r[2] - r[0]) / 2.0, color));
         }
-        let color = if !enabled { INK_DIM } else if on { ACCENT } else { INK };
+        let color = if !enabled {
+            INK_DIM
+        } else if on {
+            ACCENT
+        } else {
+            INK
+        };
         let half = 0.45 * u;
         let icon = match control {
             Control::Close => &icons().close,
@@ -241,7 +261,14 @@ fn contents(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
     let (u, px) = (l.unit(), l.px());
     let Some(toc) = l.toc else { return };
     ui.line([toc[2], toc[1]], [toc[2], toc[3] - 0.9 * u], px, SEPARATOR);
-    ui.labels.push(Label { text: "Contents".to_string(), size: 0.46 * u, color: INK_DIM, at: [toc[0] + 0.9 * u, toc[1] + 0.6 * u], align: Align::Left, alpha: 1.0 });
+    ui.labels.push(Label {
+        text: "Contents".to_string(),
+        size: 0.46 * u,
+        color: INK_DIM,
+        at: [toc[0] + 0.9 * u, toc[1] + 0.6 * u],
+        align: Align::Left,
+        alpha: 1.0,
+    });
     let size = 0.46 * u;
     for k in l.toc_visible(view.rows.len(), view.toc_scroll) {
         let row = view.rows[k];
@@ -263,7 +290,13 @@ fn contents(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
             chevron(ui, [(arrow[0] + arrow[2]) / 2.0, centre_y], 0.14 * u, !(view.folded)(row.item), 1.5 * px, INK_DIM);
         }
         let x = l.toc_title_x(row, k, view.toc_scroll);
-        let color = if section { ACCENT } else if item.page.is_some() { INK } else { INK_DIM };
+        let color = if section {
+            ACCENT
+        } else if item.page.is_some() {
+            INK
+        } else {
+            INK_DIM
+        };
         let title = fit(&item.title, size, r[2] - x - 0.2 * u);
         if !title.is_empty() {
             ui.labels.push(Label { text: title, size, color, at: [x, centre_y], align: Align::Left, alpha: 1.0 });
@@ -285,7 +318,12 @@ fn pages(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
         let (mark, motion) = (ui.mark(), (view.motion)(i));
         // The paper behind the picture, with a hairline edge: what shows until the picture is there.
         if whole {
-            ui.panels.push(crate::scene::Panel::new([thumb[0] - px, thumb[1] - px + 2.0 * px, thumb[2] + px, thumb[3] + px + 2.0 * px], 2.0 * px, 6.0 * px, [16, 20, 44, 36]));
+            ui.panels.push(crate::scene::Panel::new(
+                [thumb[0] - px, thumb[1] - px + 2.0 * px, thumb[2] + px, thumb[3] + px + 2.0 * px],
+                2.0 * px,
+                6.0 * px,
+                [16, 20, 44, 36],
+            ));
         }
         ui.panels.push(crate::scene::Panel::solid([shown[0] - px, shown[1] - px, shown[2] + px, shown[3] + px], 2.0 * px, PANEL_EDGE));
         ui.panels.push(crate::scene::Panel::solid(shown, 1.5 * px, PAPER));
@@ -307,8 +345,18 @@ fn pages(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
                 let tick = ui.mark();
                 if selected(i) {
                     ui.disc(centre, 0.8 * u, ACCENT);
-                    ui.line([centre[0] - 0.2 * u, centre[1] + 0.02 * u], [centre[0] - 0.05 * u, centre[1] + 0.18 * u], 2.0 * px, [255, 255, 255, 255]);
-                    ui.line([centre[0] - 0.05 * u, centre[1] + 0.18 * u], [centre[0] + 0.24 * u, centre[1] - 0.16 * u], 2.0 * px, [255, 255, 255, 255]);
+                    ui.line(
+                        [centre[0] - 0.2 * u, centre[1] + 0.02 * u],
+                        [centre[0] - 0.05 * u, centre[1] + 0.18 * u],
+                        2.0 * px,
+                        [255, 255, 255, 255],
+                    );
+                    ui.line(
+                        [centre[0] - 0.05 * u, centre[1] + 0.18 * u],
+                        [centre[0] + 0.24 * u, centre[1] - 0.16 * u],
+                        2.0 * px,
+                        [255, 255, 255, 255],
+                    );
                 } else {
                     // An open ring (the page shows through it) that shows on white paper, with a pale one round it
                     // so that it shows on dark pages too.
@@ -326,7 +374,11 @@ fn pages(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
             let (centre_x, centre_y) = ((row[0] + row[2]) / 2.0, (row[1] + row[3]) / 2.0 + 0.1 * u);
             if view.hover == Some(Hover::Number(i)) || view.menu == Some(i) {
                 let half = (0.9 * u).min((row[2] - row[0]) / 2.0);
-                ui.panels.push(crate::scene::Panel::solid([centre_x - half - 0.5 * u, row[1] + 0.15 * u, centre_x + half + 0.5 * u, row[3] - 0.05 * u], 0.4 * u, HOVER_WASH));
+                ui.panels.push(crate::scene::Panel::solid(
+                    [centre_x - half - 0.5 * u, row[1] + 0.15 * u, centre_x + half + 0.5 * u, row[3] - 0.05 * u],
+                    0.4 * u,
+                    HOVER_WASH,
+                ));
             }
             let text = (i + 1).to_string();
             ui.labels.push(Label { text: text.clone(), size: 0.5 * u, color, at: [centre_x - 0.2 * u, centre_y], align: Align::Centre, alpha: 1.0 });
@@ -412,7 +464,14 @@ fn dragging(view: &OverviewView<'_>, l: &OverviewLayout, drag: &DragView<'_>, ui
     if drag.pages.len() > 1 {
         let badge = [rect[2], rect[1]];
         ui.disc(badge, 0.9 * u, ACCENT);
-        ui.labels.push(Label { text: drag.pages.len().to_string(), size: 0.46 * u, color: [255, 255, 255, 255], at: badge, align: Align::Centre, alpha: 1.0 });
+        ui.labels.push(Label {
+            text: drag.pages.len().to_string(),
+            size: 0.46 * u,
+            color: [255, 255, 255, 255],
+            at: badge,
+            align: Align::Centre,
+            alpha: 1.0,
+        });
     }
 }
 
@@ -513,14 +572,21 @@ mod tests {
         v.edit = true;
         let editing = drawn(&v, [1280.0, 720.0], 1.0).0;
         assert!(editing.lines.len() > ringed.lines.len(), "a circle on every page, ticked on the chosen ones");
-        let accent = |ui: &Ui| ui.labels.iter().filter(|l| l.color == ACCENT && l.text.chars().all(|c| c.is_ascii_digit())).map(|l| l.text.clone()).collect::<Vec<_>>();
+        let accent = |ui: &Ui| {
+            ui.labels.iter().filter(|l| l.color == ACCENT && l.text.chars().all(|c| c.is_ascii_digit())).map(|l| l.text.clone()).collect::<Vec<_>>()
+        };
         assert_eq!(accent(&editing), ["2", "3", "5"], "the numbers of the current and the chosen pages are in the accent colour");
     }
 
     #[test]
     fn the_table_of_contents_shows_its_rows_folds_and_the_section_being_read() {
         let pages = layout(4);
-        let outline = vec![item("Chapter 1", 0, Some(0), true), item("1.1 Basics", 1, Some(1), false), item("Chapter 2", 0, Some(3), false), item("Appendix", 0, None, false)];
+        let outline = vec![
+            item("Chapter 1", 0, Some(0), true),
+            item("1.1 Basics", 1, Some(1), false),
+            item("Chapter 2", 0, Some(3), false),
+            item("Appendix", 0, None, false),
+        ];
         let rows = rows_of(&outline);
         let mut v = view(&pages, &outline, &rows, &[]);
         v.section = Some(1);

@@ -7,7 +7,6 @@
 use std::cell::Cell;
 use std::time::Instant;
 
-
 use crate::doc::Doc;
 use crate::editor::{Editor, Request};
 use crate::figure::NodeAction;
@@ -110,8 +109,7 @@ thread_local! {
 }
 
 const PHASES: [Phase; 6] = [Phase::Down, Phase::Move, Phase::Up, Phase::Cancel, Phase::Hover, Phase::Leave];
-const BUTTONS: [MouseButton; 4] =
-    [MouseButton::Left, MouseButton::Right, MouseButton::Middle, MouseButton::Other];
+const BUTTONS: [MouseButton; 4] = [MouseButton::Left, MouseButton::Right, MouseButton::Middle, MouseButton::Other];
 
 fn random_samples(rng: &mut Rng, size: [f32; 2], hostile: bool) -> Vec<Sample> {
     let n = rng.below(8);
@@ -502,11 +500,7 @@ fn poke(ed: &mut Editor, rng: &mut Rng, hostile: bool) -> String {
         12 => {
             let (x, y) = if hostile { (rng.coord(10.0), rng.coord(10.0)) } else { (rng.finite(10.0), rng.finite(10.0)) };
             what = format!("wheel {x} {y}");
-            ed.wheel(if rng.chance(0.5) {
-                Wheel::Lines(x, y)
-            } else {
-                Wheel::Pixels(x * 30.0, y * 30.0)
-            });
+            ed.wheel(if rng.chance(0.5) { Wheel::Lines(x, y) } else { Wheel::Pixels(x * 30.0, y * 30.0) });
         }
         13 | 14 => {
             // The mouse presses and releases wherever it is, with any button, while a tool is held.
@@ -524,12 +518,7 @@ fn poke(ed: &mut Editor, rng: &mut Rng, hostile: bool) -> String {
         16 => ed.dpr = rng.pick(&[0.5, 1.0, 1.25, 1.5, 2.0, 3.0, 4.0]),
         17 => ed.mouse_left(),
         18 => {
-            let phase = rng.pick(&[
-                Phase::Down,
-                Phase::Move,
-                Phase::Up,
-                Phase::Cancel,
-            ]);
+            let phase = rng.pick(&[Phase::Down, Phase::Move, Phase::Up, Phase::Cancel]);
             let (id, pos) =
                 (rng.below(4) as u32, if hostile { [rng.coord(size[0]), rng.coord(size[1])] } else { [rng.finite(size[0]), rng.finite(size[1])] });
             what = format!("touch from the toolkit {phase:?} {id} {pos:?}");
@@ -1794,7 +1783,11 @@ fn every_tool_together(seed: u64, rounds: usize) {
             11 | 12 => {
                 // Undo and redo, also with typing under way.
                 for _ in 0..1 + rng.below(3) {
-                    if rng.chance(0.6) { ed.undo() } else { ed.redo() }
+                    if rng.chance(0.6) {
+                        ed.undo()
+                    } else {
+                        ed.redo()
+                    }
                     follow_pages(&mut ed, &mut doc);
                 }
                 "undo/redo"
@@ -1895,9 +1888,17 @@ fn check_overview(ed: &Editor, doc: &Doc, what: &str) {
     let Some(state) = ed.chrome.overview.as_ref() else { return };
     let layout = ed.overview_layout();
     let count = ed.layout.len();
-    assert!(state.scroll.is_finite() && state.scroll >= 0.0 && state.scroll <= layout.max_scroll(count) + 0.01, "{what}: the pages are scrolled to {}", state.scroll);
+    assert!(
+        state.scroll.is_finite() && state.scroll >= 0.0 && state.scroll <= layout.max_scroll(count) + 0.01,
+        "{what}: the pages are scrolled to {}",
+        state.scroll
+    );
     let rows = ed.toc_rows().len();
-    assert!(state.toc_scroll >= 0.0 && state.toc_scroll <= layout.toc_max_scroll(rows) + 0.01, "{what}: the table is scrolled to {}", state.toc_scroll);
+    assert!(
+        state.toc_scroll >= 0.0 && state.toc_scroll <= layout.toc_max_scroll(rows) + 0.01,
+        "{what}: the table is scrolled to {}",
+        state.toc_scroll
+    );
     assert!(state.selected.iter().all(|&p| p < count), "{what}: pages chosen that are not there: {:?} of {count}", state.selected);
     assert!(state.edit || state.selected.is_empty(), "{what}: pages are chosen outside edit mode");
     // It draws, and what it draws is a number.
@@ -2036,7 +2037,11 @@ fn stress_the_pages_overview_under_hostile_input_keeps_the_pages_the_selection_a
                 }
             }
             17 | 18 => {
-                if rng.chance(0.5) { ed.undo() } else { ed.redo() }
+                if rng.chance(0.5) {
+                    ed.undo()
+                } else {
+                    ed.redo()
+                }
             }
             19 if ed.ink.len() < 300 => {
                 // Ink on a page, as when the overview is not up.
@@ -2360,4 +2365,3 @@ fn stress_motion_changes_how_long_things_take_and_never_where_they_end_up() {
         }
     }
 }
-

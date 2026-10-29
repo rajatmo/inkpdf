@@ -308,8 +308,7 @@ fn a_storm_of_hostile_events_leaves_the_dialog_sound() {
                 0 => ed.mouse_moved(pos),
                 1 => ed.mouse_button(if rng.chance(0.5) { ButtonState::Pressed } else { ButtonState::Released }, MouseButton::Left),
                 2 => ed.wheel(Wheel::Lines(rng.coord(5.0), rng.coord(5.0))),
-                3 => ed
-                    .wheel(Wheel::Pixels(rng.coord(500.0), rng.coord(500.0))),
+                3 => ed.wheel(Wheel::Pixels(rng.coord(500.0), rng.coord(500.0))),
                 4 => ed.pointer_event(pen(rng.pick(&[Phase::Down, Phase::Move, Phase::Up, Phase::Cancel, Phase::Hover, Phase::Leave]), TIP, &[pos])),
                 5 => ed.pointer_event(touch(rng.below(3) as u32, rng.pick(&[Phase::Down, Phase::Move, Phase::Up, Phase::Cancel]), pos, 30.0)),
                 6 => {

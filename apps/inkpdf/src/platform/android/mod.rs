@@ -14,7 +14,7 @@ use super::{PointerSource, Waker};
 use crate::browse::Place;
 use crate::input::Mode;
 
-pub use super::stubs::{SystemClipboard, system_font, attach_parent_console, error_box, motion_prefs, report_fatal};
+pub use super::stubs::{SystemClipboard, attach_parent_console, error_box, motion_prefs, report_fatal, system_font};
 
 /// The activity, kept for what only it can say: where the app's own folders are, and the soft keyboard.
 static APP: OnceLock<AndroidApp> = OnceLock::new();

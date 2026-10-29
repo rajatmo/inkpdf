@@ -212,7 +212,9 @@ impl UiLayers {
             let bar = ed.toolbar();
             bar.draw_with(&state, &stamp.look, &mut ui);
             let coming = ui.mark();
-            let unfolded = stamp.panel.and_then(|(view, bits)| Some((view, f32::from_bits(bits), bar.tool_panel(view.tool, ed.view.viewport[0], view.editing.is_some())?)));
+            let unfolded = stamp
+                .panel
+                .and_then(|(view, bits)| Some((view, f32::from_bits(bits), bar.tool_panel(view.tool, ed.view.viewport[0], view.editing.is_some())?)));
             // The bar under the tools; with the panel unfolded they are one card, drawn before the panel's contents. The card
             // grows to hold the panel as the panel comes in, and the panel's contents appear when there is room for them.
             if let (Some(context), Some(view)) = (ed.context_bar(), &stamp.context) {

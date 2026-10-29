@@ -105,7 +105,6 @@ pub struct Editor {
     pub fingers: TouchGestures,
     /// The last pen sample the screen has not yet shown, for latency measurement.
     pub pending_sample_ms: Option<f64>,
-
 }
 
 impl Editor {

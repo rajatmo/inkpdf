@@ -21,7 +21,6 @@
 //! starting; it just falls back to the defaults for those lines. (Older files had three width
 //! slots, `width 1 2.5`; those lines are ignored.)
 
-
 use crate::geometry::Shape;
 use crate::smooth::DEFAULT_AMOUNT;
 use crate::tool::{MAX_WIDTH, MIN_WIDTH, PALETTE, TEXT_SIZES, Tool, ToolStyle};

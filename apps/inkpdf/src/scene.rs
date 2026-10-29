@@ -100,7 +100,13 @@ impl Panel {
 
     pub fn transformed(self, x: &Xform) -> Self {
         // (An edge's softness is a size too: a shadow grows with what it is under.)
-        Self { rect: x.rect(self.rect), radius: self.radius * x.scale, soft: (self.soft * x.scale).max(1.0).min(self.soft.max(1.0)), color: x.colour(self.color), pad: self.pad }
+        Self {
+            rect: x.rect(self.rect),
+            radius: self.radius * x.scale,
+            soft: (self.soft * x.scale).max(1.0).min(self.soft.max(1.0)),
+            color: x.colour(self.color),
+            pad: self.pad,
+        }
     }
 }
 

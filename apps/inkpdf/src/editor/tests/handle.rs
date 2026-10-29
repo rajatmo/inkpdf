@@ -178,7 +178,8 @@ mod from_motion_events {
     fn a_finger_pans_after_the_pen_has_written_whatever_the_screen_reports_of_hover() {
         let line = |ed: &Editor| vec![on_page(ed, 100.0, 300.0), on_page(ed, 160.0, 330.0), on_page(ed, 220.0, 300.0)];
         // (name, hover reported before and after the stroke, hover exit reported)
-        for (name, hover, exit) in [("no hover at all", false, false), ("hover, and the pen leaves", true, true), ("hover, and no exit", true, false)] {
+        for (name, hover, exit) in [("no hover at all", false, false), ("hover, and the pen leaves", true, true), ("hover, and no exit", true, false)]
+        {
             let (mut ed, mut decoder) = (tablet(), Decoder::new(0.0));
             let stroke = line(&ed);
             let mut motions = Vec::new();
@@ -220,7 +221,8 @@ mod from_motion_events {
             for _ in 0..60 {
                 t += 7;
                 let pos = [rng.range(100.0, 900.0), rng.range(100.0, 700.0)];
-                let all = |active: &BTreeMap<u32, Held>| -> Vec<RawPointer> { active.iter().map(|(&id, &tool)| pointer(id, tool, pos, 0.5)).collect() };
+                let all =
+                    |active: &BTreeMap<u32, Held>| -> Vec<RawPointer> { active.iter().map(|(&id, &tool)| pointer(id, tool, pos, 0.5)).collect() };
                 let index_of = |active: &BTreeMap<u32, Held>, id: u32| active.keys().position(|&k| k == id).unwrap_or(0);
                 let motions: Vec<RawMotion> = match rng.below(8) {
                     0 | 1 => {

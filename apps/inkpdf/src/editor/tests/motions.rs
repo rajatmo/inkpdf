@@ -206,4 +206,3 @@ fn the_tool_panel_unfolds_and_folds_over_a_moment_and_the_bar_comes_in_when_a_to
     frames(&mut ed, 30);
     assert_eq!(ed.motions.bar_amount(), 1.0);
 }
-

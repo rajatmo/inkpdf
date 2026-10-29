@@ -154,12 +154,18 @@ fn the_plus_button_adds_a_page_after_the_one_being_looked_at() {
     let plus = ed.toolbar().centre_of(Item::AddPage);
     mouse_click_at(&mut ed, plus);
     assert_eq!(ed.layout.len(), 3, "a page more");
-    assert!(matches!(ed.requests.take_page_edits().as_slice(), [PageEdit::Insert { at: 1, .. }]), "after the first, which is the one being looked at");
+    assert!(
+        matches!(ed.requests.take_page_edits().as_slice(), [PageEdit::Insert { at: 1, .. }]),
+        "after the first, which is the one being looked at"
+    );
     ed.pan_px(0.0, -1.0e6);
     let looking = ed.view.current_page(&ed.layout);
     pen_stroke(&mut ed, TIP, &[plus, plus]);
     assert_eq!(ed.layout.len(), 4);
-    assert!(matches!(ed.requests.take_page_edits().as_slice(), [PageEdit::Insert { at, .. }] if *at == looking + 1), "the stylus: after the page now being looked at");
+    assert!(
+        matches!(ed.requests.take_page_edits().as_slice(), [PageEdit::Insert { at, .. }] if *at == looking + 1),
+        "the stylus: after the page now being looked at"
+    );
     assert_eq!(ed.ink.len(), 0);
     // A finger can press it too.
     ed.palm = crate::input::PalmGuard::default();
@@ -241,7 +247,10 @@ fn moved_pages_carry_their_ink_links_and_selection_and_the_move_is_one_step_that
     assert_eq!((ed.ink.get(first).expect("first").page, ed.ink.get(second).expect("second").page), (1, 0), "the ink went with its page");
     let (n0, n1) = (ed.layout.page(0).expect("page"), ed.layout.page(1).expect("page"));
     let (moved_a, moved_b) = (&ed.ink.get(first).expect("first").pts, &ed.ink.get(second).expect("second").pts);
-    assert!(moved_a.iter().zip(&a).all(|(n, o)| (n[1] - o[1] - (n1.y - p0.y)).abs() < 1e-2 && (n[0] - o[0]).abs() < 1e-2), "in the same place on its page");
+    assert!(
+        moved_a.iter().zip(&a).all(|(n, o)| (n[1] - o[1] - (n1.y - p0.y)).abs() < 1e-2 && (n[0] - o[0]).abs() < 1e-2),
+        "in the same place on its page"
+    );
     assert!(moved_b.iter().zip(&b).all(|(n, o)| (n[1] - o[1] - (n0.y - p1.y)).abs() < 1e-2), "and the other");
     assert_eq!(ed.links[0].target, Target::Page(0), "the link goes to the page it went to, whatever it is called now");
     assert!((ed.links[0].rect[1] - (n1.y + 10.0)).abs() < 1e-2, "and is on the page it was on");
@@ -267,11 +276,15 @@ fn a_rearrangement_of_many_pages_is_undone_exactly_by_undo() {
     let ids: Vec<u64> = (0..5)
         .map(|p| {
             let r = ed.layout.page(p).expect("page");
-            ed.ink.add(p as u32, Style { rgba: [0, 0, 0, 255], width: 2.0 }, vec![[r.x + 20.0, r.y + 30.0], [r.x + 80.0, r.y + 60.0]]).expect("stroke")
+            ed.ink
+                .add(p as u32, Style { rgba: [0, 0, 0, 255], width: 2.0 }, vec![[r.x + 20.0, r.y + 30.0], [r.x + 80.0, r.y + 60.0]])
+                .expect("stroke")
         })
         .collect();
     let before: Vec<_> = ids.iter().map(|id| ed.ink.get(*id).expect("stroke").pts.clone()).collect();
-    for edit in [PageEdit::Move { pages: vec![4, 0], to: 2 }, PageEdit::Arrange { order: vec![3, 2, 1, 0, 4] }, PageEdit::Move { pages: vec![2], to: 4 }] {
+    for edit in
+        [PageEdit::Move { pages: vec![4, 0], to: 2 }, PageEdit::Arrange { order: vec![3, 2, 1, 0, 4] }, PageEdit::Move { pages: vec![2], to: 4 }]
+    {
         assert!(ed.edit_pages(edit));
     }
     for _ in 0..3 {
@@ -294,7 +307,12 @@ fn undoing_a_deletion_gives_back_the_links_and_outline_entries_that_went_with_th
         let r = ed.layout.page(page).expect("page");
         Link { rect: [r.x + 10.0, r.y + 10.0, r.x + 50.0, r.y + 30.0], target }
     };
-    ed.links = vec![at(&ed, 0, Target::Page(1)), at(&ed, 1, Target::Page(3)), at(&ed, 2, Target::Page(0)), at(&ed, 3, Target::Url("https://example.com".into()))];
+    ed.links = vec![
+        at(&ed, 0, Target::Page(1)),
+        at(&ed, 1, Target::Page(3)),
+        at(&ed, 2, Target::Page(0)),
+        at(&ed, 3, Target::Url("https://example.com".into())),
+    ];
     let item = |title: &str, depth, page| OutlineItem { title: title.into(), depth, page, open: true, has_children: false };
     ed.outline = vec![item("one", 0, Some(0)), item("two", 0, Some(1)), item("three", 1, Some(2)), item("none", 0, None)];
     let (links, outline) = (ed.links.clone(), ed.outline.clone());
@@ -302,7 +320,11 @@ fn undoing_a_deletion_gives_back_the_links_and_outline_entries_that_went_with_th
     // The link on page 1 and the one to it are gone; the others are on pages that moved up, and go to numbers that moved too.
     assert_eq!(ed.links.len(), 2, "{:?}", ed.links);
     assert_eq!(ed.links[0].target, Target::Page(0), "the link on the third page goes to the first, which did not move");
-    assert_eq!(ed.outline.iter().map(|i| i.page).collect::<Vec<_>>(), [Some(0), None, Some(1), None], "the entry that went to the deleted page goes nowhere");
+    assert_eq!(
+        ed.outline.iter().map(|i| i.page).collect::<Vec<_>>(),
+        [Some(0), None, Some(1), None],
+        "the entry that went to the deleted page goes nowhere"
+    );
     ed.undo();
     assert_eq!(ed.links, links, "every link is back, in its place in the list, where it was and going where it went");
     assert_eq!(ed.outline, outline, "and every entry goes to the page it went to");
@@ -324,7 +346,8 @@ fn duplicated_pages_copy_their_ink_and_links_and_the_outline_stays_with_the_orig
     let mut ed = Editor::new([1200.0, 900.0], 1.0);
     ed.load(Layout::new(&[[612.0, 792.0]; 4]), vec![]);
     let r1 = ed.layout.page(1).expect("page");
-    let ink = ed.ink.add(1, Style { rgba: [0, 0, 0, 255], width: 2.0 }, vec![[r1.x + 40.0, r1.y + 50.0], [r1.x + 90.0, r1.y + 70.0]]).expect("stroke");
+    let ink =
+        ed.ink.add(1, Style { rgba: [0, 0, 0, 255], width: 2.0 }, vec![[r1.x + 40.0, r1.y + 50.0], [r1.x + 90.0, r1.y + 70.0]]).expect("stroke");
     ed.links = vec![
         Link { rect: [r1.x + 10.0, r1.y + 10.0, r1.x + 50.0, r1.y + 30.0], target: Target::Page(3) },
         Link { rect: [r1.x + 60.0, r1.y + 10.0, r1.x + 90.0, r1.y + 30.0], target: Target::Url("https://example.com".into()) },
@@ -340,7 +363,10 @@ fn duplicated_pages_copy_their_ink_and_links_and_the_outline_stays_with_the_orig
     let on_copy: Vec<&Link> = ed.links.iter().filter(|l| l.rect[1] >= copy_page.y && l.rect[1] < copy_page.bottom()).collect();
     assert_eq!(on_copy.len(), 2, "two links are on the copy");
     assert!(on_copy.iter().any(|l| l.target == Target::Page(4)), "a link to the fourth page goes to where it is now, the fifth");
-    assert!(on_copy.iter().all(|l| (l.rect[0] - (copy_page.x + 10.0)).abs() < 0.5 || (l.rect[0] - (copy_page.x + 60.0)).abs() < 0.5), "in the same places on it");
+    assert!(
+        on_copy.iter().all(|l| (l.rect[0] - (copy_page.x + 10.0)).abs() < 0.5 || (l.rect[0] - (copy_page.x + 60.0)).abs() < 0.5),
+        "in the same places on it"
+    );
     assert_eq!(ed.outline[0].page, Some(1), "the outline still goes to the page it went to");
     assert!(matches!(ed.requests.take_page_edits().as_slice(), [PageEdit::Duplicate { pages }] if pages == &[1]), "the shell is told");
     ed.undo();

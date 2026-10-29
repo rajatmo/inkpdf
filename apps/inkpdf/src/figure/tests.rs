@@ -320,10 +320,12 @@ fn a_corner_becomes_smooth_and_a_smooth_anchor_a_corner() {
 }
 
 fn ring(n: usize, r: f32) -> Vec<P> {
-    (0..n).map(|k| {
-        let a = -std::f32::consts::FRAC_PI_2 + k as f32 * std::f32::consts::TAU / n as f32;
-        [200.0 + r * a.cos(), 200.0 + r * a.sin()]
-    }).collect()
+    (0..n)
+        .map(|k| {
+            let a = -std::f32::consts::FRAC_PI_2 + k as f32 * std::f32::consts::TAU / n as f32;
+            [200.0 + r * a.cos(), 200.0 + r * a.sin()]
+        })
+        .collect()
 }
 
 #[test]

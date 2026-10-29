@@ -27,15 +27,15 @@ use crate::tool::{PALETTE, Tool, width_range};
 
 pub use context_bar::{ContextBar, ContextItem, ContextState};
 use icons::icons;
-pub use overview::{
-    Action as OverviewAction, Control as OverviewControl, DragView, Hover as OverviewHover, MenuItem as OverviewMenuItem, OverviewLayout, OverviewView, PageMotion, TocHit, TocRow,
-    draw as draw_overview,
-};
 pub use look::Look;
+pub use overview::{
+    Action as OverviewAction, Control as OverviewControl, DragView, Hover as OverviewHover, MenuItem as OverviewMenuItem, OverviewLayout,
+    OverviewView, PageMotion, TocHit, TocRow, draw as draw_overview,
+};
 pub use prompt::{PromptLayout, PromptView};
 pub use save_as::{ListingView, SaveAsHit, SaveAsLayout, SaveAsView};
-pub use theme::{Align, Image, Label, Ui};
 use theme::{ACCENT, ACCENT_WASH, HOVER_WASH, INK, INK_DIM, RIM, SEPARATOR};
+pub use theme::{Align, Image, Label, Ui};
 #[cfg(test)]
 pub use tool_panel::ToolPanel;
 pub use tool_panel::{Channel, PanelState, PanelView, Slider};

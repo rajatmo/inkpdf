@@ -40,7 +40,13 @@ pub struct Look {
 impl Look {
     /// What `state` looks like once nothing is moving.
     pub fn resting(state: &State, bar: &Toolbar) -> Look {
-        let mut look = Look { hover: [0.0; BUTTONS], ripple: [0.0; BUTTONS], enabled: [1.0; BUTTONS], tool: tool_position(state.tool), unsaved: f32::from(state.unsaved) };
+        let mut look = Look {
+            hover: [0.0; BUTTONS],
+            ripple: [0.0; BUTTONS],
+            enabled: [1.0; BUTTONS],
+            tool: tool_position(state.tool),
+            unsaved: f32::from(state.unsaved),
+        };
         for (slot, (item, _)) in bar.items.iter().enumerate() {
             let on = enabled(*item, state);
             look.enabled[slot] = f32::from(on);

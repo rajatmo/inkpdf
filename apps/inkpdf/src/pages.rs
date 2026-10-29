@@ -327,7 +327,9 @@ mod tests {
 
     #[test]
     fn a_move_takes_pages_out_and_puts_them_back_together_in_their_order() {
-        let moved = |pages: &[usize], to| order(&PageEdit::Move { pages: pages.to_vec(), to }, 5).map(|o| o.into_iter().map(Option::unwrap).collect::<Vec<_>>());
+        let moved = |pages: &[usize], to| {
+            order(&PageEdit::Move { pages: pages.to_vec(), to }, 5).map(|o| o.into_iter().map(Option::unwrap).collect::<Vec<_>>())
+        };
         assert_eq!(moved(&[0], 2), Some(vec![1, 2, 0, 3, 4]), "one page later");
         assert_eq!(moved(&[3], 0), Some(vec![3, 0, 1, 2, 4]), "one page to the front");
         assert_eq!(moved(&[0], 4), Some(vec![1, 2, 3, 4, 0]), "to the end");
@@ -381,7 +383,9 @@ mod tests {
             }
         }
         // A deleted page comes back with the size it had, under the same name for the grave.
-        let PageEdit::Restore { grave, pages } = PageEdit::Delete { pages: vec![1], grave: 4 }.inverse(&layout).expect("inverse") else { panic!("not a restore") };
+        let PageEdit::Restore { grave, pages } = PageEdit::Delete { pages: vec![1], grave: 4 }.inverse(&layout).expect("inverse") else {
+            panic!("not a restore")
+        };
         assert_eq!((grave, pages), (4, vec![(1, [300.0, 400.0])]));
         assert!(PageEdit::delete(9).inverse(&layout).is_none());
     }
@@ -390,7 +394,11 @@ mod tests {
     fn a_duplicate_puts_copies_together_after_the_last_page_copied() {
         let dup = |pages: &[usize]| PageEdit::Duplicate { pages: pages.to_vec() };
         assert_eq!(order(&dup(&[1]), 4), Some(vec![Some(0), Some(1), None, Some(2), Some(3)]));
-        assert_eq!(order(&dup(&[3, 1]), 5), Some(vec![Some(0), Some(1), Some(2), Some(3), None, None, Some(4)]), "both copies after the last, in order");
+        assert_eq!(
+            order(&dup(&[3, 1]), 5),
+            Some(vec![Some(0), Some(1), Some(2), Some(3), None, None, Some(4)]),
+            "both copies after the last, in order"
+        );
         assert_eq!(order(&dup(&[2, 2]), 3), Some(vec![Some(0), Some(1), Some(2), None]), "a page counts once");
         assert_eq!(order(&dup(&[]), 3), None);
         assert_eq!(order(&dup(&[3]), 3), None, "no such page");
@@ -398,7 +406,11 @@ mod tests {
         assert!(dup(&[0]).copies(0).is_empty());
         let layout = Layout::new(&[[100.0, 200.0], [300.0, 400.0], [500.0, 600.0]]);
         let after = layout.edited(&dup(&[0, 2])).expect("layout");
-        assert_eq!((0..5).map(|p| after.page(p).map(|r| r.w)).collect::<Vec<_>>(), [Some(100.0), Some(300.0), Some(500.0), Some(100.0), Some(500.0)], "a copy is as big as its page");
+        assert_eq!(
+            (0..5).map(|p| after.page(p).map(|r| r.w)).collect::<Vec<_>>(),
+            [Some(100.0), Some(300.0), Some(500.0), Some(100.0), Some(500.0)],
+            "a copy is as big as its page"
+        );
         let undo = dup(&[0, 2]).inverse(&layout).expect("inverse");
         assert_eq!(undo, PageEdit::Delete { pages: vec![3, 4], grave: 0 }, "the copies go to undo it");
         assert_eq!(after.edited(&undo).expect("layout").len(), 3);
@@ -406,7 +418,10 @@ mod tests {
         assert_eq!(map.added(), [3, 4]);
         assert_eq!(map.copies().iter().map(|c| (c.page, c.from)).collect::<Vec<_>>(), [(3, 0), (4, 2)]);
         let c = map.copies()[0];
-        assert!(((c.dy) - (after.page(3).expect("page").y - layout.page(0).expect("page").y)).abs() < 1e-3 && c.dx.abs() < 1e-3, "{c:?}: the copy's place, from the old page's");
+        assert!(
+            ((c.dy) - (after.page(3).expect("page").y - layout.page(0).expect("page").y)).abs() < 1e-3 && c.dx.abs() < 1e-3,
+            "{c:?}: the copy's place, from the old page's"
+        );
         let mut names = vec!["a", "b", "c"];
         assert!(dup(&[0, 2]).apply_with(&mut names, |source| source.copied().unwrap_or("new")));
         assert_eq!(names, ["a", "b", "c", "a", "c"], "an entry of a copy is made from its page's");

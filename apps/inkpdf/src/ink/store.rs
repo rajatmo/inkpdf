@@ -849,7 +849,11 @@ mod tests {
         }
         assert!(same(&store.get(c).expect("c").pts, &on_page(&layout, 2, 10.0)), "the later page is back down where it was");
         assert!(same(&store.get(d).expect("d").pts, &on_page(&layout, 1, 200.0)));
-        assert_eq!(store.take_page_edit(), Some(PageEdit::Restore { grave: 3, pages: vec![(1, [600.0, 800.0])] }), "the rest of the document is told what to do");
+        assert_eq!(
+            store.take_page_edit(),
+            Some(PageEdit::Restore { grave: 3, pages: vec![(1, [600.0, 800.0])] }),
+            "the rest of the document is told what to do"
+        );
         assert_eq!(store.take_page_edit(), None, "once");
         assert!(store.redo());
         assert!(store.get(b).is_none() && store.get(d).is_none() && store.get(c).expect("c").page == 1);
@@ -952,7 +956,10 @@ mod tests {
         let copies: Vec<&Stroke> = store.strokes().iter().filter(|s| s.page == 2).collect();
         assert_eq!(copies.len(), 2);
         assert!(copies.iter().all(|s| s.id != a && s.id != b && s.id != c), "each has an id of its own");
-        assert!(same(&copies[0].pts, &on_page(&after, 2, 10.0)) && same(&copies[1].pts, &on_page(&after, 2, 200.0)), "in the same places on the copy");
+        assert!(
+            same(&copies[0].pts, &on_page(&after, 2, 10.0)) && same(&copies[1].pts, &on_page(&after, 2, 200.0)),
+            "in the same places on the copy"
+        );
         assert_eq!(store.get(b).expect("b").page, 1, "the originals stay where they are");
         assert_eq!(store.get(c).expect("c").page, 1);
         assert_eq!(store.dirty_pages().iter().copied().collect::<Vec<_>>(), vec![2], "the copy is to be written, and only it");

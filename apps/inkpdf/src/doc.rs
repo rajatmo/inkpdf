@@ -510,7 +510,11 @@ mod tests {
         let (mut doc, mut store, path) = open_pages("pictures-follow", 4);
         let before: Vec<Option<u32>> = (0..4).map(|p| doc.render_page(p)).collect();
         edit(&mut doc, &mut store, PageEdit::Move { pages: vec![3], to: 0 });
-        assert_eq!((0..4).map(|p| doc.render_page(p)).collect::<Vec<_>>(), [before[3], before[0], before[1], before[2]], "a moved page keeps what draws it");
+        assert_eq!(
+            (0..4).map(|p| doc.render_page(p)).collect::<Vec<_>>(),
+            [before[3], before[0], before[1], before[2]],
+            "a moved page keeps what draws it"
+        );
         edit(&mut doc, &mut store, PageEdit::Delete { pages: vec![1], grave: 4 });
         edit(&mut doc, &mut store, PageEdit::Duplicate { pages: vec![0] });
         assert_eq!((0..4).map(|p| doc.render_page(p)).collect::<Vec<_>>(), [before[3], before[3], before[1], before[2]]);
@@ -535,7 +539,11 @@ mod tests {
             assert!(started.elapsed().as_secs() < 20, "the page was never rendered");
             std::thread::sleep(std::time::Duration::from_millis(5));
         };
-        assert_eq!(Key::from_tag(rendered.request.tag), Key::Preview { page: 0 }, "it is tagged with the page of the file, which no change of the pages alters");
+        assert_eq!(
+            Key::from_tag(rendered.request.tag),
+            Key::Preview { page: 0 },
+            "it is tagged with the page of the file, which no change of the pages alters"
+        );
         assert_eq!(rendered.request.page, 0, "and was drawn from the file's first page");
         assert!(rendered.error.is_none());
         let _ = fs::remove_dir_all(path.parent().expect("dir"));
@@ -738,7 +746,8 @@ mod tests {
     /// The first point of each stroke in the file at `path`, with its page, to the tenth of a point, sorted.
     fn where_the_ink_is(path: &Path) -> Vec<(u32, i64, i64)> {
         let (_, strokes) = Doc::open(path).expect("reopen");
-        let mut found: Vec<_> = strokes.iter().map(|(page, _, pts, ..)| (*page, (pts[0][0] * 10.0).round() as i64, (pts[0][1] * 10.0).round() as i64)).collect();
+        let mut found: Vec<_> =
+            strokes.iter().map(|(page, _, pts, ..)| (*page, (pts[0][0] * 10.0).round() as i64, (pts[0][1] * 10.0).round() as i64)).collect();
         found.sort_unstable();
         found
     }
@@ -746,7 +755,8 @@ mod tests {
     /// What `where_the_ink_is` should say for the strokes `store` holds, with the pages as `doc` has them: the file
     /// keeps a stroke in its page's own space and the reader turns it back into the document's, so the same points.
     fn where_the_ink_should_be(store: &InkStore) -> Vec<(u32, i64, i64)> {
-        let mut found: Vec<_> = store.strokes().iter().map(|s| (s.page, (s.pts[0][0] * 10.0).round() as i64, (s.pts[0][1] * 10.0).round() as i64)).collect();
+        let mut found: Vec<_> =
+            store.strokes().iter().map(|s| (s.page, (s.pts[0][0] * 10.0).round() as i64, (s.pts[0][1] * 10.0).round() as i64)).collect();
         found.sort_unstable();
         found
     }
@@ -868,7 +878,11 @@ mod tests {
         assert_eq!(widths(&Doc::open(&path).expect("reopen").0), vec![600.0, 610.0, 620.0, 610.0, 620.0, 630.0], "the file has the copies");
         assert_eq!(where_the_ink_is(&path), where_the_ink_should_be(&store), "with their ink, and the others' ink where it was");
         // The copies draw from the page they copy.
-        assert_eq!((doc.render_page(3), doc.render_page(4)), (doc.render_page(1), doc.render_page(2)), "a copy is drawn from the page it copies: it shares its pictures");
+        assert_eq!(
+            (doc.render_page(3), doc.render_page(4)),
+            (doc.render_page(1), doc.render_page(2)),
+            "a copy is drawn from the page it copies: it shares its pictures"
+        );
         let _ = fs::remove_dir_all(path.parent().expect("dir"));
     }
 

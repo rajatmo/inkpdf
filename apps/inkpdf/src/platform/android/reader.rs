@@ -11,8 +11,8 @@
 use winit::platform::android::activity::input::{InputEvent as Event, KeyAction, KeyEvent, KeyMapChar, Keycode, MotionAction, MotionEvent, ToolType};
 use winit::platform::android::activity::{AndroidApp, InputStatus};
 
-use crate::platform::motion_event::{Action, Decoder, HistoryPoint, KeyCode, RawKey, RawMotion, RawPointer, Tool};
 use crate::input::{InputEvent, PointerEvent};
+use crate::platform::motion_event::{Action, Decoder, HistoryPoint, KeyCode, RawKey, RawMotion, RawPointer, Tool};
 use crate::platform::{MAX_EVENTS_PER_PUMP, PointerSource};
 
 /// Meta state bits for Ctrl (left, right, either), which are taken off when asking what character a key makes: with Ctrl held

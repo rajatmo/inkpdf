@@ -95,10 +95,12 @@ impl Icon {
 
     /// A tick in a circle.
     fn check() -> Icon {
-        let circle: Vec<[f32; 2]> = (0..=32).map(|i| {
-            let a = i as f32 / 32.0 * std::f32::consts::TAU;
-            [0.9 * a.cos(), 0.9 * a.sin()]
-        }).collect();
+        let circle: Vec<[f32; 2]> = (0..=32)
+            .map(|i| {
+                let a = i as f32 / 32.0 * std::f32::consts::TAU;
+                [0.9 * a.cos(), 0.9 * a.sin()]
+            })
+            .collect();
         Icon { lines: vec![circle, vec![[-0.42, 0.02], [-0.1, 0.36], [0.46, -0.32]]] }
     }
 

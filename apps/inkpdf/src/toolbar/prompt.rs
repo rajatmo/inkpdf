@@ -8,8 +8,8 @@
 use crate::requests::Choice;
 
 use super::icons::icons;
-use crate::scene::Xform;
 use super::theme::{ACCENT, INK, Ui};
+use crate::scene::Xform;
 
 /// What is highlighted while the prompt is up.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

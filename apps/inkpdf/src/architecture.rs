@@ -348,8 +348,21 @@ fn tools_know_neither_each_other_nor_the_session_nor_the_shell() {
 fn nothing_below_the_adapters_touches_the_disk_the_environment_or_an_operating_system() {
     // The inner layers are pure: the same input gives the same output on every machine. What they need from the world (a font,
     // a settings folder, a clock's source) is handed to them by the adapters, which ask `platform`.
-    let forbidden =
-        ["std::fs", "std::env", "std::process", "std::net", "windows_sys", "cfg(windows)", "cfg(not(windows))", "cfg(unix", "cfg(target_os", "cfg(not(target_os", "pdfcraft_", "wgpu", "winit"];
+    let forbidden = [
+        "std::fs",
+        "std::env",
+        "std::process",
+        "std::net",
+        "windows_sys",
+        "cfg(windows)",
+        "cfg(not(windows))",
+        "cfg(unix",
+        "cfg(target_os",
+        "cfg(not(target_os",
+        "pdfcraft_",
+        "wgpu",
+        "winit",
+    ];
     let inner: Vec<String> = LAYERS
         .iter()
         .filter(|(_, layer)| *layer != Layer::Adapter)

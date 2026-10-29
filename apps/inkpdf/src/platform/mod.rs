@@ -81,10 +81,10 @@ mod stubs;
 #[cfg(not(windows))]
 mod unix_dirs;
 
-#[allow(dead_code, reason = "read by the Android reader, tested everywhere")]
-pub(crate) mod motion_event;
 #[cfg(all(unix, not(target_os = "android")))]
 mod linux;
+#[allow(dead_code, reason = "read by the Android reader, tested everywhere")]
+pub(crate) mod motion_event;
 #[cfg(windows)]
 mod windows;
 

@@ -10,14 +10,14 @@
 use std::collections::{BTreeSet, HashSet};
 
 use crate::input::{Device, Phase, PointerEvent, Wheel};
-use crate::outline;
 use crate::motion::{Curve, Slides, Tween, seconds};
+use crate::outline;
 use crate::pages::{MAX_PAGES, PageEdit, Remap};
-use crate::tools::Key;
 use crate::toolbar::{
-    self, DragView, OverviewAction as Action, OverviewControl as Control, OverviewHover as Hover, OverviewLayout, OverviewMenuItem as MenuItem, OverviewView, TocHit,
-    TocRow, Ui,
+    self, DragView, OverviewAction as Action, OverviewControl as Control, OverviewHover as Hover, OverviewLayout, OverviewMenuItem as MenuItem,
+    OverviewView, TocHit, TocRow, Ui,
 };
+use crate::tools::Key;
 
 use super::Editor;
 
@@ -261,13 +261,7 @@ impl Editor {
         let (count, chosen) = (self.ws.layout.len(), state.selected.len());
         let first = state.selected.first().copied().unwrap_or(0);
         let some = chosen > 0;
-        [
-            count > 0,
-            some && count + chosen <= MAX_PAGES,
-            some && first > 0,
-            some && first < count - chosen,
-            some && chosen < count,
-        ]
+        [count > 0, some && count + chosen <= MAX_PAGES, some && first > 0, some && first < count - chosen, some && chosen < count]
     }
 
     /// What the overview looks like now, drawn into `ui`.
@@ -297,7 +291,11 @@ impl Editor {
             enabled: self.overview_enabled(),
             menu: state.menu,
             menu_enabled: [true, true, self.ws.layout.len() < MAX_PAGES, self.ws.layout.len() > 1],
-            motion: &|page| toolbar::PageMotion { shift: state.slides.offset(page), grow: state.grows.offset(page)[0], tick: state.ticks.offset(page)[0] },
+            motion: &|page| toolbar::PageMotion {
+                shift: state.slides.offset(page),
+                grow: state.grows.offset(page)[0],
+                tick: state.ticks.offset(page)[0],
+            },
         };
         toolbar::draw_overview(&view, &layout, ui);
         ui.fade(state.appear.value());
@@ -380,7 +378,8 @@ impl Editor {
                         // A page pulled by a pen or a mouse is carried to another place; a finger pulls the pages past it.
                         Some(Hover::Page(i)) if dragged && dev != Device::Touch => {
                             if state.drag.is_none() {
-                                let pages = if state.edit && state.selected.contains(&i) { state.selected.iter().copied().collect() } else { vec![i] };
+                                let pages =
+                                    if state.edit && state.selected.contains(&i) { state.selected.iter().copied().collect() } else { vec![i] };
                                 state.drag = Some(Drag { pages, pos, slot: layout.slot_at(pos, count, state.scroll) });
                             }
                             self.carry_pages(pos, &layout);

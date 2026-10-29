@@ -6,13 +6,13 @@ use std::path::PathBuf;
 
 use winit::raw_window_handle::HasWindowHandle;
 
-use super::unix_dirs::{existing_places, first_folder, home_dir, parse_user_dirs};
 pub use super::unix_dirs::xdg_config_dir as config_dir;
+use super::unix_dirs::{existing_places, first_folder, home_dir, parse_user_dirs};
 use super::{PointerSource, Waker};
 use crate::browse::Place;
 use crate::input::Mode;
 
-pub use super::stubs::{SystemClipboard, system_font, attach_parent_console, error_box, motion_prefs, report_fatal, set_text_input};
+pub use super::stubs::{SystemClipboard, attach_parent_console, error_box, motion_prefs, report_fatal, set_text_input, system_font};
 
 /// The folders the desktop names (`$XDG_*_DIR`, else `~/.config/user-dirs.dirs`), by key, with the name they have when
 /// nothing says otherwise.

@@ -29,10 +29,19 @@ pub const MAX_PAGES: usize = 1 << 20;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Key {
-    Preview { page: u32 },
+    Preview {
+        page: u32,
+    },
     /// A small picture of a whole page, for the pages overview (see [`THUMB_SIDE`]).
-    Thumb { page: u32 },
-    Tile { page: u32, level: i16, tx: u16, ty: u16 },
+    Thumb {
+        page: u32,
+    },
+    Tile {
+        page: u32,
+        level: i16,
+        tx: u16,
+        ty: u16,
+    },
 }
 
 impl Key {

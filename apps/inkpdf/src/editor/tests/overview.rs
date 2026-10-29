@@ -1,13 +1,13 @@
 //! The pages overview: opened from the toolbar, a card over the document in which every device can go to a page, scroll,
 //! and press the buttons of its header and the entries of its table of contents; and in which nothing reaches the page.
 
+use crate::ink::Style;
 use crate::input::Mode;
 use crate::links::Target;
 use crate::outline::OutlineItem;
 use crate::pages::PageEdit;
-use crate::tools::Key;
-use crate::ink::Style;
 use crate::toolbar::{OverviewControl, OverviewHover};
+use crate::tools::Key;
 
 use super::*;
 use crate::scene::Capsule;
@@ -168,7 +168,10 @@ fn while_it_is_up_nothing_reaches_the_page_not_the_pen_nor_a_finger_nor_the_keyb
     ed.pointer_event(touch(3, Phase::Up, [layout.card[0] + 20.0, 450.0], 30.0));
     ed.pointer_event(touch(4, Phase::Up, [layout.card[0] + 250.0, 450.0], 30.0));
     // The keyboard: the document's shortcuts and keys do nothing (select all, delete, the arrows' nudge, typing).
-    assert!(!ed.shortcut("c", false) && !ed.shortcut("x", false) && !ed.shortcut("v", false), "the page's clipboard shortcuts are not the overview's");
+    assert!(
+        !ed.shortcut("c", false) && !ed.shortcut("x", false) && !ed.shortcut("v", false),
+        "the page's clipboard shortcuts are not the overview's"
+    );
     assert!(ed.shortcut("a", false), "Ctrl+A is the overview's own: it chooses the pages");
     assert!(ed.selection.is_empty(), "and chooses no ink on the page under it");
     assert!(!ed.press(Key::Delete) && !ed.press(Key::Text("x")));
@@ -425,7 +428,9 @@ fn with_ink(n: usize) -> (Editor, Vec<u64>) {
     let ids = (0..n)
         .map(|p| {
             let r = ed.layout.page(p).expect("page");
-            ed.ink.add(p as u32, Style { rgba: [0, 0, 0, 255], width: 2.0 }, vec![[r.x + 40.0, r.y + 50.0], [r.x + 90.0, r.y + 70.0]]).expect("stroke")
+            ed.ink
+                .add(p as u32, Style { rgba: [0, 0, 0, 255], width: 2.0 }, vec![[r.x + 40.0, r.y + 50.0], [r.x + 90.0, r.y + 70.0]])
+                .expect("stroke")
         })
         .collect();
     (ed, ids)
@@ -634,7 +639,11 @@ fn dragging_a_chosen_page_in_edit_mode_carries_all_the_chosen_ones_together() {
         let from = cell_centre(&ed, 4);
         carry(&mut ed, how, from, [c8[0] + 3.0, (c8[1] + c8[3]) / 2.0]);
         // The three come together, in their order, before page 8.
-        assert_eq!(pages_of(&ed, &ids), [0u32, 5, 1, 2, 6, 3, 7, 4, 8, 9].map(Some).to_vec(), "{how:?}: pages 1, 4 and 6 are together, in their order, before page 8");
+        assert_eq!(
+            pages_of(&ed, &ids),
+            [0u32, 5, 1, 2, 6, 3, 7, 4, 8, 9].map(Some).to_vec(),
+            "{how:?}: pages 1, 4 and 6 are together, in their order, before page 8"
+        );
         assert_eq!(chosen(&ed), vec![5, 6, 7], "{how:?}: and they are still the chosen ones, together");
         ed.undo();
         assert_eq!(pages_of(&ed, &ids), (0..10).map(Some).collect::<Vec<_>>(), "{how:?}");

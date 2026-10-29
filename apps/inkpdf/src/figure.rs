@@ -536,7 +536,11 @@ impl Figure {
             if h == [0.0, 0.0] {
                 return false;
             }
-            anchors[i] = if i == 0 { Anchor { pos: a.pos, back: [0.0; 2], fwd: h, smooth: true } } else { Anchor { pos: a.pos, back: h, fwd: [0.0; 2], smooth: true } };
+            anchors[i] = if i == 0 {
+                Anchor { pos: a.pos, back: [0.0; 2], fwd: h, smooth: true }
+            } else {
+                Anchor { pos: a.pos, back: h, fwd: [0.0; 2], smooth: true }
+            };
             return true;
         }
         let wrap = |k: isize| -> Option<P> {

@@ -4,13 +4,13 @@ use std::path::{Path, PathBuf};
 
 use winit::window::Fullscreen;
 
+use super::config;
 use crate::doc::{Doc, UNTITLED};
 use crate::editor::Request;
 use crate::ink::PageStroke;
 use crate::pages::PageEdit;
 use crate::requests::Choice;
 use crate::store::DocId;
-use super::config;
 
 use super::{InkStamp, State, folders};
 

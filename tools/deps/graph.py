@@ -40,12 +40,22 @@ def production_lines(text):
         out.append((i, lines[i])); i += 1
     return out
 
+def test_only(d):
+    """Names of the modules a directory's parent file declares with #[cfg(test)] (`#[cfg(test)] mod name;`)."""
+    names = set()
+    for parent in (os.path.join(d, 'mod.rs'), d + '.rs'):
+        if os.path.exists(parent):
+            names |= set(re.findall(r'#\[cfg\(test\)\]\s*(?:pub(?:\([a-z]+\))?\s+)?mod\s+(\w+)\s*;', open(parent).read()))
+    return names
+
+
 def sources(d):
+    skipped = test_only(d)
     for e in sorted(os.listdir(d)):
         p = os.path.join(d, e)
         if os.path.isdir(p):
-            if e != 'tests': yield from sources(p)
-        elif p.endswith('.rs'): yield p
+            if e != 'tests' and e not in skipped: yield from sources(p)
+        elif p.endswith('.rs') and e[:-3] not in skipped: yield p
 
 
 skip = {'main','lib','bin','stress','architecture','testutil'}

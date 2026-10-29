@@ -1,6 +1,6 @@
 digraph G {
 rankdir=BT; newrank=true; compound=true; splines=true; nodesep=0.35; ranksep=0.9; pad=0.4;
-label=<<b>InkPDF essential skeleton (transitive reduction: 54 of 127 edges)</b>>; labelloc=t; fontsize=22; fontname="Helvetica";
+label=<<b>InkPDF essential skeleton (transitive reduction: 59 of 125 edges)</b>>; labelloc=t; fontsize=22; fontname="Helvetica";
 node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=13, margin="0.14,0.07", color="#888888"];
 edge [arrowsize=0.6];
 subgraph cluster_Base { label="base — plain data and arithmetic"; labeljust=l; fontname="Helvetica"; fontsize=14; style="rounded,filled"; fillcolor="#e8f1fb55"; color="#4a7fb5";
@@ -54,6 +54,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
   "tiles" [fillcolor="white"];
 }
 "app" -> "doc" [color="#55555599", penwidth=1.60, tooltip="3 uses"];
+"app" -> "editor" [color="#55555599", penwidth=1.60, tooltip="4 uses"];
 "app" -> "gpu" [color="#55555599", penwidth=1.60, tooltip="5 uses"];
 "app" -> "platform" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "doc" -> "ink_io" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
@@ -65,7 +66,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "editor" -> "settings" [color="#6a5acd99", penwidth=1.60, tooltip="3 uses"];
 "editor" -> "toolbar" [color="#6a5acd99", penwidth=1.60, tooltip="8 uses"];
 "editor" -> "tools" [color="#6a5acd99", penwidth=1.60, tooltip="7 uses"];
-"figure" -> "geometry" [color="#3a8f5c99", penwidth=1.60, tooltip="2 uses"];
+"figure" -> "geometry" [color="#3a8f5c99", penwidth=1.60, tooltip="1 uses"];
 "figure" -> "plane" [color="#3a8f5c99", penwidth=1.60, tooltip="1 uses"];
 "gpu" -> "scene" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "gpu" -> "tiles" [color="#55555599", penwidth=1.60, tooltip="2 uses"];
@@ -80,8 +81,12 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "outline" -> "pages" [color="#3a8f5c99", penwidth=1.60, tooltip="1 uses"];
 "pages" -> "view" [color="#3a8f5c99", penwidth=1.60, tooltip="1 uses"];
 "path_store" -> "store" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
-"platform" -> "editor" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
-"platform" -> "path_store" [color="#55555599", penwidth=1.60, tooltip="2 uses"];
+"platform" -> "clipboard" [color="#55555599", penwidth=1.60, tooltip="3 uses"];
+"platform" -> "clock" [color="#55555599", penwidth=1.60, tooltip="3 uses"];
+"platform" -> "input" [color="#55555599", penwidth=1.60, tooltip="10 uses"];
+"platform" -> "links" [color="#55555599", penwidth=1.60, tooltip="3 uses"];
+"platform" -> "motion" [color="#55555599", penwidth=1.60, tooltip="8 uses"];
+"platform" -> "path_store" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "requests" -> "pages" [color="#b8860b99", penwidth=1.60, tooltip="1 uses"];
 "requests" -> "store" [color="#b8860b99", penwidth=1.60, tooltip="1 uses"];
 "selection" -> "text" [color="#b8860b99", penwidth=1.60, tooltip="1 uses"];

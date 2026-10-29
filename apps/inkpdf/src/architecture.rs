@@ -20,11 +20,37 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 /// Every `.rs` file under `dir`.
+/// The modules a directory's parent file declares for tests only (`#[cfg(test)] mod name;`): they are not part of the program.
+fn test_only_modules(dir: &Path) -> Vec<String> {
+    let mut found = Vec::new();
+    for parent in [dir.join("mod.rs"), dir.with_extension("rs")] {
+        let Ok(text) = std::fs::read_to_string(parent) else { continue };
+        let lines: Vec<&str> = text.lines().map(str::trim).collect();
+        for (i, line) in lines.iter().enumerate() {
+            if *line != "#[cfg(test)]" {
+                continue;
+            }
+            // (Past any more attributes, to the item: `mod name;` or `pub(crate) mod name;`.)
+            let Some(item) = lines[i + 1..].iter().find(|l| !l.starts_with("#[")) else { continue };
+            let item = item.trim_start_matches("pub(crate) ").trim_start_matches("pub ");
+            if let Some(name) = item.strip_prefix("mod ").and_then(|r| r.strip_suffix(';')) {
+                found.push(name.to_string());
+            }
+        }
+    }
+    found
+}
+
 fn sources(dir: &Path) -> Vec<PathBuf> {
     let mut found = Vec::new();
     let Ok(entries) = std::fs::read_dir(dir) else { return found };
+    let skipped = test_only_modules(dir);
     for entry in entries.flatten() {
         let path = entry.path();
+        let stem = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+        if skipped.contains(&stem) {
+            continue;
+        }
         if path.is_dir() {
             // (Tests are the code that looks at the layers from outside.)
             if path.file_name().is_some_and(|n| n != "tests") {
@@ -273,7 +299,6 @@ const ADAPTERS: [&str; 7] = ["winit", "wgpu", "crate::app", "crate::gpu", "crate
 fn the_domain_knows_nothing_of_tools_the_session_or_the_shell() {
     let domain = [
         "ink",
-        "figure",
         "figure.rs",
         "geometry.rs",
         "smooth.rs",
@@ -326,7 +351,17 @@ fn nothing_below_the_adapters_touches_the_disk_the_environment_or_an_operating_s
     let inner: Vec<String> = LAYERS
         .iter()
         .filter(|(_, layer)| *layer != Layer::Adapter)
-        .map(|(module, _)| if src().join(module).is_dir() { (*module).to_string() } else { format!("{module}.rs") })
+        .flat_map(|(module, _)| {
+            // (A module can be a file, a directory, or a file with a directory beside it for its parts.)
+            let mut paths = Vec::new();
+            if src().join(format!("{module}.rs")).exists() {
+                paths.push(format!("{module}.rs"));
+            }
+            if src().join(module).is_dir() && !sources(&src().join(module)).is_empty() {
+                paths.push((*module).to_string());
+            }
+            paths
+        })
         .collect();
     assert_free_of(&inner.iter().map(String::as_str).collect::<Vec<_>>(), &forbidden);
 }

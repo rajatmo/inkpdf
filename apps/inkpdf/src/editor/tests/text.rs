@@ -18,11 +18,11 @@ fn tap(ed: &mut Editor, x: f32, y: f32) {
 /// The mouse button pressed at the first point, dragged through the rest and let go.
 fn mouse_drag(ed: &mut Editor, path: &[[f32; 2]]) {
     ed.mouse_moved(path[0]);
-    ed.mouse_button(ElementState::Pressed, MouseButton::Left);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
     for &p in &path[1..] {
         ed.mouse_moved(p);
     }
-    ed.mouse_button(ElementState::Released, MouseButton::Left);
+    ed.mouse_button(ButtonState::Released, MouseButton::Left);
 }
 
 fn texts(ed: &Editor) -> Vec<String> {

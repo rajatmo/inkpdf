@@ -317,10 +317,9 @@ fn tools_know_neither_each_other_nor_the_session_nor_the_shell() {
 
 #[test]
 fn the_session_knows_nothing_of_the_shell() {
-    // (It does speak winit's event types, ElementState and the like, as the vocabulary of input; what it
-    // never touches is the window, the GPU, the files or the OS's pointer layer.)
-    let forbidden: Vec<&str> = ADAPTERS.iter().copied().filter(|a| *a != "winit").collect();
-    assert_free_of(&["editor"], &forbidden);
+    // (Not even winit: the session speaks the program's own input vocabulary, `input::InputEvent`, which the shell translates
+    // into, so any host can drive it.)
+    assert_free_of(&["editor"], &ADAPTERS);
 }
 
 #[test]

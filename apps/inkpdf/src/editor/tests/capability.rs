@@ -44,11 +44,11 @@ impl Rig {
         match self.mode {
             Mode::Desktop => {
                 self.ed.mouse_moved(path[0]);
-                self.ed.mouse_button(ElementState::Pressed, MouseButton::Left);
+                self.ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
                 for &p in &path[1..] {
                     self.ed.mouse_moved(p);
                 }
-                self.ed.mouse_button(ElementState::Released, MouseButton::Left);
+                self.ed.mouse_button(ButtonState::Released, MouseButton::Left);
             }
             Mode::Tablet => {
                 self.clock += 1000.0;

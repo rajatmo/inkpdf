@@ -32,12 +32,12 @@ fn the_mouse_does_nothing_to_the_page_with_any_tool_but_scroll_in_the_tablet_mod
             (MouseButton::Left, on_page(&ed, 400.0, 600.0), on_page(&ed, 500.0, 700.0)),
             (MouseButton::Right, on_page(&ed, 200.0, 300.0), on_page(&ed, 200.0, 300.0)),
             (MouseButton::Middle, on_page(&ed, 200.0, 300.0), on_page(&ed, 100.0, 500.0)),
-            (MouseButton::Back, on_page(&ed, 200.0, 300.0), on_page(&ed, 200.0, 300.0)),
+            (MouseButton::Other, on_page(&ed, 200.0, 300.0), on_page(&ed, 200.0, 300.0)),
         ] {
             ed.mouse_moved(from);
-            ed.mouse_button(ElementState::Pressed, button);
+            ed.mouse_button(ButtonState::Pressed, button);
             ed.mouse_moved(to);
-            ed.mouse_button(ElementState::Released, button);
+            ed.mouse_button(ButtonState::Released, button);
         }
         assert_eq!(snapshot(&ed), before, "{tool:?}: the mouse changed something");
         assert!(ed.is_idle() && ed.chrome.panel.is_none());
@@ -48,12 +48,12 @@ fn the_mouse_does_nothing_to_the_page_with_any_tool_but_scroll_in_the_tablet_mod
                 || ed.requests.page_edit().is_some())
         );
         // The wheel scrolls, up and down, and sideways with a tilting wheel or a touchpad.
-        ed.wheel(MouseScrollDelta::LineDelta(0.0, -3.0));
+        ed.wheel(Wheel::Lines(0.0, -3.0));
         settle(&mut ed);
         assert!(ed.view.scroll[1] > before.2[1], "{tool:?}: the wheel scrolls");
         let zoom = ed.view.zoom;
-        ed.wheel(MouseScrollDelta::LineDelta(0.0, 3.0));
-        ed.wheel(MouseScrollDelta::PixelDelta(winit::dpi::PhysicalPosition::new(0.0, -40.0)));
+        ed.wheel(Wheel::Lines(0.0, 3.0));
+        ed.wheel(Wheel::Pixels(0.0, -40.0));
         assert_eq!(ed.view.zoom, zoom, "{tool:?}: the wheel never zooms");
     }
 }

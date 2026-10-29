@@ -16,12 +16,14 @@
 //! eraser end, barrel button or right button can still select and erase; those are shortcuts for the same.
 
 mod contract;
+mod event;
 mod gestures;
 mod palm;
 mod predict;
 
 #[allow(unused_imports, dead_code, reason = "the checker is for the sources' tests and for replay, which validates a recorded session with it")]
 pub use contract::{Broken, Checker, check};
+pub use event::{ButtonState, Dir, InputEvent, Key, KeyInput, MouseButton, Wheel};
 pub use gestures::{GestureDelta, TouchGestures};
 pub use palm::PalmGuard;
 pub use predict::predict;
@@ -109,7 +111,7 @@ pub enum Phase {
 
 /// One pointer message: the samples it carried (oldest first; Windows batches the points between
 /// frames) and the state of the device.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PointerEvent {
     pub device: Device,
     pub id: u32,

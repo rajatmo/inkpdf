@@ -193,10 +193,10 @@ fn the_wheel_a_drag_and_the_keys_scroll_the_pages_and_never_past_their_ends() {
         match how {
             Press::Mouse => {
                 ed.mouse_moved(from);
-                ed.mouse_button(ElementState::Pressed, MouseButton::Left);
+                ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
                 ed.mouse_moved([from[0], from[1] - 100.0]);
                 ed.mouse_moved(to);
-                ed.mouse_button(ElementState::Released, MouseButton::Left);
+                ed.mouse_button(ButtonState::Released, MouseButton::Left);
             }
             Press::Stylus => pen_stroke(&mut ed, TIP, &[from, [from[0], from[1] - 100.0], to]),
             Press::Finger => {
@@ -214,16 +214,16 @@ fn the_wheel_a_drag_and_the_keys_scroll_the_pages_and_never_past_their_ends() {
     open(&mut ed, Press::Mouse);
     let max = ed.overview_layout().max_scroll(120);
     ed.mouse_moved([ed.overview_layout().grid[0] + 200.0, ed.overview_layout().grid[1] + 200.0]);
-    ed.wheel(MouseScrollDelta::LineDelta(0.0, -3.0));
+    ed.wheel(Wheel::Lines(0.0, -3.0));
     glide_done(&mut ed);
     assert!(scroll_of(&ed) > 0.0, "the wheel scrolls down");
-    ed.wheel(MouseScrollDelta::LineDelta(0.0, 1000.0));
+    ed.wheel(Wheel::Lines(0.0, 1000.0));
     glide_done(&mut ed);
     assert_eq!(scroll_of(&ed), 0.0, "and not above the first row");
-    ed.wheel(MouseScrollDelta::LineDelta(0.0, -1.0e6));
+    ed.wheel(Wheel::Lines(0.0, -1.0e6));
     glide_done(&mut ed);
     assert_eq!(scroll_of(&ed), max, "nor below the last");
-    ed.wheel(MouseScrollDelta::PixelDelta(winit::dpi::PhysicalPosition::new(0.0, 5000.0)));
+    ed.wheel(Wheel::Pixels(0.0, 5000.0));
     glide_done(&mut ed);
     assert_eq!(scroll_of(&ed), 0.0, "a touchpad too");
     assert!(ed.press(Key::End(false)));
@@ -315,12 +315,12 @@ fn a_document_with_no_outline_has_no_table_and_the_table_scrolls_on_its_own() {
     let layout = ed.overview_layout();
     let toc = layout.toc.expect("a table");
     ed.mouse_moved([(toc[0] + toc[2]) / 2.0, (toc[1] + toc[3]) / 2.0]);
-    ed.wheel(MouseScrollDelta::LineDelta(0.0, -4.0));
+    ed.wheel(Wheel::Lines(0.0, -4.0));
     glide_done(&mut ed);
     let moved = ed.chrome.overview.as_ref().map_or(0.0, |o| o.toc_scroll);
     assert!(moved > 0.0, "the wheel over the table scrolls it");
     assert_eq!(scroll_of(&ed), 0.0, "and not the pages");
-    ed.wheel(MouseScrollDelta::LineDelta(0.0, -1.0e6));
+    ed.wheel(Wheel::Lines(0.0, -1.0e6));
     glide_done(&mut ed);
     let end = ed.chrome.overview.as_ref().map_or(0.0, |o| o.toc_scroll);
     assert_eq!(end, layout.toc_max_scroll(80), "as far as it goes");
@@ -409,10 +409,10 @@ fn hovering_lights_what_is_under_the_pointer_and_a_press_that_slides_off_does_no
     ed.mouse_moved(at);
     assert_eq!(ed.chrome.overview.as_ref().and_then(|o| o.hover_for_tests()), Some(OverviewHover::Page(2)));
     // Pressed on one page and let go on another: nothing happens.
-    ed.mouse_button(ElementState::Pressed, MouseButton::Left);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
     let other = cell_centre(&ed, 3);
     ed.mouse_moved(other);
-    ed.mouse_button(ElementState::Released, MouseButton::Left);
+    ed.mouse_button(ButtonState::Released, MouseButton::Left);
     assert!(ed.overview_open(), "a press that slid onto another page is not a tap on either");
     assert_eq!(ed.view.current_page(&ed.layout), 0);
 }
@@ -457,10 +457,10 @@ fn carry(ed: &mut Editor, how: Press, from: [f32; 2], to: [f32; 2]) {
     match how {
         Press::Mouse => {
             ed.mouse_moved(from);
-            ed.mouse_button(ElementState::Pressed, MouseButton::Left);
+            ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
             ed.mouse_moved(mid);
             ed.mouse_moved(to);
-            ed.mouse_button(ElementState::Released, MouseButton::Left);
+            ed.mouse_button(ButtonState::Released, MouseButton::Left);
         }
         Press::Stylus => pen_stroke(ed, TIP, &[from, mid, to]),
         Press::Finger => unreachable!("a finger scrolls the pages; it does not carry one"),
@@ -672,12 +672,12 @@ fn a_finger_drag_scrolls_the_pages_and_never_carries_one_and_escape_gives_up_a_d
     // (A page in the second visible row: the first may be partly scrolled off the top.)
     let a = cell_centre(&ed, shown.start + ed.overview_layout().columns() + 1);
     ed.mouse_moved(a);
-    ed.mouse_button(ElementState::Pressed, MouseButton::Left);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
     ed.mouse_moved([a[0] + 40.0, a[1] + 40.0]);
     ed.mouse_moved([a[0] + 200.0, a[1] + 40.0]);
     assert!(ed.chrome.overview.as_ref().is_some_and(|o| o.dragging_for_tests()), "a page is being carried");
     assert!(ed.press(Key::Escape));
-    ed.mouse_button(ElementState::Released, MouseButton::Left);
+    ed.mouse_button(ButtonState::Released, MouseButton::Left);
     assert_eq!(pages_of(&ed, &ids), (0..90).map(Some).collect::<Vec<_>>(), "nothing moved");
     assert!(ed.overview_open());
 }
@@ -689,7 +689,7 @@ fn a_page_held_near_the_edge_while_it_is_carried_scrolls_the_pages() {
     let layout = ed.overview_layout();
     let a = cell_centre(&ed, 0);
     ed.mouse_moved(a);
-    ed.mouse_button(ElementState::Pressed, MouseButton::Left);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
     ed.mouse_moved([a[0] + 30.0, a[1] + 60.0]);
     let before = scroll_of(&ed);
     for _ in 0..30 {
@@ -697,7 +697,7 @@ fn a_page_held_near_the_edge_while_it_is_carried_scrolls_the_pages() {
     }
     assert!(scroll_of(&ed) > before + 100.0, "held at the bottom edge the pages scroll up under it");
     ed.press(Key::Escape);
-    ed.mouse_button(ElementState::Released, MouseButton::Left);
+    ed.mouse_button(ButtonState::Released, MouseButton::Left);
 }
 
 #[test]
@@ -822,7 +822,7 @@ fn a_tap_on_a_pages_number_opens_its_menu_and_a_tap_anywhere_else_only_puts_it_a
     assert!(ed.press(Key::Escape));
     assert!(menu_open_for(&ed).is_none() && ed.overview_open(), "Escape puts the menu away first");
     tap(&mut ed, Press::Mouse, at);
-    ed.wheel(MouseScrollDelta::LineDelta(0.0, -1.0));
+    ed.wheel(Wheel::Lines(0.0, -1.0));
     glide_done(&mut ed);
     assert!(menu_open_for(&ed).is_none(), "scrolling does too");
 }
@@ -889,7 +889,7 @@ fn the_wheel_sends_the_pages_gliding_and_they_arrive_without_overshooting_and_a_
     open(&mut ed, Press::Mouse);
     let layout = ed.overview_layout();
     ed.mouse_moved([layout.grid[0] + 200.0, layout.grid[1] + 200.0]);
-    ed.wheel(MouseScrollDelta::LineDelta(0.0, -3.0));
+    ed.wheel(Wheel::Lines(0.0, -3.0));
     assert_eq!(scroll_of(&ed), 0.0, "the wheel has not moved them yet: they glide");
     let mut last = 0.0;
     let mut frames = 0;
@@ -902,14 +902,14 @@ fn the_wheel_sends_the_pages_gliding_and_they_arrive_without_overshooting_and_a_
     let arrived = scroll_of(&ed);
     assert!(arrived > 0.0 && frames > 3 && frames < 60, "a short glide, not a jump and not a crawl: {frames} frames");
     // Two turns in a row go the sum of both, wherever the first had got to.
-    ed.wheel(MouseScrollDelta::LineDelta(0.0, -1.0));
+    ed.wheel(Wheel::Lines(0.0, -1.0));
     ed.step_view(1.0 / 60.0);
-    ed.wheel(MouseScrollDelta::LineDelta(0.0, -1.0));
+    ed.wheel(Wheel::Lines(0.0, -1.0));
     glide_done(&mut ed);
     let unit = ed.overview_layout().unit() * 2.4;
     assert!((scroll_of(&ed) - arrived - 2.0 * unit).abs() < 1.0, "{} from {arrived}", scroll_of(&ed));
     // A turn the other way before it arrived turns it round from where it was heading, never past the ends.
-    ed.wheel(MouseScrollDelta::LineDelta(0.0, 1.0e6));
+    ed.wheel(Wheel::Lines(0.0, 1.0e6));
     glide_done(&mut ed);
     assert_eq!(scroll_of(&ed), 0.0);
 }

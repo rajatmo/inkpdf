@@ -3,6 +3,7 @@
 use std::time::{Duration, Instant};
 
 use crate::gpu::{Drawn, InkScene};
+use crate::input::InputEvent;
 use crate::tiles::{self, Key};
 
 use super::State;
@@ -38,7 +39,7 @@ impl State {
     fn take_pointer_input(&mut self) {
         if let Some(pointer) = &mut self.pointer {
             for ev in pointer.drain() {
-                self.ed.pointer_event(ev);
+                self.ed.handle(InputEvent::Pointer(ev));
             }
         }
     }

@@ -4,9 +4,7 @@
 //! (left button the tip, right the eraser end, middle the barrel button) and the text tool takes it as itself
 //! (click to place, edit and move text); in the tablet mode it only scrolls.
 
-use winit::event::{ElementState, MouseButton, MouseScrollDelta};
-
-use crate::input::{Device, PenButtons, Phase};
+use crate::input::{ButtonState, Device, MouseButton, PenButtons, Phase, Wheel};
 
 use super::{Act, Editor};
 
@@ -92,11 +90,11 @@ impl Editor {
     /// A mouse button went down or up. The left button presses what is under it if that is part of the window
     /// (a toolbar button, the tool panel, the prompt); anywhere on the page, any of the three starts what the tool
     /// and the mode make of a mouse.
-    pub(crate) fn mouse_button(&mut self, state: ElementState, button: MouseButton) {
-        if !matches!(button, MouseButton::Left | MouseButton::Right | MouseButton::Middle) {
+    pub(crate) fn mouse_button(&mut self, state: ButtonState, button: MouseButton) {
+        if button == MouseButton::Other {
             return;
         }
-        let pressed = state == ElementState::Pressed;
+        let pressed = state == ButtonState::Pressed;
         if self.chrome.save_as.is_some() {
             if button == MouseButton::Left {
                 self.save_as_pointer(Device::Mouse, 0, if pressed { Phase::Down } else { Phase::Up }, self.cursor);
@@ -167,7 +165,7 @@ impl Editor {
     }
 
     /// The wheel scrolls, up and down and (for a wheel that tilts or a touchpad) sideways.
-    pub fn wheel(&mut self, delta: MouseScrollDelta) {
+    pub fn wheel(&mut self, delta: Wheel) {
         if self.chrome.prompt.is_some() {
             return;
         }
@@ -180,9 +178,9 @@ impl Editor {
             return;
         }
         match delta {
-            MouseScrollDelta::LineDelta(x, y) => self.ws.scroll_by_px(-x * WHEEL_NOTCH_PX, y * WHEEL_NOTCH_PX),
+            Wheel::Lines(x, y) => self.ws.scroll_by_px(-x * WHEEL_NOTCH_PX, y * WHEEL_NOTCH_PX),
             // Precision touchpads already glide: follow them exactly.
-            MouseScrollDelta::PixelDelta(p) => self.ws.pan_px(p.x as f32, p.y as f32),
+            Wheel::Pixels(x, y) => self.ws.pan_px(x, y),
         }
         self.ws.redraw = true;
     }

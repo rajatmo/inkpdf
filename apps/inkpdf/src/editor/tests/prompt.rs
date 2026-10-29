@@ -70,7 +70,7 @@ fn the_button_under_the_pointer_lights_up_and_a_pressed_one_darkens() {
     let save = button(&ed, Choice::Save);
     ed.mouse_moved(save);
     assert_eq!(ed.chrome.prompt.expect("prompt").hover, Some(Choice::Save));
-    ed.mouse_button(ElementState::Pressed, MouseButton::Left);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
     assert_eq!(ed.chrome.prompt.expect("prompt").pressed, Some(Choice::Save));
     ed.mouse_moved(button(&ed, Choice::Discard));
     assert_eq!(ed.chrome.prompt.expect("prompt").pressed, None, "dragged off it, so it is no longer pressed");
@@ -97,16 +97,16 @@ fn nothing_underneath_hears_anything_while_it_is_up() {
     ed.pointer_event(touch(1, Phase::Up, [500.0, 300.0], 30.0));
     // The mouse does not scroll or press anything under the prompt.
     ed.mouse_moved(a);
-    ed.mouse_button(ElementState::Pressed, MouseButton::Left);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
     ed.mouse_moved(b);
-    ed.mouse_button(ElementState::Released, MouseButton::Left);
-    ed.mouse_button(ElementState::Pressed, MouseButton::Middle);
-    ed.mouse_button(ElementState::Released, MouseButton::Middle);
-    ed.mouse_button(ElementState::Released, MouseButton::Right);
-    ed.wheel(MouseScrollDelta::LineDelta(0.0, -5.0));
-    ed.wheel(MouseScrollDelta::LineDelta(0.0, 5.0));
-    ed.basic_touch(winit::event::TouchPhase::Started, 1, a);
-    ed.basic_touch(winit::event::TouchPhase::Moved, 1, b);
+    ed.mouse_button(ButtonState::Released, MouseButton::Left);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Middle);
+    ed.mouse_button(ButtonState::Released, MouseButton::Middle);
+    ed.mouse_button(ButtonState::Released, MouseButton::Right);
+    ed.wheel(Wheel::Lines(0.0, -5.0));
+    ed.wheel(Wheel::Lines(0.0, 5.0));
+    ed.basic_touch(Phase::Down, 1, a);
+    ed.basic_touch(Phase::Move, 1, b);
     // The toolbar's buttons are out of reach too.
     let close = ed.toolbar().centre_of(Item::Close);
     mouse_click_at(&mut ed, close);

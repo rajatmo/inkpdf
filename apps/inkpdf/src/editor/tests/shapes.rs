@@ -107,9 +107,9 @@ fn the_other_devices_do_not_make_shapes_in_the_tablet_mode() {
     // (At a desk the mouse draws as a stylus does: see mouse_as_stylus.)
     // The mouse scrolls and nothing else.
     ed.mouse_moved(on_page(&ed, 100.0, 300.0));
-    ed.mouse_button(ElementState::Pressed, MouseButton::Left);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
     ed.mouse_moved(on_page(&ed, 300.0, 400.0));
-    ed.mouse_button(ElementState::Released, MouseButton::Left);
+    ed.mouse_button(ButtonState::Released, MouseButton::Left);
     // A finger pans.
     let before = ed.view.scroll;
     ed.pointer_event(touch(1, Phase::Down, on_page(&ed, 300.0, 600.0), 30.0));

@@ -17,6 +17,7 @@ mod ink_layer;
 mod overview;
 mod pages;
 mod text_layer;
+mod translate;
 
 use std::collections::HashSet;
 use std::ops::Range;
@@ -28,17 +29,16 @@ use std::time::{Duration, Instant};
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow};
-use winit::keyboard::{Key as Typed, ModifiersState, NamedKey};
+use winit::keyboard::{Key as Typed, ModifiersState};
 use winit::window::{Icon, Window, WindowLevel};
 
 use crate::doc::Doc;
 use crate::editor::Editor;
 use crate::gpu::{Gpu, GpuChoice};
-use crate::input::Mode;
+use crate::input::{InputEvent, Mode};
 use crate::platform::{self, PointerSource};
 use crate::settings;
 use crate::tiles::Key;
-use crate::tools::{Dir, Key as ToolKey};
 use bench::Bench;
 use ink_layer::{InkStamp, UiStamp};
 
@@ -238,24 +238,28 @@ impl State {
             WindowEvent::CloseRequested => self.request_close(),
             WindowEvent::Resized(size) => {
                 self.gpu.resize(size.width, size.height);
-                self.ed.set_viewport([size.width as f32, size.height as f32]);
+                self.ed.handle(InputEvent::Resized([size.width as f32, size.height as f32]));
                 self.ed.chrome.fullscreen = self.window.fullscreen().is_some();
             }
-            WindowEvent::CursorLeft { .. } => self.ed.mouse_left(),
-            WindowEvent::Focused(false) => self.ed.focus_lost(),
+            WindowEvent::CursorLeft { .. } => self.ed.handle(InputEvent::MouseLeft),
+            WindowEvent::Focused(false) => self.ed.handle(InputEvent::FocusLost),
             // (What was asked of motion in Windows' settings is read again when the window is come back to.)
             WindowEvent::Focused(true) => self.ed.motions.set_prefs(platform::motion_prefs()),
             WindowEvent::ModifiersChanged(m) => self.modifiers = m.state(),
-            WindowEvent::ScaleFactorChanged { scale_factor, .. } => self.ed.set_dpr(scale_factor as f32),
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => self.ed.handle(InputEvent::ScaleChanged(scale_factor as f32)),
             WindowEvent::RedrawRequested => self.redraw(),
             WindowEvent::DroppedFile(path) => self.open(path),
-            WindowEvent::CursorMoved { position, .. } => self.ed.mouse_moved([position.x as f32, position.y as f32]),
-            WindowEvent::MouseInput { state, button, .. } => self.ed.mouse_button(state, button),
-            WindowEvent::MouseWheel { delta, .. } => self.ed.wheel(delta),
+            WindowEvent::CursorMoved { position, .. } => self.ed.handle(InputEvent::MouseMoved([position.x as f32, position.y as f32])),
+            WindowEvent::MouseInput { state, button, .. } => {
+                self.ed.handle(InputEvent::MouseButton { state: translate::button_state(state), button: translate::button(button) })
+            }
+            WindowEvent::MouseWheel { delta, .. } => self.ed.handle(InputEvent::Wheel(translate::wheel(delta))),
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => self.key_pressed(&event),
             // With the pointer layer installed pen and touch never reach winit; this is only the
             // fallback if it could not be installed.
-            WindowEvent::Touch(t) if self.pointer.is_none() => self.ed.basic_touch(t.phase, t.id, [t.location.x as f32, t.location.y as f32]),
+            WindowEvent::Touch(t) if self.pointer.is_none() => {
+                self.ed.handle(InputEvent::Touch { phase: translate::touch_phase(t.phase), id: t.id, pos: [t.location.x as f32, t.location.y as f32] })
+            }
             _ => {}
         }
         self.service();
@@ -275,31 +279,15 @@ impl State {
     fn key_pressed(&mut self, event: &KeyEvent) {
         if self.modifiers.control_key() {
             if let Typed::Character(letter) = &event.logical_key {
-                self.ed.shortcut(letter, self.modifiers.shift_key());
+                self.ed.handle(InputEvent::Shortcut { letter: letter.to_string(), shift: self.modifiers.shift_key() });
             }
             return;
         }
-        let shift = self.modifiers.shift_key();
         // The tool in use says which of these it hears (see `InputPolicy`): a text box being typed into takes them
         // all; with something selected, Delete, Escape and the arrows work on that.
-        let key = match &event.logical_key {
-            Typed::Named(NamedKey::Backspace) => ToolKey::Backspace,
-            Typed::Named(NamedKey::Delete) => ToolKey::Delete,
-            Typed::Named(NamedKey::Escape) => ToolKey::Escape,
-            Typed::Named(NamedKey::ArrowLeft) => ToolKey::Arrow(Dir::Left, shift),
-            Typed::Named(NamedKey::ArrowRight) => ToolKey::Arrow(Dir::Right, shift),
-            Typed::Named(NamedKey::ArrowUp) => ToolKey::Arrow(Dir::Up, shift),
-            Typed::Named(NamedKey::ArrowDown) => ToolKey::Arrow(Dir::Down, shift),
-            Typed::Named(NamedKey::Home) => ToolKey::Home(shift),
-            Typed::Named(NamedKey::End) => ToolKey::End(shift),
-            Typed::Named(NamedKey::Enter) if self.ed.is_typing() => ToolKey::Text("\n"),
-            _ if self.ed.is_typing() => match &event.text {
-                Some(text) => ToolKey::Text(text),
-                None => return,
-            },
-            _ => return,
-        };
-        self.ed.press(key);
+        if let Some(key) = translate::key(&event.logical_key, event.text.as_deref(), self.modifiers.shift_key(), self.ed.is_typing()) {
+            self.ed.handle(InputEvent::Key(key));
+        }
     }
 
     pub fn about_to_wait(&mut self, el: &ActiveEventLoop) {

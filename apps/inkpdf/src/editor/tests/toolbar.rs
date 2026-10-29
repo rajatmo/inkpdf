@@ -245,9 +245,9 @@ fn the_sliders_work_with_the_mouse_and_with_touch() {
     assert!(ed.chrome.panel.is_some());
     let (left, right) = (panel(&ed).point_on(Slider::Width, 0.0), panel(&ed).point_on(Slider::Width, 1.0));
     ed.mouse_moved(left);
-    ed.mouse_button(ElementState::Pressed, MouseButton::Left);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
     ed.mouse_moved(right);
-    ed.mouse_button(ElementState::Released, MouseButton::Left);
+    ed.mouse_button(ButtonState::Released, MouseButton::Left);
     assert!((ed.pen.width - crate::tool::MAX_WIDTH).abs() < 0.01);
     assert!(ed.chrome.panel.is_some());
 
@@ -273,8 +273,8 @@ fn the_toolbar_acts_for_every_device() {
     // The mouse chooses the laser.
     let laser = bar.centre_of(Item::Tool(Tool::Laser));
     ed.mouse_moved(laser);
-    ed.mouse_button(ElementState::Pressed, MouseButton::Left);
-    ed.mouse_button(ElementState::Released, MouseButton::Left);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
+    ed.mouse_button(ButtonState::Released, MouseButton::Left);
     assert_eq!(ed.tool, Tool::Laser);
     // A finger chooses the pen again, which only chooses it: the panel is the bar's.
     let pen_at = bar.centre_of(Item::Tool(Tool::Pen));

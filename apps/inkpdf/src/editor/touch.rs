@@ -103,17 +103,10 @@ impl Editor {
         }
     }
 
-    /// Touch through winit's own events, used only if the Windows pointer layer could not be
-    /// installed. Pans and zooms; it cannot tell a pen from a finger.
-    pub fn basic_touch(&mut self, phase: winit::event::TouchPhase, id: u64, pos: [f32; 2]) {
-        use winit::event::TouchPhase;
+    /// Touch that is only a place (see [`crate::input::InputEvent::Touch`]), used when the OS's own pointer reader is not
+    /// there. Pans and zooms; it cannot tell a pen from a finger. `phase` is `Down`, `Move`, `Up` or `Cancel`.
+    pub fn basic_touch(&mut self, phase: Phase, id: u64, pos: [f32; 2]) {
         if self.chrome.save_as.is_some() && self.chrome.prompt.is_none() {
-            let phase = match phase {
-                TouchPhase::Started => Phase::Down,
-                TouchPhase::Moved => Phase::Move,
-                TouchPhase::Ended => Phase::Up,
-                TouchPhase::Cancelled => Phase::Cancel,
-            };
             self.save_as_pointer(Device::Touch, id as u32, phase, pos);
             return;
         }
@@ -121,12 +114,12 @@ impl Editor {
             return;
         }
         match phase {
-            TouchPhase::Started => {
+            Phase::Down => {
                 self.ws.view.stop();
                 self.basic_touches.insert(id, pos);
                 self.basic_pinch = self.basic_pinch_state();
             }
-            TouchPhase::Moved => {
+            Phase::Move => {
                 let Some(old) = self.basic_touches.insert(id, pos) else { return };
                 if self.basic_touches.len() == 1 {
                     self.ws.pan_px(pos[0] - old[0], pos[1] - old[1]);
@@ -141,10 +134,12 @@ impl Editor {
                 }
                 self.ws.redraw = true;
             }
-            TouchPhase::Ended | TouchPhase::Cancelled => {
+            Phase::Up | Phase::Cancel => {
                 self.basic_touches.remove(&id);
                 self.basic_pinch = self.basic_pinch_state();
             }
+            // (A touch that is only a place does not hover.)
+            Phase::Hover | Phase::Leave => {}
         }
     }
 

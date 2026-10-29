@@ -1,10 +1,33 @@
 //! Routing a pointer to the interaction it belongs to.
 
-use crate::input::{Device, PointerEvent, Sample};
+use crate::input::{Device, InputEvent, PointerEvent, Sample};
 
 use super::{Act, Editor};
 
 impl Editor {
+    /// The one way in for what the person does: every device, and the window's own changes. The shell translates what its
+    /// toolkit says into an [`InputEvent`]; a replay of a recorded session hands over the same events, so the editor behaves
+    /// alike whoever is driving it. (The methods this calls are also public, as the tests use them.)
+    pub fn handle(&mut self, event: InputEvent) {
+        match event {
+            InputEvent::Pointer(ev) => self.pointer_event(ev),
+            InputEvent::MouseMoved(pos) => self.mouse_moved(pos),
+            InputEvent::MouseButton { state, button } => self.mouse_button(state, button),
+            InputEvent::MouseLeft => self.mouse_left(),
+            InputEvent::Wheel(delta) => self.wheel(delta),
+            InputEvent::Touch { phase, id, pos } => self.basic_touch(phase, id, pos),
+            InputEvent::Key(key) => {
+                self.press(key.as_key());
+            }
+            InputEvent::Shortcut { letter, shift } => {
+                self.shortcut(&letter, shift);
+            }
+            InputEvent::FocusLost => self.focus_lost(),
+            InputEvent::Resized(size) => self.set_viewport(size),
+            InputEvent::ScaleChanged(dpr) => self.set_dpr(dpr),
+        }
+    }
+
     /// Whether the chrome interaction under way belongs to this pointer.
     pub(super) fn act_belongs_to(&self, dev: Device, id: u32) -> bool {
         match &self.chrome.act {

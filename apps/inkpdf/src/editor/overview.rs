@@ -9,9 +9,7 @@
 
 use std::collections::{BTreeSet, HashSet};
 
-use winit::event::MouseScrollDelta;
-
-use crate::input::{Device, Phase, PointerEvent};
+use crate::input::{Device, Phase, PointerEvent, Wheel};
 use crate::outline;
 use crate::motion::{Curve, Slides, Tween, seconds};
 use crate::pages::{MAX_PAGES, PageEdit, Remap};
@@ -501,11 +499,11 @@ impl Editor {
     }
 
     /// The wheel scrolls the pages, or the table of contents when the pointer is over it.
-    pub(super) fn overview_wheel(&mut self, delta: MouseScrollDelta) {
+    pub(super) fn overview_wheel(&mut self, delta: Wheel) {
         let unit = self.overview_layout().unit();
         let dy = match delta {
-            MouseScrollDelta::LineDelta(_, y) => -y * WHEEL_UNITS * unit,
-            MouseScrollDelta::PixelDelta(p) => -(p.y as f32),
+            Wheel::Lines(_, y) => -y * WHEEL_UNITS * unit,
+            Wheel::Pixels(_, y) => -y,
         };
         let over_toc = self.overview_layout().toc.is_some_and(|t| crate::ink::rect_contains(t, self.cursor));
         self.glide_overview_by(dy, over_toc);

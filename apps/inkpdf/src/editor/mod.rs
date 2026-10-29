@@ -105,7 +105,7 @@ pub struct Editor {
     /// The last pen sample the screen has not yet shown, for latency measurement.
     pub pending_sample_ms: Option<f64>,
 
-    /// Touch through winit's own events: only when the pointer layer is unavailable.
+    /// Touch that is only a place: only when the OS's own pointer reader is unavailable.
     basic_touches: HashMap<u64, [f32; 2]>,
     basic_pinch: Option<(f32, [f32; 2])>,
 }

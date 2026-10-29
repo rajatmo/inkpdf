@@ -12,10 +12,8 @@
 
 use std::path::{Path, PathBuf};
 
-use winit::event::MouseScrollDelta;
-
 use crate::browse::{self, Entry, Place};
-use crate::input::{Device, Phase, PointerEvent};
+use crate::input::{Device, Phase, PointerEvent, Wheel};
 use crate::requests::Request;
 use crate::toolbar::{ListingView, SaveAsHit, SaveAsLayout, SaveAsView, Ui};
 use crate::tools::{Dir, Key};
@@ -375,10 +373,10 @@ impl SaveAsState {
         outcome
     }
 
-    fn wheel(&mut self, layout: &SaveAsLayout, delta: MouseScrollDelta) {
+    fn wheel(&mut self, layout: &SaveAsLayout, delta: Wheel) {
         let by = match delta {
-            MouseScrollDelta::LineDelta(_, y) => -y * WHEEL_ROWS * layout.row_height(),
-            MouseScrollDelta::PixelDelta(p) => -(p.y as f32),
+            Wheel::Lines(_, y) => -y * WHEEL_ROWS * layout.row_height(),
+            Wheel::Pixels(_, y) => -y,
         };
         self.scroll_to(layout, self.scroll_in(layout) + by);
     }
@@ -522,7 +520,7 @@ impl Editor {
     }
 
     /// The wheel, while the dialog is up: it scrolls the list.
-    pub(super) fn save_as_wheel(&mut self, delta: MouseScrollDelta) {
+    pub(super) fn save_as_wheel(&mut self, delta: Wheel) {
         let Some(state) = &self.chrome.save_as else { return };
         let layout = self.save_as_layout(state);
         if let Some(state) = &mut self.chrome.save_as {
@@ -765,13 +763,13 @@ mod tests {
     fn the_wheel_and_the_arrows_scroll_within_the_list_and_never_out_of_it() {
         let layout = SaveAsLayout::new([1100.0, 900.0], 1.0, 2);
         let mut s = ready((0..40).map(|i| entry(&format!("f{i}"), true)).collect());
-        s.wheel(&layout, MouseScrollDelta::LineDelta(0.0, -1.0));
+        s.wheel(&layout, Wheel::Lines(0.0, -1.0));
         assert!((s.scroll_in(&layout) - WHEEL_ROWS * layout.row_height()).abs() < 0.01);
-        s.wheel(&layout, MouseScrollDelta::LineDelta(0.0, 1000.0));
+        s.wheel(&layout, Wheel::Lines(0.0, 1000.0));
         assert_eq!(s.scroll_in(&layout), 0.0, "not above the first row");
-        s.wheel(&layout, MouseScrollDelta::LineDelta(0.0, -1000.0));
+        s.wheel(&layout, Wheel::Lines(0.0, -1000.0));
         assert_eq!(s.scroll_in(&layout), layout.max_scroll(40), "not past the last");
-        s.wheel(&layout, MouseScrollDelta::LineDelta(f32::NAN, f32::NAN));
+        s.wheel(&layout, Wheel::Lines(f32::NAN, f32::NAN));
         s.scroll = f32::NAN;
         assert_eq!(s.scroll_in(&layout), 0.0, "never not a number");
         s.key(Key::Arrow(Dir::Down, false), &layout);

@@ -202,7 +202,7 @@ fn while_it_is_up_nothing_reaches_the_page() {
     ed.pointer_event(touch(1, Phase::Down, page, 30.0));
     ed.pointer_event(touch(1, Phase::Move, [page[0], page[1] + 80.0], 30.0));
     ed.pointer_event(touch(1, Phase::Up, [page[0], page[1] + 80.0], 30.0));
-    ed.wheel(MouseScrollDelta::LineDelta(0.0, -3.0));
+    ed.wheel(Wheel::Lines(0.0, -3.0));
     assert_eq!((ed.ink.len(), ed.view.scroll), (0, before), "the document is as it was");
     // The shortcuts of the page do not fire, and the keys go to the name.
     assert!(!ed.shortcut("s", false) && !ed.shortcut("z", false) && !ed.shortcut("a", false));
@@ -220,9 +220,9 @@ fn a_drag_of_any_device_and_the_wheel_scroll_the_list() {
         match by {
             By::Mouse => {
                 ed.mouse_moved(from);
-                ed.mouse_button(ElementState::Pressed, MouseButton::Left);
+                ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
                 ed.mouse_moved(to);
-                ed.mouse_button(ElementState::Released, MouseButton::Left);
+                ed.mouse_button(ButtonState::Released, MouseButton::Left);
             }
             By::Stylus => {
                 ed.pointer_event(pen(Phase::Down, TIP, &[from]));
@@ -243,7 +243,7 @@ fn a_drag_of_any_device_and_the_wheel_scroll_the_list() {
     }
     let mut ed = asking(Mode::Desktop);
     ed.folder_listed(Path::new(DOCUMENTS), Ok(many));
-    ed.wheel(MouseScrollDelta::LineDelta(0.0, -2.0));
+    ed.wheel(Wheel::Lines(0.0, -2.0));
     let mut ui = Ui::default();
     ed.draw_save_as(&mut ui);
     assert!(!ui.labels.iter().any(|t| t.text == "folder 00" && t.alpha > 0.99), "the wheel scrolled the list");
@@ -289,8 +289,8 @@ fn ctrl_shift_s_asks_for_save_as_and_ctrl_s_for_save_and_neither_while_it_is_up(
 fn loading_another_document_puts_it_away_and_touch_through_winit_works_too() {
     let mut ed = asking(Mode::Tablet);
     let save = at(&ed, SaveAsHit::Save);
-    ed.basic_touch(winit::event::TouchPhase::Started, 7, save);
-    ed.basic_touch(winit::event::TouchPhase::Ended, 7, save);
+    ed.basic_touch(Phase::Down, 7, save);
+    ed.basic_touch(Phase::Up, 7, save);
     assert!(ed.requests.take(&Request::SaveTo(PathBuf::from(DOCUMENTS).join("Untitled.pdf"))), "the fallback touch is a tap too");
     ed.load(crate::view::Layout::new(&[[612.0, 792.0]]), vec![]);
     assert!(!ed.save_as_open());
@@ -309,10 +309,10 @@ fn a_storm_of_hostile_events_leaves_the_dialog_sound() {
             let pos = [rng.coord(1300.0), rng.coord(1000.0)];
             match rng.below(16) {
                 0 => ed.mouse_moved(pos),
-                1 => ed.mouse_button(if rng.chance(0.5) { ElementState::Pressed } else { ElementState::Released }, MouseButton::Left),
-                2 => ed.wheel(MouseScrollDelta::LineDelta(rng.coord(5.0), rng.coord(5.0))),
+                1 => ed.mouse_button(if rng.chance(0.5) { ButtonState::Pressed } else { ButtonState::Released }, MouseButton::Left),
+                2 => ed.wheel(Wheel::Lines(rng.coord(5.0), rng.coord(5.0))),
                 3 => ed
-                    .wheel(MouseScrollDelta::PixelDelta(winit::dpi::PhysicalPosition::new(f64::from(rng.coord(500.0)), f64::from(rng.coord(500.0))))),
+                    .wheel(Wheel::Pixels(rng.coord(500.0), rng.coord(500.0))),
                 4 => ed.pointer_event(pen(rng.pick(&[Phase::Down, Phase::Move, Phase::Up, Phase::Cancel, Phase::Hover, Phase::Leave]), TIP, &[pos])),
                 5 => ed.pointer_event(touch(rng.below(3) as u32, rng.pick(&[Phase::Down, Phase::Move, Phase::Up, Phase::Cancel]), pos, 30.0)),
                 6 => {

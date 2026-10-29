@@ -2,6 +2,8 @@
 
 Written 2026-10-29 on `linux-android-port`, from the code as it is (numbers are measured or counted, not estimated).
 
+**Status (2026-10-29): R1 to R7 and R9 are done; R8 is done for allocation (the sample-array part waits for hardware numbers).** Each item below says what landed. The text of each plan is kept as it was written.
+
 **TL;DR**
 
 1. The core is already well layered (tested, no upward edges, `Tool` has a contract suite, `Request` inverts the shell).

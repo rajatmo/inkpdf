@@ -106,7 +106,7 @@ different on every platform). It is three parts and a thread, one per layer, so 
   or `SaveAsCancelled`). The shell keeps what was waiting on it (`Then`) across the dialog.
 * `toolbar/save_as.rs` (ui): `SaveAsLayout` (where everything is, hit testing, scrolling) and the drawing as panels, lines and labels.
 * `app/folders.rs` (adapter): folders are read on a thread of their own and handed back through a channel.
-* `platform::documents_dir()` and `platform::places()` say where it opens: Documents as the OS names it, then the other places.
+* `Platform::documents_dir()` and `Platform::places()` (the shell holds the platform as a `Box<dyn Platform>`, see `platform/mod.rs`) say where it opens: Documents as the OS names it, then the other places.
 
 ### Platforms (`src/platform/`)
 

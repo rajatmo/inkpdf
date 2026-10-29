@@ -104,18 +104,54 @@ different on every platform). It is three parts and a thread, one per layer, so 
   the shell through `Request::ListFolder` and `Request::SaveTo` (answered by `Editor::folder_listed` and `Editor::save_as_done`,
   or `SaveAsCancelled`). The shell keeps what was waiting on it (`Then`) across the dialog.
 * `toolbar/save_as.rs` (ui): `SaveAsLayout` (where everything is, hit testing, scrolling) and the drawing as panels, lines and labels.
-* `app/folders.rs` (adapter): folders are read on a thread of their own and handed back through a channel.
+* `app/folders.rs` (adapter): folders are read through the `FileStore` on a thread of their own and handed back through a channel.
 * `Platform::documents_dir()` and `Platform::places()` (the shell holds the platform as a `Box<dyn Platform>`, see `platform/mod.rs`) say where it opens: Documents as the OS names it, then the other places.
 
 ### Platforms (`src/platform/`)
 
-Everything that differs by operating system is behind `platform/mod.rs`, chosen at compile time: `windows/` (Win32
-pointer messages, message boxes, clipboard, posture), `linux/` and `android/` (winit's basic input for now) over the shared
-`unix_dirs.rs` (folders), `stubs.rs` (services with nothing behind them yet) and `motion_event.rs` (the pure decoder from an Android
-`MotionEvent`'s fields to events, tested everywhere). The shell holds a `Box<dyn PointerSource>`: `pump` (take what the OS has queued, right
-after the display wait), `pending`, `drain_into` (→ `PointerEvent`s with the OS's batched `samples`), `take_posture_change`, `uninstall`. A new
-OS adds one such source and changes nothing above `platform`; the session may not name it (tested). Small per-OS facts
-elsewhere (clock, font folders, GPU backend, settings folder) are `cfg` items in their own modules.
+Everything that differs by operating system is behind `platform/mod.rs`, chosen at compile time. The shell holds one
+`Box<dyn Platform>` (built by `platform::native()`): where documents go (`documents_dir`, `places`, `config_dir`, `file_store`), the
+system font if its widths are the ones PDF readers use (`system_font`: Arial on Windows, nothing elsewhere, where the built-in
+Liberation Sans is used), what the user asked of motion and the machine's posture (`motion_prefs`, `detect_mode`), side effects
+(`open_url`, `error_box`, `set_text_input`, `clipboard`) and the pen reader (`install_pointer`). The window crosses the seam as a
+`raw-window-handle` plus a `Waker`, so no windowing toolkit type is in the API. `platform::fake::FakePlatform` runs the shell's calls
+with no OS. Process-level calls before there is a window (`attach_parent_console`, `report_fatal`) stay free functions.
+
+* `windows/`: Win32 pointer messages with the history Windows batches (`pointer.rs`), message boxes, clipboard and fonts (`native.rs`),
+  posture, the known folders, and the performance counter converted to the app's clock (`counter.rs`).
+* `linux.rs`: winit's basic input for now (a native pen reader over Wayland's tablet protocol is step L2 in `docs/PORTING.md`).
+* `android/`: `reader.rs` reads the activity's input queue *before* winit (which flattens every `MotionEvent` into a plain touch) and
+  hands the fields to `motion_event.rs`, a pure decoder tested on every OS: tool type, pressure, the stylus's buttons, hover, the points
+  between events, cancels. Pointers are told by device *and* id (a pen digitiser and a touch screen both count from 0).
+* `unix_dirs.rs` (folders by the XDG rules), `stubs.rs` (services with nothing behind them yet).
+
+The pen reader is a `PointerSource`: `pump` (take what the OS has queued, right after the display wait), `pending`, `drain_into`
+(append `PointerEvent`s with the OS's batched `samples` to a buffer the shell keeps, so nothing is allocated per frame),
+`take_posture_change`, `uninstall`. A new OS adds one such source and changes nothing above `platform`; the session may not name it
+(tested), and a contract suite (`platform/contract.rs`) holds every source to the same rules. The layering test also says nothing below the
+adapters touches a file, the environment, an OS, a PDF crate, `wgpu` or `winit`: what they need (a font, the settings folder, the
+clock's source) is handed to them.
+
+### Storage and the PDF
+
+* `store.rs` (domain) is the port: `DocId` (a path, or an address a platform made, such as an Android `content://` URI) and the
+  `FileStore` trait (`read`, `write_atomic`, `list`). `path_store.rs` (adapter) is the file system behind it: the atomic save (written
+  beside the old file and swapped in), the read-only refusal and the folder listing.
+* `doc.rs` is the renderer's pool and the saved bytes; it reads and writes only through a `FileStore`. The pure bookkeeping of the pages
+  (their size and geometry, which page of the renderer's file draws each, copies, and the deleted pages kept for undo) is `page_table.rs`
+  (model), tested with no PDF.
+* `pdf_read.rs` (adapter) reads a file's links, outline and page geometry for the model, which (`links.rs`, `outline.rs`) keeps them
+  and carries them through edits. `ink_io.rs` reads and writes the ink.
+
+### The shell (`src/app/`)
+
+`State` is the window, the GPU, the editor and the platform, with three plain groups of what the shell keeps (fields, not objects, so
+nothing sits on the frame path): `FrameLoop` (the clock, statistics, what the loop waits for), `DocumentSession` (the open document, its
+store, what waits on the unsaved-changes prompt and on Save As) and `UiLayers` (what is on the GPU and what it was built from). The
+presenters that turn editor state into GPU data (`ink_layer`, `text_layer`, `overview`, `pages`) are methods of `UiLayers`; they take a
+`Paint` (the editor, the GPU, the document, the frame number) built by `paint!(self)`. `files.rs` is the document workflow
+(`Then`, open, save, close, serving the editor's `Request`s). `--record FILE` copies every event given to the editor (`replay.rs`,
+`input/record.rs`, a text line each) and `--replay FILE` plays a recording back at its pace.
 
 ## Pages: one edit, everything follows
 
@@ -183,7 +219,7 @@ edit) is made of the same few pieces:
   over a group of what was drawn with `Ui::mark` / `Ui::apply`, which is how things come in, go out and slide without the
   drawing code changing.
 * The shell (`app`) keeps what a thing was drawn as while it goes out (the overview's `ghost`) and reads the Windows
-  "animations" setting (`native::motion_prefs`; `INKPDF_MOTION=off|on` overrides it for a run).
+  "animations" setting (`Platform::motion_prefs`; `INKPDF_MOTION=off|on` overrides it for a run).
 * Tests run with reduced motion (what they look at is where things end up); `editor/tests/motions.rs` and the overview tests
   turn it on and drive the frames. `stress_motion_changes_how_long_things_take_and_never_where_they_end_up` runs the same
   random events with motion off and on, letting everything arrive after each, and requires the same document, selection and
@@ -217,7 +253,7 @@ edit) is made of the same few pieces:
 | **Flyweight** | text bitmap cache (kept) |
 | **Builder** | `Draft`, a polyline built node by node (kept) |
 | **Incremental computation** | the live stroke's smooth curve is extended segment by segment (`curve_segments`) |
-| **Ports & Adapters** | `win_pointer` (Win32 → `PointerEvent`), `gpu` (scene → wgpu), `Painter` |
+| **Ports & Adapters** | `platform` (`Platform`, and a `PointerSource` per OS → `PointerEvent`), `store` (`FileStore`, with `path_store`), `gpu` (scene → wgpu), `Painter` |
 
 ## Modes and device rules (`Tool::policy(mode)`)
 
@@ -264,9 +300,9 @@ right and middle buttons are shortcuts and no test may need them.
 * **Keys** reach a tool as `tools::Key`. `tools/shortcuts.rs::selection_key` (Delete, Escape, arrows) is shared by the
   pen, shape and text tools; Ctrl+letter shortcuts are the session's (`Editor::shortcut`, desktop only) and go to
   the text tool as `Key::Chord` while a box is being edited.
-* **Text editing** is `TextEdit` (text, caret, selection anchor) in the text tool plus pure layout in `text.rs`
+* **Text editing** is `TextEdit` (text, caret, selection anchor) in the text tool plus pure layout in `text/layout.rs`
   (`caret_at`, `index_at`, `vertical`, `selection_rects`, `follow_wrap`). The system clipboard is a domain trait
-  (`clipboard::TextClipboard`) held by the workspace; `native::SystemClipboard` is the Windows adapter, and tests use
+  (`clipboard::TextClipboard`) held by the workspace; `Platform::clipboard` gives the system's (Windows: `platform/windows/native.rs`), and tests use
   the in-memory one.
 
 How it fits the layers: a tool states a `Tool::policy(mode)` (an `InputPolicy` with a `MouseUse`: `Scrolls`,

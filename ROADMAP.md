@@ -34,13 +34,15 @@ Non-negotiables, agreed with the owner:
 
 ## 2. Working in a cloud session (read this before you start)
 
-- **The crate is Windows-only.** It uses Win32 (`win_pointer`, `native`, DirectX 12) unconditionally, so on a Linux cloud
-  sandbox `cargo build` and `cargo test` will most likely **not compile** (check with `cargo check` once; if it does not,
-  stop trying). The only verification is the **GitHub Actions** workflow `.github/workflows/ci.yml` on `windows-latest`:
-  `cargo fmt --all -- --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`, then a release build.
-- Therefore: work on a branch, keep each change small, run `cargo fmt` locally if the toolchain is there, push the branch,
-  read the CI result (`gh run watch`, `gh run view --log-failed`) and fix until green. Do not guess at a compile; read the
-  neighbouring code and copy its idioms.
+- **The crate builds on Windows, Linux and Android.** The Win32 code is `platform/windows/` and is compiled only on Windows; on a
+  Linux sandbox `cargo test -p inkpdf --lib` and `cargo clippy -p inkpdf --all-targets -- -D warnings` run the whole test suite, and
+  Windows and Android can be cross-checked from there (`--target x86_64-pc-windows-msvc`, and `cargo clippy -p inkpdf-android --target
+  aarch64-linux-android`). The arbiter is the **GitHub Actions** workflow `.github/workflows/ci.yml`: `check` on `windows-latest`
+  (`cargo fmt --all -- --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`, a release build), then `linux` (with a
+  real-window smoke test on a virtual display), `android` (and an emulator run) and the portable builds.
+- Therefore: work on a branch, keep each change small, run `cargo fmt` locally if the toolchain is there, push the branch, open a pull
+  request (CI runs on pull requests), read the result (`gh run view --log-failed`) and fix until green. Do not guess at a compile; read
+  the neighbouring code and copy its idioms. Read `docs/PORTING.md` before touching `platform/` or anything per-OS.
 - **Things only the owner can do** (a real Windows desktop): the real-input checks `tools/e2e/*.ps1` (they take over the
   mouse and keyboard), the soak, the latency and CPU measurements, building the installer, TikZ icon compilation (MiKTeX).
   When a task needs them, say so in the pull request and list exactly what to run (section 7).
@@ -61,13 +63,13 @@ Layers, lowest first (full table with every module in `apps/inkpdf/ARCHITECTURE.
 
 | Layer | Modules (today) |
 |---|---|
-| base | `plane`, `motion`, `scene`, `clock`, `geometry`, `colour`, `coords`, `view`, `text`, `smooth`, `clipboard` |
-| model | `figure`, `ink`, `laser`, `links`, `outline`, `pages` |
-| domain | `tool`, `input`, `requests`, `workspace`, `selection`, `settings` |
+| base | `plane`, `motion`, `scene`, `clock`, `geometry`, `colour`, `coords`, `view`, `text` (`font`, `layout`, `raster`), `smooth`, `clipboard` |
+| model | `figure`, `ink`, `laser`, `links`, `outline`, `pages`, `page_table` |
+| domain | `tool`, `browse`, `input`, `requests`, `workspace`, `selection`, `settings`, `store` |
 | ui | `toolbar` (layout, hit-testing, drawing as plain data; `toolbar/overview/*`) |
 | tools | `tools` (what a press on the page does, one file per tool) |
 | session | `editor` (routes input, owns the chrome, the history and every animation: `editor/motions.rs`) |
-| adapter | `app`, `gpu`, `win_pointer`, `native`, `posture`, `doc`, `ink_io`, `tiles`, `thumbnail` |
+| adapter | `app`, `gpu`, `platform` (`windows/`, `linux`, `android/`), `doc`, `path_store`, `pdf_read`, `ink_io`, `tiles`, `thumbnail` |
 
 The workspace has two crates: `apps/inkpdf` (the app) and `apps/inkpdf-thumb` (an Explorer thumbnail COM DLL; it contains
 no PDF code and is not affected by anything below).
@@ -212,7 +214,7 @@ outside `pdf/` finds only `#[cfg(test)]` code, the new test fails if you add a s
 
 **F2. `--dump-layout` for the real-input scripts.**
 *Goal:* the PowerShell scripts in `tools/e2e/` stop hard-coding fractions of a maximised 4K window.
-*Work:* add a `--dump-layout` option in `app` option parsing (see the existing `--stats`, `--exit-after` handling in `main.rs` /
+*Work:* add a `--dump-layout` option in `app` option parsing (see the existing `--stats`, `--exit-after` handling in `lib.rs` /
 `app/`) that, once the window exists, prints one JSON object to stdout and exits: window client size, dpr, and the rectangle of
 every toolbar button, context-bar button, the overview's header controls, grid cells for N pages and the bar actions
 (the layouts already exist as pure functions: `Toolbar::layout`, `ContextBar::below`, `OverviewLayout::new`). Teach

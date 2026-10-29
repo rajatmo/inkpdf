@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **InkPDF runs on Linux and on Android**, beside Windows, from the same code. Every operating system gets its own small pen reader behind
+  one `Platform` object (Windows: pointer messages with their history; Android: the activity's `MotionEvent`s, so stylus, finger, eraser,
+  buttons and hover are told apart; Linux: winit's basic input for now), and everything above it is shared. Windows behaves as before.
+  Packaging: a Linux portable tarball (`tools/linux/build-portable.sh`), an Android APK (`tools/android`), and CI jobs that build both
+  and the Windows portable. Android is a test build: no file picker or clipboard yet.
+- The Android reader lets go of touches the system cancels (a screen cancels its touches when the pen comes near; they used to stay
+  down, so the next one-finger pan zoomed), and tells a pen and a finger with the same pointer number apart.
+- The README is for users first (where it runs, how to get it, how to use it), with the developer notes after.
 - On Android the stylus's first button (the S Pen's one button) erases, as in Samsung Notes; a second button is the barrel button (lasso), and a
   real eraser end erases as before. Windows and Linux are unchanged: the eraser end erases and the barrel button lassos.
 - `--record FILE` saves the input the program was given (pen, touch, mouse, keys) as text, and `--replay FILE` plays it back at its

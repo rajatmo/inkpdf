@@ -10,7 +10,7 @@ Linux and Android live on `main` beside Windows (merged 2026-10-29). Written 202
  ┌──────┴────────────────────────────────────────────┐
  │ platform/windows   WM_POINTER + history   (done)  │   one PointerSource per OS,
  │ platform/linux     winit basic input     (L2: Wayland tablet-v2, X11 XI2)
- │ platform/android   winit basic input     (A2: MotionEvent + history)
+ │ platform/android   MotionEvent + history (done)   │   behind one Platform object
  └──────┬────────────────────────────────────────────┘
         │  PointerEvent { device, phase, samples[], pen buttons }   ← same type on every OS
    input → editor → tools → ink → scene → gpu (wgpu: DX12 | Vulkan)
@@ -20,39 +20,44 @@ Linux and Android live on `main` beside Windows (merged 2026-10-29). Written 202
 
 | | Windows | Linux (X11, Wayland) | Android |
 |---|---|---|---|
-| Builds | yes (checked by cross-compiling from Linux, clippy `-D warnings`, tests build) | **yes** | type-checks (`aarch64-linux-android`) |
-| 612 unit/editor/storm tests | CI (as before) | **pass** | not run |
-| Window + GPU + render | as before | **runs** (X11 on Xvfb, Wayland on headless Weston, software Vulkan) | no packaging yet |
-| Mouse draws, Ctrl+S saves an Ink annotation | as before | **yes** (`tools/e2e/linux-smoke.sh`) | no |
-| Pen pressure / eraser / barrel / history | yes | **not yet** (L2) | not yet (A2) |
+| Builds | yes | yes | yes (arm64 APK, `tools/android`) |
+| 717 unit/editor/storm tests | CI and by hand | pass | the pure parts (the decoder) run on every OS |
+| Window + GPU + render | yes (DX12) | runs (X11 on Xvfb, Wayland on headless Weston, software Vulkan) | runs on a Samsung tablet (S Pen), Vulkan |
+| Pen pressure / eraser / barrel / hover / history | yes | **not yet** (L2): basic mouse and touch | yes (the S Pen's one button erases) |
+| Touch: pan, pinch, taps on the buttons | yes | basic | yes |
+| Palm rejection | touch is off while the pen is near | same rule (with basic input there is no hover) | yes |
 | Clipboard for text boxes | yes | in-memory only (L3) | in-memory only (A4) |
-| Save As | in-app card, opens on Documents | in-app card, opens on Documents (XDG) | in-app card, opens on shared Documents; needs the SAF for real saving (A4) |
+| Save As | in-app card, opens on Documents | in-app card, opens on Documents (XDG) | in-app card, in the app's own folder; needs the SAF for other files (A4) |
 | Error box | yes | terminal | terminal |
+| Portable package | zip (`build-portable.ps1`, CI) | tarball (`tools/linux/build-portable.sh`, CI) | APK (CI artifact) |
 
-Not verified by me, because the container has no pen, no touch screen and no Windows: any real pen input, and the
-Windows tests *running* (they only build here). CI on `windows-latest` is still the arbiter for Windows.
+What has been tried by hand: Windows (pen, touch and the portable build), Linux on WSL, and Android on an S Pen tablet. What has not:
+Linux with a real pen (there is no reader for it yet), an Android phone, Android with a mouse or a keyboard dock, and any
+measurement of latency on Linux or Android (do not claim numbers without `--stats` on hardware).
 
 The picture of all this, generated from the code: `docs/deps/platform.svg` (routing per OS) and `docs/deps/skeleton.svg`
 (the module graph); regenerate with `python3 tools/deps/graph.py`.
 
-## What changed (and what did not)
+## How it is built
 
-* `win_pointer`, `native`, `posture` moved, unchanged apart from paths, to `platform/windows/` (git sees renames).
-* `platform/mod.rs` is the only surface the shell uses: `PointerSource` (`pump` / `pending` / `drain` /
-  `take_posture_change` / `uninstall`), `install_pointer`, `save_file_dialog`, `error_box`, `open_url`,
-  `motion_prefs`, `detect_mode`, `SystemClipboard`, `report_fatal`, `attach_parent_console`.
-* `app` holds `Option<Box<dyn PointerSource>>` instead of a bool plus free functions. `None` is the old fallback
-  (winit mouse/touch), which is what Linux and Android use today.
-* Per-OS differences found elsewhere, now `cfg`-split: `clock.rs` (QPC on Windows, `Instant` elsewhere), `text.rs`
-  (font lookup: Windows fonts folder / Linux and Android font folders, Liberation Sans is Arial-metric),
-  `gpu/device.rs` (DX12 / Vulkan), `settings.rs` (`%APPDATA%` / `$XDG_CONFIG_HOME`), `doc.rs` (a read-only file is
-  refused on Linux too, and a saved file keeps its permissions), `inkpdf-bot` (Windows-only driver, gated).
-* Cargo: winit gets X11 + Wayland features on Linux and NativeActivity on Android; the `rfd` dependency is gone (Save As is the app's own card).
-  Windows dependency features are exactly as before.
-* Layering test: `platform` replaces `win_pointer`/`native`/`posture` in `LAYERS`; the session still may not name it.
+* `platform/mod.rs` is the only surface the shell uses: the `Platform` trait (folders, `file_store`, font, motion and posture, URL,
+  error box, text input, clipboard, `install_pointer`) built once by `platform::native()`, and `PointerSource` (`pump` / `pending` /
+  `drain_into` / `take_posture_change` / `uninstall`; `pump_early`, `drain_other_into` and `late_touch` for a source that shares the OS's
+  input queue with the toolkit, which Android's does). `Option<Box<dyn PointerSource>>` in the shell: `None` is the fallback to winit's
+  mouse and touch, which Linux uses today. The window crosses as a `raw-window-handle` and a `Waker`.
+* The pen path is unchanged in order (wait for the display, `pump`, `drain_into`, draw), and no thread, channel or lock sits between a
+  source and the editor.
+* Per-OS differences live in `platform/`, not scattered as `cfg`: the clock is `Instant` (Windows converts its counter stamps in
+  `platform/windows/counter.rs`), the font is Arial from Windows or the built-in Liberation Sans, settings go to `Platform::config_dir`,
+  files go through a `FileStore`. What is left as `cfg` in the program: the GPU backend choice (`gpu/device.rs`: DX12 on Windows, Vulkan
+  elsewhere) and the read-only check in `path_store.rs`. A test forbids files, the environment, OS `cfg`, PDF, `wgpu` and `winit` below the
+  adapters.
+* Cargo: winit gets X11 + Wayland features on Linux and NativeActivity on Android. The program is the library `apps/inkpdf/src/lib.rs`
+  (`main.rs` only calls `inkpdf::run()`), and `apps/inkpdf-android` is the `cdylib` the APK holds.
+* `--record FILE` / `--replay FILE` copy and replay the input stream, so a problem on one device can be played on another.
 
-**Windows behaviour is unchanged by construction** (same code, same call order, `cfg(windows)` paths identical).
-Check it yourself on return: `cargo test`, `tools/e2e/run.ps1`, `tools/e2e/latency.ps1` (p50 ≈ 2.6 ms, p95 ≈ 4.3 ms).
+**Windows behaviour is unchanged by design** (the same Win32 calls in the same order), and it was checked by hand on a real machine
+after the port: `cargo test`, `tools/e2e/run.ps1`, `tools/e2e/latency.ps1` are still the way to check it (p50 about 2.6 ms, p95 about 4.3 ms).
 
 ## Latency: why the pointer source is separate
 
@@ -85,7 +90,7 @@ Android has had `MotionEvent` historical samples and `TOOL_TYPE_STYLUS` for a lo
 
 ## Next steps (each is one session; do in order)
 
-**L1. Done:** build, run and test on Linux; smoke test and CI jobs.
+**L1. Done:** build, run and test on Linux; smoke test, portable tarball and CI jobs.
 
 **L2. Linux pen (the main task).** `platform/linux/tablet.rs`, a `PointerSource` over `zwp_tablet_manager_v2`.
 * Share winit's Wayland connection (`wayland-backend` `from_foreign_display` with the display pointer from
@@ -104,21 +109,23 @@ Android has had `MotionEvent` historical samples and `TOOL_TYPE_STYLUS` for a lo
 `arboard`), an in-app error card (like Save As), animations setting (`gsettings`/portal), packaging (AppImage or
 Flatpak; a `.desktop` file and icon), HiDPI check, the real `latency.sh` equivalent.
 
-**A1. Android build. Done (first cut).** The program is now the library `apps/inkpdf/src/lib.rs` (`main.rs` only calls `inkpdf::run()`;
-unit tests are `cargo test -p inkpdf --lib`). `apps/inkpdf-android` is the `cdylib` the APK holds (`android_main`, stderr forwarded to
-logcat as tag `inkpdf`). The GPU surface is paused on `Suspended` and remade on `Resumed`. `tools/android/build-apk.sh` builds and
-signs an arm64 APK (NativeActivity, no Java); CI builds it as an artifact. **Not run on a device by the author**: expect first-run
-problems and read `adb logcat -s inkpdf`. Known gaps: pen pressure/eraser/barrel (A2), system bars and cutouts (A3), files from other apps
-and the clipboard (A4); saving goes to the app's own `Documents` folder (`Android/data/app.inkpdf.test/files/Documents`).
+**A1. Android build. Done.** The program is the library `apps/inkpdf/src/lib.rs`; `apps/inkpdf-android` is the `cdylib` the APK holds
+(`android_main`, stderr forwarded to logcat as tag `inkpdf`). The GPU surface is paused on `Suspended` and remade on `Resumed`.
+`tools/android/build-apk.sh` builds and signs an arm64 APK (NativeActivity, no Java); CI builds it as an artifact and runs it on an emulator.
+Saving goes to the app's own `Documents` folder (`Android/data/app.inkpdf.test/files/Documents`).
 
-**A2. Android stylus. Done (first cut, untested on a device).** `platform/android/reader.rs` reads the activity's input queue *before* winit
-does (at winit's `new_events`, and again after the display wait), because winit turns every `MotionEvent` into a plain touch (no tool type,
-no stylus buttons, no hover, no history). What it takes goes through `platform::motion_event::Decoder`, which is tested on every platform: stylus =
-pen with pressure and the points between events (`samples[]`), eraser end = eraser, stylus button = barrel, hover and leave, finger = touch
-with its contact size, palm = rejected, mouse = the mouse; keys (Back = Escape, the soft keyboard's characters, Ctrl shortcuts). A few events
-arrive in the moment between the two reads and winit reports them as touch: `late_touch` makes them the pointer they already were.
-Still to evaluate on a device: unbuffered input dispatch, `Choreographer`-aligned frames (Swappy), Vulkan `FIFO` vs `MAILBOX`, front-buffer
-rendering. Do not claim numbers without `--stats` on hardware.
+**A2. Android stylus. Done, tried on an S Pen tablet.** `platform/android/reader.rs` reads the activity's input queue *before* winit does
+(at winit's `new_events`, and again after the display wait), because winit turns every `MotionEvent` into a plain touch. What it takes goes
+through `platform::motion_event::Decoder`, which is tested on every platform: stylus = pen with pressure and the points between events
+(`samples[]`), eraser end or the stylus's first button = eraser (an S Pen has one button), second button = barrel, hover and leave, finger =
+touch with its contact size, palm = rejected, mouse = the mouse; keys (Back = Escape, the soft keyboard's characters, Ctrl shortcuts). A few
+events arrive in the moment between the two reads and winit reports them as touch: `late_touch` makes them the pointer they already were.
+What the device taught: a screen *cancels* its touches when the pen comes near, so a cancel carries the pointer's last place (or whoever is
+told of it cannot let it go, and the next one-finger pan becomes a pinch with the leftover finger); a pen digitiser and a touch screen both
+number their pointers from 0, so a pointer is told by its device *and* its id; a pen whose screen does not report hover must not be called
+"in range" after a lift, or touch stays off. A randomized test (`no_finger_is_left_behind_...`) drives such orders through the decoder into
+the editor. Still to evaluate on a device: unbuffered input dispatch, `Choreographer`-aligned frames (Swappy), Vulkan `FIFO` vs `MAILBOX`,
+front-buffer rendering.
 
 **A3. Android UI fit.** Touch targets (the toolbar is sized for a mouse and a pen), system bars and cutouts, the
 soft keyboard for the text tool (`Ime` events), default `Mode::Tablet` (already set).
@@ -132,7 +139,8 @@ open and save, not just a path), clipboard, `ACTION_VIEW` for links. Needs JNI (
 sudo apt install mesa-vulkan-drivers libxkbcommon-x11-0 fonts-liberation   # plus a real GPU driver on a real machine
 cargo run -p inkpdf --bin inkpdf -- some.pdf --mode desktop
 WINIT_UNIX_BACKEND=wayland cargo run -p inkpdf --bin inkpdf     # or =x11
-tools/e2e/linux-smoke.sh                                                      # needs xvfb, xdotool
+tools/e2e/linux-smoke.sh                                                      # needs xvfb, xdotool (also records and replays a session)
+tools/linux/build-portable.sh                                                 # InkPDF-Portable-<version>-linux-x86_64.tar.gz
 cargo check -p inkpdf-android --target aarch64-linux-android                  # rustup target add aarch64-linux-android first
 ```
 

@@ -16,7 +16,8 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
-target="${CARGO_TARGET_DIR:-$here/../../../inkpdf-build}"
+target_dir="$(cargo metadata --format-version 1 --no-deps --manifest-path "$here/../../Cargo.toml" | python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')"
+target="$target_dir"
 app="${1:-$target/debug/inkpdf}"
 gen="${2:-$target/debug/inkpdf-gen}"
 work="$(mktemp -d)"

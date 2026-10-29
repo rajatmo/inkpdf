@@ -42,7 +42,9 @@ for abi in $abis; do
     export "CC_$var=$llvm/${target}${api}-clang" "CXX_$var=$llvm/${target}${api}-clang++" "AR_$var=$llvm/llvm-ar"
     export "CARGO_TARGET_${up}_LINKER=$llvm/${target}${api}-clang"
     cargo build "${flags[@]}" -p inkpdf-android --target "$target" --manifest-path "$root/Cargo.toml"
-    so="${CARGO_TARGET_DIR:-$root/target}/$target/$profile/libinkpdf_android.so"
+    # (Where cargo put it: `.cargo/config.toml` builds beside the repository unless CARGO_TARGET_DIR says otherwise.)
+    target_dir="$(cargo metadata --format-version 1 --no-deps --manifest-path "$root/Cargo.toml" | python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')"
+    so="$target_dir/$target/$profile/libinkpdf_android.so"
     [ -f "$so" ] || { echo "no $so"; exit 1; }
     mkdir -p "$work/lib/$abi"
     cp "$so" "$work/lib/$abi/"

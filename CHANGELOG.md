@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Inside: the PDF engine sits behind one seam (`pdf::PdfBackend`), so the program speaks its own types and only `pdf/pdfcraft.rs` names pdfcraft
+  (a test says so); the editor takes its motion preference explicitly (no more `cfg!(test)` in the program).
 - **InkPDF runs on Linux and on Android**, beside Windows, from the same code. Every operating system gets its own small pen reader behind
   one `Platform` object (Windows: pointer messages with their history; Android: the activity's `MotionEvent`s, so stylus, finger, eraser,
   buttons and hover are told apart; Linux: winit's basic input for now), and everything above it is shared. Windows behaves as before.

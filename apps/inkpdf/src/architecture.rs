@@ -147,7 +147,7 @@ enum Layer {
 }
 
 /// Every top-level module of the program, and its layer. A new module is placed here or the test fails.
-const LAYERS: [(&str, Layer); 38] = [
+const LAYERS: [(&str, Layer); 40] = [
     ("plane", Layer::Base),
     ("motion", Layer::Base),
     ("scene", Layer::Base),
@@ -166,6 +166,7 @@ const LAYERS: [(&str, Layer); 38] = [
     ("outline", Layer::Model),
     ("pages", Layer::Model),
     ("page_table", Layer::Model),
+    ("pagetext", Layer::Model),
     ("tool", Layer::Domain),
     ("browse", Layer::Domain),
     ("input", Layer::Domain),
@@ -182,6 +183,7 @@ const LAYERS: [(&str, Layer); 38] = [
     ("platform", Layer::Adapter),
     ("doc", Layer::Adapter),
     ("path_store", Layer::Adapter),
+    ("pdf", Layer::Adapter),
     ("pdf_read", Layer::Adapter),
     ("ink_io", Layer::Adapter),
     ("tiles", Layer::Adapter),
@@ -379,6 +381,27 @@ fn nothing_below_the_adapters_touches_the_disk_the_environment_or_an_operating_s
         })
         .collect();
     assert_free_of(&inner.iter().map(String::as_str).collect::<Vec<_>>(), &forbidden);
+}
+
+#[test]
+fn only_the_pdf_module_names_the_pdf_engine() {
+    // The engine (pdfcraft, and the `hayro` crates under it) sits behind `pdf::PdfBackend`: every other module speaks the program's own
+    // types, so a new version of the engine, or another engine, is one module's business. (Tests may look inside: they are not scanned.)
+    let paths: Vec<String> = LAYERS
+        .iter()
+        .filter(|(module, _)| *module != "pdf")
+        .flat_map(|(module, _)| {
+            let mut paths = Vec::new();
+            if src().join(format!("{module}.rs")).exists() {
+                paths.push(format!("{module}.rs"));
+            }
+            if src().join(module).is_dir() && !sources(&src().join(module)).is_empty() {
+                paths.push((*module).to_string());
+            }
+            paths
+        })
+        .collect();
+    assert_free_of(&paths.iter().map(String::as_str).collect::<Vec<_>>(), &["pdfcraft_", "hayro"]);
 }
 
 #[test]

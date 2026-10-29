@@ -196,13 +196,13 @@ impl State {
         let started = Instant::now();
         let budget = if self.ed.pending_sample_ms.is_some() { UPLOAD_BUDGET_PEN_DOWN } else { UPLOAD_BUDGET };
         while let Some(page) = doc.try_recv() {
-            let key = Key::from_tag(page.request.tag);
+            let key = Key::from_tag(page.tag);
             match &page.error {
                 Some(e) => {
                     eprintln!("render failed for {key:?}: {e}");
                     self.session.failed.insert(key);
                 }
-                None => self.gpu.upload(key, page.width, page.height, page.rgba.as_ref(), self.timing.frame),
+                None => self.gpu.upload(key, page.width, page.height, page.rgba.as_slice(), self.timing.frame),
             }
             if started.elapsed() > budget {
                 break;

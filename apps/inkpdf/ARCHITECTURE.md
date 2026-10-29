@@ -53,12 +53,12 @@ ones below; no two modules may reach each other, directly or through others.
 
 | Layer | Modules |
 |---|---|
-| adapter | `app`, `gpu`, `platform`, `doc`, `path_store`, `pdf_read`, `ink_io`, `tiles`, `thumbnail` |
+| adapter | `app`, `gpu`, `platform`, `pdf`, `doc`, `path_store`, `pdf_read`, `ink_io`, `tiles`, `thumbnail` |
 | session | `editor` |
 | tools | `tools` |
 | ui | `toolbar` |
 | domain | `tool`, `browse`, `input`, `requests`, `workspace`, `selection`, `settings`, `store` |
-| model | `figure`, `ink`, `laser`, `links`, `outline`, `pages`, `page_table` |
+| model | `figure`, `ink`, `laser`, `links`, `outline`, `pages`, `page_table`, `pagetext` |
 | base | `plane`, `motion`, `scene`, `clock`, `geometry`, `colour`, `coords`, `view`, `text`, `smooth`, `clipboard` |
 
 * `plane` holds the point type `P` and the plane arithmetic (distances, polygon tests, simplify, thin, `clamp_into`)
@@ -140,8 +140,15 @@ clock's source) is handed to them.
 * `doc.rs` is the renderer's pool and the saved bytes; it reads and writes only through a `FileStore`. The pure bookkeeping of the pages
   (their size and geometry, which page of the renderer's file draws each, copies, and the deleted pages kept for undo) is `page_table.rs`
   (model), tested with no PDF.
-* `pdf_read.rs` (adapter) reads a file's links, outline and page geometry for the model, which (`links.rs`, `outline.rs`) keeps them
-  and carries them through edits. `ink_io.rs` reads and writes the ink.
+* `pdf/` (adapter) is **the one seam to the PDF engine**: `PdfBackend` (inspect, blank, open, a render pool, one render now, page text,
+  dates) and `PdfDocument` (an open file: links, outline, annotations, add and delete annotations, organize pages, save whole or as an
+  update). Its types are the program's own (`RenderRequest`, `Rendered`, `RawLink`, `Annotation`, `NewAnnotation`); the only
+  implementation is `pdf/pdfcraft.rs`, and `architecture.rs` fails if any other module names `pdfcraft_*` or `hayro`. `pagetext.rs` (model)
+  is the trait for one page's text (`PageTextView`) that the text tools will use; the pdfcraft side implements it. `pdf::native()` is the
+  backend the program was built with.
+* `pdf_read.rs` (adapter) places what the engine hands over on the layout (links in document space, an outline with tidy titles) for the
+  model, which (`links.rs`, `outline.rs`) keeps it and carries it through edits. `ink_io.rs` is the policy for ink: which annotations are
+  ours (`inkpdf-` names), how strokes and shapes are written, in terms of `PdfDocument`.
 
 ### The shell (`src/app/`)
 

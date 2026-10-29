@@ -1,6 +1,6 @@
 digraph G {
 rankdir=BT; newrank=true; compound=true; splines=true; nodesep=0.35; ranksep=0.9; pad=0.4;
-label=<<b>InkPDF essential skeleton (transitive reduction: 62 of 133 edges)</b>>; labelloc=t; fontsize=22; fontname="Helvetica";
+label=<<b>InkPDF essential skeleton (transitive reduction: 66 of 139 edges)</b>>; labelloc=t; fontsize=22; fontname="Helvetica";
 node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=13, margin="0.14,0.07", color="#888888"];
 edge [arrowsize=0.6];
 subgraph cluster_Base { label="base — plain data and arithmetic"; labeljust=l; fontname="Helvetica"; fontsize=14; style="rounded,filled"; fillcolor="#e8f1fb55"; color="#4a7fb5";
@@ -24,6 +24,7 @@ subgraph cluster_Model { label="model — what a drawing is made of"; labeljust=
   "outline" [fillcolor="white"];
   "page_table" [fillcolor="white"];
   "pages" [fillcolor="white"];
+  "pagetext" [fillcolor="white"];
 }
 subgraph cluster_Domain { label="domain — what devices and tools mean"; labeljust=l; fontname="Helvetica"; fontsize=14; style="rounded,filled"; fillcolor="#fdf3d655"; color="#b8860b";
   "browse" [fillcolor="white"];
@@ -50,6 +51,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
   "gpu" [fillcolor="white"];
   "ink_io" [fillcolor="white"];
   "path_store" [fillcolor="white"];
+  "pdf" [fillcolor="white"];
   "pdf_read" [fillcolor="white"];
   "platform" [fillcolor="white" penwidth=2.5 color="#c0392b" fontcolor="#c0392b"];
   "thumbnail" [fillcolor="white"];
@@ -84,9 +86,11 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "page_table" -> "pages" [color="#3a8f5c99", penwidth=1.60, tooltip="1 uses"];
 "pages" -> "view" [color="#3a8f5c99", penwidth=1.60, tooltip="1 uses"];
 "path_store" -> "store" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
-"pdf_read" -> "coords" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
-"pdf_read" -> "links" [color="#55555599", penwidth=1.60, tooltip="2 uses"];
+"pdf" -> "coords" [color="#55555599", penwidth=1.60, tooltip="2 uses"];
+"pdf" -> "pagetext" [color="#55555599", penwidth=1.60, tooltip="2 uses"];
+"pdf_read" -> "links" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "pdf_read" -> "outline" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
+"pdf_read" -> "pdf" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "platform" -> "clipboard" [color="#55555599", penwidth=1.60, tooltip="3 uses"];
 "platform" -> "clock" [color="#55555599", penwidth=1.60, tooltip="3 uses"];
 "platform" -> "input" [color="#55555599", penwidth=1.60, tooltip="13 uses"];
@@ -101,6 +105,8 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "smooth" -> "plane" [color="#4a7fb599", penwidth=1.60, tooltip="1 uses"];
 "store" -> "browse" [color="#b8860b99", penwidth=1.60, tooltip="1 uses"];
 "text" -> "plane" [color="#4a7fb599", penwidth=1.60, tooltip="3 uses"];
+"thumbnail" -> "pdf" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
+"tiles" -> "pdf" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "tiles" -> "view" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "tool" -> "ink" [color="#b8860b99", penwidth=1.60, tooltip="1 uses"];
 "toolbar" -> "colour" [color="#a14a9699", penwidth=1.60, tooltip="1 uses"];

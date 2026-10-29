@@ -9,7 +9,7 @@
 use std::io::{Read, Write};
 use std::sync::Arc;
 
-use pdfcraft_render::{PageRenderer, RenderConfig, RenderRequest, inspect};
+use crate::pdf::{self, RenderRequest};
 
 /// Files larger than this are not read for a thumbnail: the shell asks for many at once.
 pub const MAX_PDF_BYTES: usize = 256 << 20;
@@ -53,17 +53,16 @@ pub fn first_page(pdf: Vec<u8>, longest: u32) -> Option<Thumbnail> {
     }
     let bytes = Arc::new(pdf);
     let longest = longest.clamp(MIN_SIDE, MAX_SIDE);
-    let info = inspect(bytes.clone(), None).ok()?;
-    let page = info.pages.first()?;
+    let pages = pdf::native().inspect(&bytes).ok()?;
+    let page = pages.first()?;
     let side = page.width.max(page.height);
     if !side.is_finite() || side <= 0.0 {
         return None;
     }
     let scale = (longest as f32 / side).clamp(0.005, 4.0);
-    let mut renderer = PageRenderer::new(bytes, RenderConfig::default());
-    let page = renderer.render(RenderRequest { page: 0, scale, ..RenderRequest::default() });
+    let page = pdf::native().render_now(bytes, &RenderRequest { page: 0, scale, ..RenderRequest::default() });
     let (width, height) = (page.width, page.height);
-    let rgba: &[u8] = page.rgba.as_ref();
+    let rgba: &[u8] = page.rgba.as_slice();
     if page.error.is_some() || width == 0 || height == 0 || rgba.len() != width as usize * height as usize * 4 {
         return None;
     }

@@ -12,16 +12,12 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use pdfcraft_annot::appearance::parse_da;
-use pdfcraft_annot::{Meta, NewAnnotation, Shape, Style as AnnotStyle, add_annotation, delete_annotation, page_refs};
-use pdfcraft_cos::{Dict, Document, Object, SaveOptions, pdf_date, write_full, write_incremental};
-use pdfcraft_organize::{OrganizeError, delete_pages, duplicate_pages, insert_blank_page, move_pages, page_count};
-
 use crate::coords::PageGeom;
 use crate::figure::Figure;
 use crate::ink::{InkStore, P, PageStroke, Style, TextBlock};
 use crate::links::Link;
 use crate::outline::OutlineItem;
+use crate::pdf::{self, AnnotKind, NewAnnotation, NewShape, OrganizeError, PdfDocument};
 use crate::view::Layout;
 
 /// What marks an annotation as ours.
@@ -62,97 +58,51 @@ struct FoundText {
     rect: [f32; 4],
 }
 
-fn numbers(doc: &Document, dict: &Dict, key: &[u8]) -> Vec<f64> {
-    dict.get(key)
-        .map(|o| doc.resolve(o))
-        .and_then(|o| o.as_array().map(|a| a.iter().map(|x| doc.resolve(x).as_f64().unwrap_or(0.0)).collect()))
-        .unwrap_or_default()
-}
-
-fn is_ours(doc: &Document, dict: &Dict) -> bool {
-    if !matches!(dict.name(b"Subtype"), Some(b"Ink" | b"FreeText")) {
-        return false;
-    }
-    let Some(nm) = dict.get(b"NM").map(|o| doc.resolve(o)) else { return false };
-    matches!(&*nm, Object::String(s) if s.to_text().starts_with(NAME_PREFIX))
-}
-
-/// A text annotation of ours (the text and colour of a text box), or `None` if it has no text.
-fn found_text(doc: &Document, d: &Dict, page: usize, index: usize) -> Option<Found> {
-    let contents = d.get(b"Contents").map(|o| doc.resolve(o))?;
-    let Object::String(s) = &*contents else { return None };
-    let text = crate::text::clean(&s.to_text());
-    let rect = numbers(doc, d, b"Rect");
-    if text.is_empty() || rect.len() != 4 {
-        return None;
-    }
-    let (colour, size) = parse_da(d);
+/// Our annotations in the document, with their positions in each page's `/Annots`: the ones with a name that starts with ours.
+fn find_ours(doc: &dyn PdfDocument) -> Vec<Found> {
     let byte = |v: f64| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-    let alpha = d.get(b"CA").map(|o| doc.resolve(o)).and_then(|o| o.as_f64()).unwrap_or(1.0);
-    let style = Style { rgba: [byte(colour[0]), byte(colour[1]), byte(colour[2]), byte(alpha)], width: 0.0 };
-    let r = [rect[0].min(rect[2]) as f32, rect[1].min(rect[3]) as f32, rect[0].max(rect[2]) as f32, rect[1].max(rect[3]) as f32];
-    let size = (size as f32).clamp(1.0, 400.0);
-    Some(Found { page, index, style, strokes: Vec::new(), figure: None, text: Some(FoundText { text, size, rect: r }) })
-}
-
-/// Our annotations in the document, with their positions in each page's `/Annots`.
-fn find_ours(doc: &Document) -> Vec<Found> {
-    let mut out = Vec::new();
-    let Ok(pages) = page_refs(doc) else { return out };
-    for (page, page_ref) in pages.iter().enumerate() {
-        let page_obj = doc.get(*page_ref);
-        let Some(page_dict) = page_obj.as_dict() else { continue };
-        let Some(annots) = page_dict.get(b"Annots").map(|a| doc.resolve(a)) else { continue };
-        let Some(list) = annots.as_array() else { continue };
-        for (index, entry) in list.iter().enumerate() {
-            let obj = doc.resolve(entry);
-            let Some(d) = obj.as_dict() else { continue };
-            if !is_ours(doc, d) {
-                continue;
-            }
-            if d.name(b"Subtype") == Some(b"FreeText") {
-                if let Some(found) = found_text(doc, d, page, index) {
-                    out.push(found);
+    doc.annotations()
+        .into_iter()
+        .filter(|a| a.name.starts_with(NAME_PREFIX))
+        .filter_map(|a| {
+            let rgba = [byte(a.colour[0]), byte(a.colour[1]), byte(a.colour[2]), byte(a.opacity)];
+            match a.kind {
+                AnnotKind::Text => {
+                    let text = crate::text::clean(&a.text);
+                    if text.is_empty() {
+                        return None;
+                    }
+                    let r = a.rect;
+                    let rect = [r[0].min(r[2]) as f32, r[1].min(r[3]) as f32, r[0].max(r[2]) as f32, r[1].max(r[3]) as f32];
+                    let size = (a.font_size as f32).clamp(1.0, 400.0);
+                    Some(Found {
+                        page: a.page,
+                        index: a.index,
+                        style: Style { rgba, width: 0.0 },
+                        strokes: Vec::new(),
+                        figure: None,
+                        text: Some(FoundText { text, size, rect }),
+                    })
                 }
-                continue;
+                AnnotKind::Ink => Some(Found {
+                    page: a.page,
+                    index: a.index,
+                    style: Style { rgba, width: a.width as f32 },
+                    strokes: a.strokes,
+                    figure: a.name.split_once(FIGURE_MARK).map(|(_, f)| f.to_string()),
+                    text: None,
+                }),
             }
-            let ink_list = d.get(b"InkList").map(|o| doc.resolve(o));
-            let strokes: Vec<Vec<[f32; 2]>> = ink_list
-                .as_ref()
-                .and_then(|l| l.as_array())
-                .map(|rows| {
-                    rows.iter()
-                        .filter_map(|row| {
-                            let row = doc.resolve(row);
-                            let nums: Vec<f64> = row.as_array()?.iter().map(|x| doc.resolve(x).as_f64().unwrap_or(0.0)).collect();
-                            Some(nums.as_chunks::<2>().0.iter().map(|&[x, y]| [x as f32, y as f32]).collect())
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            let c = numbers(doc, d, b"C");
-            let rgb = if c.len() == 3 { [c[0], c[1], c[2]] } else { [0.0; 3] };
-            let alpha = d.get(b"CA").map(|o| doc.resolve(o)).and_then(|o| o.as_f64()).unwrap_or(1.0);
-            let width =
-                d.get(b"BS").map(|b| doc.resolve(b)).and_then(|b| b.as_dict().and_then(|b| b.get(b"W").and_then(Object::as_f64))).unwrap_or(1.0);
-            let byte = |v: f64| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-            let style = Style { rgba: [byte(rgb[0]), byte(rgb[1]), byte(rgb[2]), byte(alpha)], width: width as f32 };
-            let figure = match d.get(b"NM").map(|o| doc.resolve(o)).as_deref() {
-                Some(Object::String(s)) => s.to_text().split_once(FIGURE_MARK).map(|(_, f)| f.to_string()),
-                _ => None,
-            };
-            out.push(Found { page, index, style, strokes, figure, text: None });
-        }
-    }
-    out
+        })
+        .collect()
 }
 
 /// Read the ink this app saved earlier.
 pub fn load(bytes: &Arc<Vec<u8>>, geoms: &[PageGeom], layout: &Layout) -> Result<Loaded, String> {
-    let mut doc = Document::open(bytes.clone()).map_err(|e| e.to_string())?;
-    let links = crate::pdf_read::links(&doc, geoms, layout);
-    let outline = crate::pdf_read::outline(&doc);
-    let found = find_ours(&doc);
+    let mut doc = pdf::native().open(bytes)?;
+    let links = crate::pdf_read::links(&*doc, geoms, layout);
+    let outline = crate::pdf_read::outline(&*doc);
+    let found = find_ours(&*doc);
     if found.is_empty() {
         return Ok(Loaded { strokes: Vec::new(), render_bytes: bytes.clone(), links, outline });
     }
@@ -185,22 +135,22 @@ pub fn load(bytes: &Arc<Vec<u8>>, geoms: &[PageGeom], layout: &Layout) -> Result
     // The page renderer must not also draw them: delete from the highest index down so the
     // earlier ones keep their positions.
     for f in found.iter().rev() {
-        delete_annotation(&mut doc, f.page, f.index).map_err(|e| e.to_string())?;
+        doc.delete_annotation(f.page, f.index)?;
     }
-    let render_bytes = write_full(&doc, &SaveOptions::default()).map_err(|e| e.to_string())?;
+    let render_bytes = doc.save_full()?;
     Ok(Loaded { strokes, render_bytes: Arc::new(render_bytes), links, outline })
 }
 
 /// Put the pages of the file that are left (the deleted ones are out of it by now) in the order the document has them:
 /// `order` is, for each page of the document, the page of the file it was, or `None` if it was added (it is put in
 /// afterwards). The pages that are already in order are not touched.
-fn arrange(doc: &mut Document, doc_of_file: &[Option<usize>], order: &[Option<usize>]) -> Result<(), String> {
+fn arrange(doc: &mut dyn PdfDocument, doc_of_file: &[Option<usize>], order: &[Option<usize>]) -> Result<(), String> {
     let mut present: Vec<usize> = (0..doc_of_file.len()).filter(|&f| doc_of_file[f].is_some()).collect();
     let wanted: Vec<usize> = order.iter().flatten().copied().collect();
     for (at, &file_page) in wanted.iter().enumerate() {
         let Some(now) = present.iter().position(|&f| f == file_page) else { continue };
         if now != at {
-            move_pages(doc, &[now], at).map_err(|e| e.to_string())?;
+            doc.move_pages(&[now], at)?;
             present.remove(now);
             present.insert(at, file_page);
         }
@@ -227,30 +177,30 @@ pub fn save(
     doc_of_file: &[Option<usize>],
     copies: &[(usize, usize)],
 ) -> Result<Vec<u8>, String> {
-    let mut doc = Document::open(base.clone()).map_err(|e| e.to_string())?;
-    let now = pdf_date(unix_now());
+    let mut doc = pdf::native().open(base)?;
+    let now = pdf::native().date(unix_now());
     let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_nanos());
     let mut serial = 0_u32;
 
     // Delete our previous annotations on the changed pages, highest index first, while the pages
     // are still numbered as the file has them (a page deleted needs none: it goes, with them).
-    let mut old = find_ours(&doc);
+    let mut old = find_ours(&*doc);
     old.retain(|f| doc_of_file.get(f.page).copied().flatten().is_some_and(|page| pages.contains(&(page as u32))));
     for f in old.iter().rev() {
-        delete_annotation(&mut doc, f.page, f.index).map_err(|e| e.to_string())?;
+        doc.delete_annotation(f.page, f.index)?;
     }
     // Copies of pages come first, as pages at the end of the file (so that a page that was copied and then deleted still has
     // its copy): ink this app saved on the page they are copies of is not theirs, and goes.
     let originals = doc_of_file.len();
     for &(_, source) in copies {
-        let end = page_count(&doc).map_err(|e| e.to_string())?;
-        duplicate_pages(&mut doc, &[source], Some(end)).map_err(|e| e.to_string())?;
+        let end = doc.page_count()?;
+        doc.duplicate_pages(&[source], Some(end))?;
     }
     if !copies.is_empty() {
-        let mut stale = find_ours(&doc);
+        let mut stale = find_ours(&*doc);
         stale.retain(|f| f.page >= originals);
         for f in stale.iter().rev() {
-            delete_annotation(&mut doc, f.page, f.index).map_err(|e| e.to_string())?;
+            doc.delete_annotation(f.page, f.index)?;
         }
     }
     let mut of_file: Vec<Option<usize>> = doc_of_file.to_vec();
@@ -270,28 +220,28 @@ pub fn save(
         order.iter().enumerate().filter(|(_, from)| from.is_none()).filter_map(|(at, _)| layout.page(at).map(|r| (at, [r.w, r.h]))).collect();
     let mut inserts = &added[..];
     if !deleted.is_empty() {
-        match delete_pages(&mut doc, &deleted) {
+        match doc.delete_pages(&deleted) {
             Ok(()) => {}
             // Every page of the file is going: a file cannot have none, so the first page added goes in first.
             Err(OrganizeError::WouldRemoveAllPages) => {
-                let (&(_, [w, h]), rest) = inserts.split_first().ok_or("the document would have no pages")?;
-                insert_blank_page(&mut doc, deleted.len(), f64::from(w), f64::from(h)).map_err(|e| e.to_string())?;
-                delete_pages(&mut doc, &deleted).map_err(|e| e.to_string())?;
+                let (&(_, size), rest) = inserts.split_first().ok_or("the document would have no pages")?;
+                doc.insert_blank_page(deleted.len(), size)?;
+                doc.delete_pages(&deleted).map_err(|e| e.to_string())?;
                 inserts = rest;
             }
             Err(e) => return Err(e.to_string()),
         }
     }
-    arrange(&mut doc, doc_of_file, &order)?;
-    for &(at, [w, h]) in inserts {
-        insert_blank_page(&mut doc, at, f64::from(w), f64::from(h)).map_err(|e| e.to_string())?;
+    arrange(&mut *doc, doc_of_file, &order)?;
+    for &(at, size) in inserts {
+        doc.insert_blank_page(at, size)?;
     }
 
     for &page in pages {
         let (Some(geom), Some(rect)) = (geoms.get(page as usize), layout.page(page as usize)) else { continue };
         let mut run: Vec<Vec<[f64; 2]>> = Vec::new();
         let mut run_style: Option<Style> = None;
-        let mut flush = |doc: &mut Document,
+        let mut flush = |doc: &mut dyn PdfDocument,
                          run: &mut Vec<Vec<[f64; 2]>>,
                          style: Option<Style>,
                          figure: Option<&str>,
@@ -299,42 +249,39 @@ pub fn save(
          -> Result<(), String> {
             let Some(style) = style else { return Ok(()) };
             // Typed text is a FreeText annotation (so any reader shows it as text); the rest is ink.
-            let (shape, contents, width) = match text {
-                Some((block, rect)) => (Shape::Typewriter { rect, font_size: f64::from(block.size) }, block.text.clone(), 0.0),
+            let (shape, text, width) = match text {
+                Some((block, rect)) => (NewShape::Text { rect, font_size: f64::from(block.size) }, block.text.clone(), 0.0),
                 None if run.is_empty() => return Ok(()),
-                None => (Shape::Ink { strokes: std::mem::take(run) }, String::new(), f64::from(style.width)),
+                None => (NewShape::Ink { strokes: std::mem::take(run) }, String::new(), f64::from(style.width)),
             };
             let c = style.rgba;
+            serial += 1;
+            let tag = figure.map_or_else(String::new, |f| format!("{FIGURE_MARK}{f}"));
             let new = NewAnnotation {
                 page: page as usize,
                 shape,
-                style: AnnotStyle {
-                    color: [f64::from(c[0]) / 255.0, f64::from(c[1]) / 255.0, f64::from(c[2]) / 255.0],
-                    opacity: f64::from(c[3]) / 255.0,
-                    width,
-                    fill: None,
-                },
-                contents,
+                colour: [f64::from(c[0]) / 255.0, f64::from(c[1]) / 255.0, f64::from(c[2]) / 255.0],
+                opacity: f64::from(c[3]) / 255.0,
+                width,
+                text,
                 author: "InkPDF".into(),
+                name: format!("{NAME_PREFIX}{stamp:x}-{serial}{tag}"),
+                date: now.clone(),
             };
-            serial += 1;
-            let tag = figure.map_or_else(String::new, |f| format!("{FIGURE_MARK}{f}"));
-            let meta = Meta { date: Some(now.clone()), id: format!("{NAME_PREFIX}{stamp:x}-{serial}{tag}") };
-            add_annotation(doc, &new, &meta).map_err(|e| e.to_string())?;
-            Ok(())
+            doc.add_annotation(&new)
         };
         for s in store.strokes().iter().filter(|s| s.page == page) {
             if let Some(block) = &s.text {
-                flush(&mut doc, &mut run, run_style, None, None)?;
+                flush(&mut *doc, &mut run, run_style, None, None)?;
                 run_style = None;
                 let corners = s.pts.iter().map(|p| geom.view_to_user([p[0] - rect.x, p[1] - rect.y])).map(|u| [f64::from(u[0]), f64::from(u[1])]);
                 let r =
                     corners.fold([f64::MAX, f64::MAX, f64::MIN, f64::MIN], |r, c| [r[0].min(c[0]), r[1].min(c[1]), r[2].max(c[0]), r[3].max(c[1])]);
-                flush(&mut doc, &mut Vec::new(), Some(s.style), None, Some((block, r)))?;
+                flush(&mut *doc, &mut Vec::new(), Some(s.style), None, Some((block, r)))?;
                 continue;
             }
             if run_style != Some(s.style) || run.len() >= STROKES_PER_ANNOTATION || s.figure.is_some() {
-                flush(&mut doc, &mut run, run_style, None, None)?;
+                flush(&mut *doc, &mut run, run_style, None, None)?;
                 run_style = Some(s.style);
             }
             let mut user: Vec<[f64; 2]> = s
@@ -356,19 +303,18 @@ pub fn save(
                     let u = geom.view_to_user([p[0] - rect.x, p[1] - rect.y]);
                     [u[0], u[1]]
                 });
-                flush(&mut doc, &mut run, run_style, Some(&text), None)?;
+                flush(&mut *doc, &mut run, run_style, Some(&text), None)?;
                 run_style = None;
             }
         }
-        flush(&mut doc, &mut run, run_style, None, None)?;
+        flush(&mut *doc, &mut run, run_style, None, None)?;
     }
-    write_incremental(&doc, &SaveOptions { mod_date: Some(now), ..SaveOptions::default() }).map_err(|e| e.to_string())
+    doc.save_incremental(&now)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
     use crate::testutil::sample_pdf;
 
     fn setup() -> (Arc<Vec<u8>>, Vec<PageGeom>, Layout) {
@@ -430,8 +376,8 @@ mod tests {
     fn same_style_strokes_share_an_annotation_and_a_new_style_starts_another() {
         let (bytes, geoms, layout) = setup();
         let saved = save(&bytes, &store_with(&layout), &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save");
-        let doc = Document::open(Arc::new(saved)).expect("open");
-        let found = find_ours(&doc);
+        let doc = pdf::native().open(&Arc::new(saved)).expect("open");
+        let found = find_ours(&*doc);
         // Two red strokes in one annotation, one blue dot in another.
         assert_eq!(found.len(), 2);
         assert_eq!(found[0].strokes.len(), 2);
@@ -445,8 +391,8 @@ mod tests {
         // Erase everything and save again on top of the first save.
         let empty = InkStore::new();
         let second = save(&first, &empty, &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("second save");
-        let doc = Document::open(Arc::new(second)).expect("open");
-        assert!(find_ours(&doc).is_empty(), "the old annotations were deleted");
+        let doc = pdf::native().open(&Arc::new(second)).expect("open");
+        assert!(find_ours(&*doc).is_empty(), "the old annotations were deleted");
     }
 
     #[test]
@@ -455,11 +401,12 @@ mod tests {
         let saved = Arc::new(save(&bytes, &store_with(&layout), &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save"));
         let loaded = load(&saved, &geoms, &layout).expect("load");
         assert!(!Arc::ptr_eq(&loaded.render_bytes, &saved));
-        let doc = Document::open(loaded.render_bytes.clone()).expect("open the render copy");
-        assert!(find_ours(&doc).is_empty());
+        let doc = pdf::native().open(&loaded.render_bytes.clone()).expect("open the render copy");
+        assert!(find_ours(&*doc).is_empty());
         // And the page still renders.
-        let r = pdfcraft_render::PageRenderer::new(loaded.render_bytes.clone(), pdfcraft_render::RenderConfig::default());
-        assert_eq!(r.page_count(), 1);
+        assert_eq!(doc.page_count(), Ok(1));
+        let page = pdf::native().render_now(loaded.render_bytes.clone(), &pdf::RenderRequest::default());
+        assert!(page.error.is_none() && page.width > 0, "{:?}", page.error);
     }
 
     #[test]
@@ -468,8 +415,8 @@ mod tests {
         let first = Arc::new(save(&bytes, &store_with(&layout), &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save"));
         // Saving with no changed pages writes no new annotations and deletes none.
         let again = save(&first, &InkStore::new(), &geoms, &layout, &BTreeSet::new(), &[Some(0)], &[]).expect("save");
-        let doc = Document::open(Arc::new(again)).expect("open");
-        assert_eq!(find_ours(&doc).len(), 2);
+        let doc = pdf::native().open(&Arc::new(again)).expect("open");
+        assert_eq!(find_ours(&*doc).len(), 2);
     }
 
     #[test]
@@ -481,7 +428,7 @@ mod tests {
             store.add(0, RED, vec![[o[0] + i as f32, o[1]], [o[0] + i as f32 + 1.0, o[1] + 1.0]]);
         }
         let saved = save(&bytes, &store, &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save");
-        let found = find_ours(&Document::open(Arc::new(saved)).expect("open"));
+        let found = find_ours(&*pdf::native().open(&Arc::new(saved)).expect("open"));
         assert_eq!(found.len(), 3);
         assert_eq!(found.iter().map(|f| f.strokes.len()).sum::<usize>(), STROKES_PER_ANNOTATION * 2 + 5);
     }
@@ -508,8 +455,8 @@ mod tests {
         for (words, size) in [("Hello", 24.0), ("Two\nlines of text", 12.0), ("Zwei Ünï — ünïcode ✓", 18.0)] {
             let (bytes, geoms, layout) = setup();
             let saved = Arc::new(save(&bytes, &text_store(&layout, words, size), &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save"));
-            let doc = Document::open(saved.clone()).expect("open");
-            assert!(find_ours(&doc).iter().any(|f| f.text.is_some()), "{words:?}: the text is one of our annotations");
+            let doc = pdf::native().open(&saved.clone()).expect("open");
+            assert!(find_ours(&*doc).iter().any(|f| f.text.is_some()), "{words:?}: the text is one of our annotations");
             let loaded = load(&saved, &geoms, &layout).expect("load");
             assert_eq!(loaded.strokes.len(), 4, "the three strokes and the text");
             let texts = loaded_texts(&loaded);
@@ -544,7 +491,6 @@ mod tests {
 
     #[test]
     fn other_readers_draw_the_saved_text_in_its_colour_where_the_box_was() {
-        use pdfcraft_render::{PageRenderer, RenderConfig, RenderRequest};
         let (bytes, geoms, layout) = setup();
         // Only the text (no ink), so any red in the box is the text.
         let o = page_origin(&layout);
@@ -557,9 +503,9 @@ mod tests {
             crate::text::outline(top_left, words, size),
         );
         let saved = Arc::new(save(&bytes, &store, &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save"));
-        let page = PageRenderer::new(saved, RenderConfig::default()).render(RenderRequest { page: 0, scale: 1.0, ..RenderRequest::default() });
+        let page = pdf::native().render_now(saved, &pdf::RenderRequest { page: 0, scale: 1.0, ..pdf::RenderRequest::default() });
         assert!(page.error.is_none(), "{:?}", page.error);
-        let (w, rgba) = (page.width as usize, page.rgba.as_ref());
+        let (w, rgba) = (page.width as usize, page.rgba.as_slice());
         let [bw, bh] = crate::text::measure(words, size);
         let reddish =
             |x: usize, y: usize| rgba.get((y * w + x) * 4..(y * w + x) * 4 + 4).is_some_and(|p| p[3] > 128 && p[0] > 150 && p[1] < 90 && p[2] < 90);
@@ -572,7 +518,6 @@ mod tests {
 
     #[test]
     fn other_readers_draw_text_upright_and_in_place_on_a_page_turned_in_the_file() {
-        use pdfcraft_render::{PageRenderer, RenderConfig, RenderRequest};
         for rotate in [0, 90, 180, 270] {
             let objs = [
                 "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
@@ -580,9 +525,8 @@ mod tests {
                 format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Rotate {rotate} >>"),
             ];
             let bytes = Arc::new(crate::testutil::build_pdf(&objs));
-            let info = pdfcraft_render::inspect(bytes.clone(), None).expect("inspect");
-            let geoms: Vec<PageGeom> = info.pages.iter().map(crate::pdf_read::page_geom).collect();
-            let sizes: Vec<[f32; 2]> = info.pages.iter().map(|p| [p.width, p.height]).collect();
+            let geoms: Vec<PageGeom> = pdf::native().inspect(&bytes).expect("inspect");
+            let sizes: Vec<[f32; 2]> = geoms.iter().map(|p| [p.width, p.height]).collect();
             let layout = Layout::new(&sizes);
             let o = page_origin(&layout);
             let mut store = InkStore::new();
@@ -604,8 +548,8 @@ mod tests {
                 "rotate {rotate}: {:?} vs {want:?}",
                 texts[0].2
             );
-            let page = PageRenderer::new(saved, RenderConfig::default()).render(RenderRequest { page: 0, scale: 1.0, ..RenderRequest::default() });
-            let (w, rgba) = (page.width as usize, page.rgba.as_ref());
+            let page = pdf::native().render_now(saved, &pdf::RenderRequest { page: 0, scale: 1.0, ..pdf::RenderRequest::default() });
+            let (w, rgba) = (page.width as usize, page.rgba.as_slice());
             let mut b = [usize::MAX, usize::MAX, 0, 0];
             for (i, p) in rgba.as_chunks::<4>().0.iter().enumerate() {
                 if p[3] > 128 && p[0] > 150 && p[1] < 90 {
@@ -660,9 +604,8 @@ mod tests {
         use crate::input::{Device, PenButtons, Phase, PointerEvent, Sample};
         let (Ok(base), Ok(out)) = (std::env::var("INKPDF_DEMO_BASE"), std::env::var("INKPDF_DEMO_OUT")) else { return };
         let bytes = Arc::new(std::fs::read(base).expect("read the base PDF"));
-        let info = pdfcraft_render::inspect(bytes.clone(), None).expect("inspect");
-        let geoms: Vec<PageGeom> = info.pages.iter().map(crate::pdf_read::page_geom).collect();
-        let sizes: Vec<[f32; 2]> = info.pages.iter().map(|p| [p.width, p.height]).collect();
+        let geoms: Vec<PageGeom> = pdf::native().inspect(&bytes).expect("inspect");
+        let sizes: Vec<[f32; 2]> = geoms.iter().map(|p| [p.width, p.height]).collect();
         let layout = Layout::new(&sizes);
 
         let mut ed = Editor::new([1200.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
@@ -730,20 +673,24 @@ mod tests {
     fn foreign_annotations_are_not_loaded_as_ours() {
         // An Ink annotation with some other name is not ours: it must survive a save untouched.
         let (bytes, geoms, layout) = setup();
-        let mut doc = Document::open(bytes.clone()).expect("open");
+        let mut doc = pdf::native().open(&bytes).expect("open");
         let new = NewAnnotation {
             page: 0,
-            shape: Shape::Ink { strokes: vec![vec![[10.0, 10.0], [50.0, 50.0]]] },
-            style: AnnotStyle { color: [0.0, 1.0, 0.0], opacity: 1.0, width: 2.0, fill: None },
-            contents: String::new(),
+            shape: NewShape::Ink { strokes: vec![vec![[10.0, 10.0], [50.0, 50.0]]] },
+            colour: [0.0, 1.0, 0.0],
+            opacity: 1.0,
+            width: 2.0,
+            text: String::new(),
             author: "someone else".into(),
+            name: "other-1".into(),
+            date: "D:20260101000000Z".into(),
         };
-        add_annotation(&mut doc, &new, &Meta { date: Some("D:20260101000000Z".into()), id: "other-1".into() }).expect("add");
-        let with_foreign = Arc::new(write_incremental(&doc, &SaveOptions::default()).expect("write"));
+        doc.add_annotation(&new).expect("add");
+        let with_foreign = Arc::new(doc.save_incremental("D:20260101000000Z").expect("write"));
         assert!(load(&with_foreign, &geoms, &layout).expect("load").strokes.is_empty());
         let saved = save(&with_foreign, &store_with(&layout), &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save");
-        let reopened = Document::open(Arc::new(saved)).expect("open");
-        let ink_annots = pdfcraft_annot::summaries(&reopened).into_iter().filter(|s| s.subtype == "Ink").count();
+        let reopened = pdf::native().open(&Arc::new(saved)).expect("open");
+        let ink_annots = reopened.annotations().into_iter().filter(|a| a.kind == AnnotKind::Ink).count();
         assert_eq!(ink_annots, 3, "the foreign one plus our two");
     }
 
@@ -800,7 +747,7 @@ mod tests {
         moved.move_control(Control::Anchor(0), at(80.0, 90.0), false);
         assert!(again.reshape(id, moved));
         // And an annotation that is not one of ours is still left alone.
-        assert_eq!(find_ours(&Document::open(saved).expect("open")).len(), 8, "a shape has an annotation of its own");
+        assert_eq!(find_ours(&*pdf::native().open(&saved).expect("open")).len(), 8, "a shape has an annotation of its own");
     }
     #[test]
     fn a_shape_whose_description_is_damaged_loads_as_plain_ink() {

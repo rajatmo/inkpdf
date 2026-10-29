@@ -4,9 +4,6 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
-use pdfcraft_cos::{SaveOptions, write_full};
-use pdfcraft_render::{RenderConfig, RenderPool, RenderRequest, RenderedPage, inspect};
-
 use crate::coords::PageGeom;
 use crate::ink::{InkStore, PageStroke};
 use crate::ink_io;
@@ -17,6 +14,7 @@ use crate::page_table::PageTable;
 use crate::pages::PageEdit;
 #[cfg(test)]
 use crate::path_store::PathStore;
+use crate::pdf::{self, RenderPool, RenderRequest, Rendered};
 use crate::store::{DocId, FileStore};
 use crate::tiles::{self, Key};
 use crate::view::Layout;
@@ -41,7 +39,7 @@ pub struct Doc {
     pages: PageTable,
     /// The size of each page of the file the renderer has, in points (what its pictures are made for).
     render_sizes: Vec<[f32; 2]>,
-    pool: RenderPool,
+    pool: Box<dyn RenderPool>,
     queued: Vec<RenderRequest>,
 }
 
@@ -68,20 +66,18 @@ impl Doc {
     /// start writing.
     pub fn blank(size: [f32; 2]) -> Result<Doc, String> {
         let size = size.map(|s| if s.is_finite() { s.clamp(PAGE_SIDE[0], PAGE_SIDE[1]) } else { BLANK_PAGE[0] });
-        let pdf = pdfcraft_create::blank(f64::from(size[0]), f64::from(size[1]), 1).map_err(|e| e.to_string())?;
-        let bytes = write_full(&pdf, &SaveOptions::default()).map_err(|e| e.to_string())?;
+        let bytes = pdf::native().blank(size)?;
         Self::from_bytes(Arc::new(bytes), None, UNTITLED.into()).map(|(doc, _)| doc)
     }
 
     fn from_bytes(bytes: Arc<Vec<u8>>, id: Option<DocId>, name: String) -> Result<(Doc, Vec<PageStroke>), String> {
         let started = Instant::now();
-        let info = inspect(bytes.clone(), None).map_err(|e| e.to_string())?;
-        if info.pages.is_empty() {
+        let all = pdf::native().inspect(&bytes)?;
+        if all.is_empty() {
             return Err("the document has no pages".into());
         }
-        let pages = info.pages.iter().take(tiles::MAX_PAGES);
-        let sizes: Vec<[f32; 2]> = pages.clone().map(|p| [p.width, p.height]).collect();
-        let geoms: Vec<PageGeom> = pages.map(crate::pdf_read::page_geom).collect();
+        let geoms: Vec<PageGeom> = all.into_iter().take(tiles::MAX_PAGES).collect();
+        let sizes: Vec<[f32; 2]> = geoms.iter().map(|p| [p.width, p.height]).collect();
         let layout = Layout::new(&sizes);
         // A file this app inked earlier shows that ink from the ink layer, not the page raster.
         let (strokes, mut links, mut outline, render_bytes) = match ink_io::load(&bytes, &geoms, &layout) {
@@ -94,7 +90,7 @@ impl Doc {
         // (In a damaged file the outline and the links can name pages the renderer does not show.)
         crate::outline::limit_to(&mut outline, sizes.len());
         crate::links::limit_to(&mut links, sizes.len());
-        let pool = RenderPool::new(render_bytes.clone(), render_threads(), RenderConfig::default());
+        let pool = pdf::native().render_pool(render_bytes.clone(), render_threads());
         let sizes_of_file = sizes.clone();
         let doc = Doc {
             id,
@@ -183,7 +179,7 @@ impl Doc {
         }
     }
 
-    pub fn try_recv(&self) -> Option<RenderedPage> {
+    pub fn try_recv(&self) -> Option<Rendered> {
         self.pool.try_recv()
     }
 
@@ -540,11 +536,11 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(5));
         };
         assert_eq!(
-            Key::from_tag(rendered.request.tag),
+            Key::from_tag(rendered.tag),
             Key::Preview { page: 0 },
             "it is tagged with the page of the file, which no change of the pages alters"
         );
-        assert_eq!(rendered.request.page, 0, "and was drawn from the file's first page");
+        assert_eq!(rendered.page, 0, "and was drawn from the file's first page");
         assert!(rendered.error.is_none());
         let _ = fs::remove_dir_all(path.parent().expect("dir"));
     }
@@ -692,8 +688,8 @@ mod tests {
             assert!(started.elapsed().as_secs() < 20, "the page was never rendered");
             std::thread::sleep(std::time::Duration::from_millis(5));
         };
-        assert_eq!(Key::from_tag(rendered.request.tag), Key::Preview { page: 2 }, "tagged with the page of the file");
-        assert_eq!(rendered.request.page, 2, "and drawn from the file's third page");
+        assert_eq!(Key::from_tag(rendered.tag), Key::Preview { page: 2 }, "tagged with the page of the file");
+        assert_eq!(rendered.page, 2, "and drawn from the file's third page");
         let _ = fs::remove_dir_all(path.parent().expect("dir"));
     }
 

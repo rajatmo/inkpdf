@@ -218,7 +218,7 @@ overrides it). Make `Prefs::default()` full motion; keep tests reduced through t
 and the direct `Editor::new` calls in `stress.rs` and `ink_io.rs` tests), e.g. `Editor::with_prefs` or a `#[cfg(test)]` constructor.
 *Done when:* tests unchanged and green; `rg 'cfg!\(test\)' apps/inkpdf/src` finds nothing in `motion.rs`.
 
-**K1. The `pdf` module: a `PdfBackend` seam designed for rendering, text, markup and reading colours.**
+**K1. The `pdf` module: a `PdfBackend` seam designed for rendering, text, markup and reading colours.** *(Done 2026-10-29 on branch `pdf-seam`: the trait, the pdfcraft implementation, `doc`, `ink_io`, `tiles`, `thumbnail` and `pdf_read` moved, the enforcement test. Left for later tasks: the page look for dark pages (T6) and markup (X3) are not in the trait yet; text is, as `PageTextView`.)*
 *Goal:* `apps/inkpdf/src/pdf/` (adapter layer) is the only module that names `pdfcraft_*` (or `hayro*`); everything else sees the
 program's own types and the trait. It replaces the old F1 (its leak-closing step was done by S2: `links`, `outline` and `coords` are pure
 and `pdf_read.rs` reads their data).
@@ -319,7 +319,7 @@ the toggle is inert in light and keeps its value through a trip through light; t
 *Work (needs K1):* the `PdfBackend` (K1) takes a page look (off, or reading colours built from the palette's page roles, e.g. text
 `#e6e6e6` on background `#121212`, `only_black: false`, `line_art: true`) and sets `RenderConfig.reading_colors`; `doc.rs` builds a
 new `RenderPool` when the look changes (the pool is created from `RenderConfig`). Texture keys must tell the looks apart:
-`tiles::Key::to_tag` packs `page << 40` (20 bits, bits 40 to 59), bit 61 = thumbnail, bit 62 = preview; **bit 60 is free**: use it
+`tiles::Key::to_tag` packs `page << 40` (20 bits, bits 40 to 59), bit 61 = thumbnail, bit 62 = preview; **bit 60 is NOT free** (it is pdfcraft's `PRINT_TAG`: a request with it set renders in the document's true colours and ignores the reading colours, and `pdf` asserts it is clear); **bit 63 is free**: use it
 for "dark look" so old textures stay on screen until the new ones arrive (no flash). Thumbnails and the overview follow. Ink and
 typed-text *display* colours are mapped by a pure function in `palette` using the same rule as `ReadingParams` (near-black →
 text colour, light → background, hues kept) at the places that build capsules and text bitmaps (`app/ink_layer.rs`

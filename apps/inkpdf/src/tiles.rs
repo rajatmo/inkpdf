@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use pdfcraft_render::{RenderRequest, Tile, device_pixels, effective_scale};
+use crate::pdf::{RenderRequest, Tile, device_pixels, effective_scale};
 
 use crate::view::{Layout, View};
 

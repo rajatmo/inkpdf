@@ -111,11 +111,14 @@ signs an arm64 APK (NativeActivity, no Java); CI builds it as an artifact. **Not
 problems and read `adb logcat -s inkpdf`. Known gaps: pen pressure/eraser/barrel (A2), system bars and cutouts (A3), files from other apps
 and the clipboard (A4); saving goes to the app's own `Documents` folder (`Android/data/app.inkpdf.test/files/Documents`).
 
-**A2. Android stylus.** `platform/android/stylus.rs`: `MotionEvent` through `android-activity` (tool type
-stylus/eraser/finger, pressure, `ACTION_HOVER_*`, historical pointer samples = `samples[]`, `BUTTON_STYLUS_PRIMARY`).
-Palm rejection already exists in `input/palm.rs`. Latency items to evaluate on a device: unbuffered input dispatch,
-`Choreographer`-aligned frames (Swappy frame pacing), Vulkan `FIFO` vs `MAILBOX`, and front-buffer rendering where the
-device has it. Do not claim numbers without `--stats` on hardware.
+**A2. Android stylus. Done (first cut, untested on a device).** `platform/android/reader.rs` reads the activity's input queue *before* winit
+does (at winit's `new_events`, and again after the display wait), because winit turns every `MotionEvent` into a plain touch (no tool type,
+no stylus buttons, no hover, no history). What it takes goes through `input::motion::Decoder`, which is tested on every platform: stylus =
+pen with pressure and the points between events (`samples[]`), eraser end = eraser, stylus button = barrel, hover and leave, finger = touch
+with its contact size, palm = rejected, mouse = the mouse; keys (Back = Escape, the soft keyboard's characters, Ctrl shortcuts). A few events
+arrive in the moment between the two reads and winit reports them as touch: `late_touch` makes them the pointer they already were.
+Still to evaluate on a device: unbuffered input dispatch, `Choreographer`-aligned frames (Swappy), Vulkan `FIFO` vs `MAILBOX`, front-buffer
+rendering. Do not claim numbers without `--stats` on hardware.
 
 **A3. Android UI fit.** Touch targets (the toolbar is sized for a mouse and a pen), system bars and cutouts, the
 soft keyboard for the text tool (`Ime` events), default `Mode::Tablet` (already set).

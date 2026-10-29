@@ -531,9 +531,16 @@ fn poke(ed: &mut Editor, rng: &mut Rng, hostile: bool) -> String {
                 Phase::Cancel,
             ]);
             let (id, pos) =
-                (rng.below(4) as u64, if hostile { [rng.coord(size[0]), rng.coord(size[1])] } else { [rng.finite(size[0]), rng.finite(size[1])] });
-            what = format!("basic_touch {phase:?} {id} {pos:?}");
-            ed.basic_touch(phase, id, pos);
+                (rng.below(4) as u32, if hostile { [rng.coord(size[0]), rng.coord(size[1])] } else { [rng.finite(size[0]), rng.finite(size[1])] });
+            what = format!("touch from the toolkit {phase:?} {id} {pos:?}");
+            ed.pointer_event(PointerEvent {
+                device: Device::Touch,
+                id,
+                phase,
+                samples: vec![Sample { pos, pressure: 1.0, t_ms: crate::clock::now_ms() }],
+                pen: PenButtons::default(),
+                contact_px: 0.0,
+            });
         }
         19 => {
             let dt = rng.range(0.0, 0.1);

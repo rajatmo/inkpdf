@@ -11,7 +11,8 @@ subgraph cluster_shared { label="shared code (all OSes)"; style="rounded,filled"
 }
 subgraph cluster_plat { label="platform/  (adapter layer, picks one backend at compile time)"; style="rounded,filled"; fillcolor="#fdf2f0"; color="#c0392b"; fontname="Helvetica";
   "platform_mod" [label="platform/mod.rs\nPointerSource trait\ninstall_pointer · save_file_dialog\nre-exports os::*", penwidth=2.5, color="#c0392b"];
-  "p_android" [label="platform/android.rs", color="#8e44ad", penwidth=2];
+  "p_android_mod" [label="platform/android/mod.rs", color="#8e44ad", penwidth=2];
+  "p_android_reader" [label="platform/android/reader.rs", color="#8e44ad", penwidth=2];
   "p_generic" [label="platform/generic.rs", color="#7f8c8d", penwidth=2];
   "p_linux" [label="platform/linux.rs", color="#27ae60", penwidth=2];
   "p_windows_folders" [label="platform/windows/folders.rs", color="#2e86c1", penwidth=2];
@@ -31,8 +32,9 @@ subgraph cluster_ext { label="outside crates"; style="rounded,filled"; fillcolor
 "main" -> "platform_mod" [label="attach_parent_console\nreport_fatal", color="#c0392b"]
 "platform_mod" -> "input" [label="PointerEvent"]
 "editor" -> "input"
-"platform_mod" -> "p_android" [label="cfg(target_os = android)", color="#8e44ad", penwidth=2, fontcolor="#8e44ad"]
-"p_android" -> "x_winit" [color="#8e44ad", style=dashed]
+"platform_mod" -> "p_android_mod" [label="cfg(target_os = android)", color="#8e44ad", penwidth=2, fontcolor="#8e44ad"]
+"p_android_mod" -> "x_winit" [color="#8e44ad", style=dashed]
+"p_android_reader" -> "x_winit" [color="#8e44ad", style=dashed]
 "platform_mod" -> "p_generic" [label="cfg(not(windows))", color="#7f8c8d", penwidth=2, fontcolor="#7f8c8d"]
 "p_generic" -> "x_winit" [color="#7f8c8d", style=dashed]
 "platform_mod" -> "p_linux" [label="cfg(unix, not android)", color="#27ae60", penwidth=2, fontcolor="#27ae60"]
@@ -50,7 +52,9 @@ subgraph cluster_ext { label="outside crates"; style="rounded,filled"; fillcolor
 "p_windows_mod" -> "p_windows_pointer" [color="#2e86c1"]
 "p_windows_mod" -> "p_windows_native" [color="#2e86c1"]
 "p_windows_mod" -> "p_windows_posture" [color="#2e86c1"]
+"p_windows_mod" -> "p_windows_folders" [color="#2e86c1"]
+"p_android_mod" -> "p_android_reader" [color="#8e44ad"]
 "p_linux" -> "p_generic" [label="re-exports", color="#27ae60"]
-"p_android" -> "p_generic" [label="re-exports", color="#8e44ad"]
-{rank=same; "p_windows_mod"; "p_linux"; "p_android";}
+"p_android_mod" -> "p_generic" [label="re-exports", color="#8e44ad"]
+{rank=same; "p_windows_mod"; "p_linux"; "p_android_mod";}
 }

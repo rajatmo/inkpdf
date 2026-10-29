@@ -891,9 +891,9 @@
 <!-- app&#45;&gt;clock -->
 <g id="edge2" class="edge">
 <title>app&#45;&gt;clock</title>
-<g id="a_edge2"><a xlink:title="3 uses">
-<path fill="none" stroke="#555555" stroke-width="1.8" stroke-opacity="0.600000" d="M823.68,-63.99C764.91,-78.35 626.01,-120.36 554,-210 523.56,-247.89 508.97,-304.23 502.83,-335.66"/>
-<polygon fill="#555555" fill-opacity="0.600000" stroke="#555555" stroke-width="1.8" stroke-opacity="0.600000" points="500.75,-335.32 501.71,-341.6 504.88,-336.09 500.75,-335.32"/>
+<g id="a_edge2"><a xlink:title="4 uses">
+<path fill="none" stroke="#555555" stroke-width="1.96" stroke-opacity="0.600000" d="M823.68,-63.99C764.91,-78.35 626.01,-120.36 554,-210 523.56,-247.89 508.97,-304.23 502.83,-335.66"/>
+<polygon fill="#555555" fill-opacity="0.600000" stroke="#555555" stroke-width="1.96" stroke-opacity="0.600000" points="500.75,-335.32 501.71,-341.6 504.88,-336.09 500.75,-335.32"/>
 </a>
 </g>
 </g>
@@ -1236,9 +1236,9 @@
 <!-- platform&#45;&gt;clock -->
 <g id="edge68" class="edge">
 <title>platform&#45;&gt;clock</title>
-<g id="a_edge68"><a xlink:title="1 uses">
-<path fill="none" stroke="#555555" stroke-width="1.3" stroke-opacity="0.600000" d="M696.14,-175.37C677.13,-184.26 654.45,-196.25 636,-210 585.67,-247.53 538.86,-305.25 515.17,-336.7"/>
-<polygon fill="#555555" fill-opacity="0.600000" stroke="#555555" stroke-width="1.3" stroke-opacity="0.600000" points="513.21,-335.82 511.3,-341.88 516.57,-338.33 513.21,-335.82"/>
+<g id="a_edge68"><a xlink:title="2 uses">
+<path fill="none" stroke="#555555" stroke-width="1.59" stroke-opacity="0.600000" d="M696.14,-175.37C677.13,-184.26 654.45,-196.25 636,-210 585.67,-247.53 538.86,-305.25 515.17,-336.7"/>
+<polygon fill="#555555" fill-opacity="0.600000" stroke="#555555" stroke-width="1.59" stroke-opacity="0.600000" points="513.21,-335.82 511.3,-341.88 516.57,-338.33 513.21,-335.82"/>
 </a>
 </g>
 </g>
@@ -1281,9 +1281,9 @@
 <!-- platform&#45;&gt;input -->
 <g id="edge70" class="edge">
 <title>platform&#45;&gt;input</title>
-<g id="a_edge70"><a xlink:title="8 uses">
-<path fill="none" stroke="#555555" stroke-width="2.38" stroke-opacity="0.600000" d="M773.74,-159.53C969.17,-162.33 1842.04,-176.64 1958,-210 2045.04,-235.04 2059.62,-260.78 2135,-311 2196.18,-351.76 2209.68,-364.75 2266,-412 2354.93,-486.62 2355.09,-536.24 2459,-588 2515.26,-616.02 2543.99,-581.87 2598,-614 2608.43,-620.21 2617.26,-630.29 2623.86,-639.62"/>
-<polygon fill="#555555" fill-opacity="0.600000" stroke="#555555" stroke-width="2.38" stroke-opacity="0.600000" points="2622.19,-640.91 2627.29,-644.7 2625.67,-638.55 2622.19,-640.91"/>
+<g id="a_edge70"><a xlink:title="12 uses">
+<path fill="none" stroke="#555555" stroke-width="2.65" stroke-opacity="0.600000" d="M773.74,-159.53C969.17,-162.33 1842.04,-176.64 1958,-210 2045.04,-235.04 2059.62,-260.78 2135,-311 2196.18,-351.76 2209.68,-364.75 2266,-412 2354.93,-486.62 2355.09,-536.24 2459,-588 2515.26,-616.02 2543.99,-581.87 2598,-614 2608.43,-620.21 2617.26,-630.29 2623.86,-639.62"/>
+<polygon fill="#555555" fill-opacity="0.600000" stroke="#555555" stroke-width="2.65" stroke-opacity="0.600000" points="2622.19,-640.91 2627.29,-644.7 2625.67,-638.55 2622.19,-640.91"/>
 </a>
 </g>
 </g>

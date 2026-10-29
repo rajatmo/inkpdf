@@ -129,7 +129,7 @@ for f in files:
     info[f]={'ext':sorted({c for c in EXT if re.search(r'\b'+c+r'::',body)}),
              'crate':sorted({m for m in re.findall(r'crate::([a-z_]+)',body) if m in mods and m!='platform'})}
 nid=lambda f: 'p_'+f.replace('/','_').replace('.rs','')
-cfg={'windows/mod.rs':'cfg(windows)','linux.rs':'cfg(unix, not android)','android.rs':'cfg(target_os = android)','generic.rs':'cfg(not(windows))'}
+cfg={'windows/mod.rs':'cfg(windows)','linux.rs':'cfg(unix, not android)','android/mod.rs':'cfg(target_os = android)','generic.rs':'cfg(not(windows))'}
 colr={'windows':'#2e86c1','linux':'#27ae60','android':'#8e44ad','generic':'#7f8c8d'}
 def grp(f): return f.split('/')[0].replace('.rs','')
 D=['digraph P {','rankdir=LR; newrank=true; splines=true; nodesep=0.3; ranksep=1.1; pad=0.4;',
@@ -160,9 +160,10 @@ for f in files:
 D.append('"platform_mod" -> "x_rfd" [label="save_file_dialog\\n(not android)", style=dashed, color="#c0392b"]')
 D.append('"platform_mod" -> "x_winit" [style=dashed, color="#c0392b"]')
 # windows internals
-D+=[f'"{nid("windows/mod.rs")}" -> "{nid(x)}" [color="{colr["windows"]}"]' for x in ['windows/pointer.rs','windows/native.rs','windows/posture.rs']]
-D+=[f'"{nid("linux.rs")}" -> "{nid("generic.rs")}" [label="re-exports", color="{colr["linux"]}"]',f'"{nid("android.rs")}" -> "{nid("generic.rs")}" [label="re-exports", color="{colr["android"]}"]']
-D.append('{rank=same; "p_windows_mod"; "p_linux"; "p_android";}')
+D+=[f'"{nid("windows/mod.rs")}" -> "{nid(x)}" [color="{colr["windows"]}"]' for x in ['windows/pointer.rs','windows/native.rs','windows/posture.rs','windows/folders.rs']]
+D+=[f'"{nid("android/mod.rs")}" -> "{nid("android/reader.rs")}" [color="{colr["android"]}"]']
+D+=[f'"{nid("linux.rs")}" -> "{nid("generic.rs")}" [label="re-exports", color="{colr["linux"]}"]',f'"{nid("android/mod.rs")}" -> "{nid("generic.rs")}" [label="re-exports", color="{colr["android"]}"]']
+D.append('{rank=same; "p_windows_mod"; "p_linux"; "p_android_mod";}')
 D.append('}')
 plat='\n'.join(D)
 

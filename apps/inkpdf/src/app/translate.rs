@@ -4,7 +4,7 @@
 use winit::event::{ElementState, MouseButton as Button, MouseScrollDelta, TouchPhase};
 use winit::keyboard::{Key as Typed, NamedKey};
 
-use crate::input::{ButtonState, Dir, KeyInput, MouseButton, Phase, Wheel};
+use crate::input::{ButtonState, Device, Dir, KeyInput, MouseButton, PenButtons, Phase, PointerEvent, Sample, Wheel};
 
 /// A mouse button: one of the three the program uses, or `Other` (back, forward, …), which it ignores.
 pub(super) fn button(button: Button) -> MouseButton {
@@ -37,6 +37,28 @@ pub(super) fn touch_phase(phase: TouchPhase) -> Phase {
         TouchPhase::Moved => Phase::Move,
         TouchPhase::Ended => Phase::Up,
         TouchPhase::Cancelled => Phase::Cancel,
+    }
+}
+
+/// A touch from the toolkit as a pointer event of the kind the OS's own reader makes: a finger (the toolkit cannot tell a pen from
+/// one), at the place, with the force it reports (1 if none), stamped `now_ms`. It presses buttons, pans and zooms as every finger does.
+pub(super) fn touch(touch: &winit::event::Touch, now_ms: f64) -> PointerEvent {
+    let pressure = match touch.force {
+        Some(winit::event::Force::Normalized(f)) => f as f32,
+        Some(winit::event::Force::Calibrated { force, max_possible_force, .. }) if max_possible_force > 0.0 => (force / max_possible_force) as f32,
+        _ => 1.0,
+    };
+    PointerEvent {
+        device: Device::Touch,
+        id: touch.id as u32,
+        phase: touch_phase(touch.phase),
+        samples: vec![Sample {
+            pos: [touch.location.x as f32, touch.location.y as f32],
+            pressure: if pressure.is_finite() { pressure.clamp(0.0, 1.0) } else { 1.0 },
+            t_ms: now_ms,
+        }],
+        pen: PenButtons::default(),
+        contact_px: 0.0,
     }
 }
 

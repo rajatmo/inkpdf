@@ -1,11 +1,12 @@
 //! Everything an input device can say to the editor, as plain data the program owns: the mouse, the wheel, the keyboard, a touch
-//! that is only a position (what a toolkit that cannot tell a pen from a finger reports), the window's size and focus. The shell
+//! pen and touch, the window's size and focus. The shell
 //! translates what its toolkit says into these; the editor knows no toolkit, so any shell can drive it: a window of winit's, a
 //! host that is not winit, or a replay of a recorded session (see `replay`).
 //!
-//! The pen and touch from the OS's own reader are [`PointerEvent`](super::PointerEvent)s, as before.
+//! Pen and touch are [`PointerEvent`](super::PointerEvent)s, whether the OS's own reader made them or the shell made them from the
+//! toolkit's touch events (which cannot tell a pen from a finger, but press the buttons and pan and zoom as the reader's do).
 
-use super::{Phase, PointerEvent};
+use super::PointerEvent;
 
 /// Whether a button went down or up.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -116,12 +117,6 @@ pub enum InputEvent {
     /// The mouse left the window.
     MouseLeft,
     Wheel(Wheel),
-    /// A touch that is only a place (no pen, pressure or size): with the phase it is in (`Down`, `Move`, `Up` or `Cancel`).
-    Touch {
-        phase: Phase,
-        id: u64,
-        pos: [f32; 2],
-    },
     Key(KeyInput),
     /// A letter pressed with Ctrl (a shortcut), with whether Shift is held.
     Shortcut {

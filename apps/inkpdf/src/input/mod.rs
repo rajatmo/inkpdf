@@ -18,6 +18,8 @@
 mod contract;
 mod event;
 mod gestures;
+#[allow(dead_code, reason = "read by the Android reader, tested everywhere")]
+pub(crate) mod motion;
 mod palm;
 mod predict;
 

@@ -74,6 +74,21 @@ pub trait PointerSource {
     /// Whether the machine's posture changed since this was last asked (a convertible became a tablet, or back).
     fn take_posture_change(&mut self) -> bool;
 
+    /// Take the input as early as the loop allows (the start of each of the toolkit's iterations), for a source that shares the
+    /// OS's input queue with the toolkit and must read it first (Android's does: the toolkit would otherwise take pen events as
+    /// touch). Nothing for the others.
+    fn pump_early(&mut self) {}
+
+    /// The other input the source took from the queue because it shared it (keys, a mouse): handed over with the pointers.
+    fn drain_other(&mut self) -> Vec<crate::input::InputEvent> {
+        Vec::new()
+    }
+
+    /// A touch the toolkit reported after all (the source took the rest of the queue, but a few events arrive in the moment between):
+    /// the source makes it the pointer it already was, or a finger. Nothing for a source that swallows pen and touch before the
+    /// toolkit sees them.
+    fn late_touch(&mut self, _ev: PointerEvent) {}
+
     /// Stop receiving; called when the app exits.
     fn uninstall(&mut self);
 }

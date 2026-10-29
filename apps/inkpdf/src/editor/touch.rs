@@ -103,55 +103,8 @@ impl Editor {
         }
     }
 
-    /// Touch that is only a place (see [`crate::input::InputEvent::Touch`]), used when the OS's own pointer reader is not
-    /// there. Pans and zooms; it cannot tell a pen from a finger. `phase` is `Down`, `Move`, `Up` or `Cancel`.
-    pub fn basic_touch(&mut self, phase: Phase, id: u64, pos: [f32; 2]) {
-        if self.chrome.save_as.is_some() && self.chrome.prompt.is_none() {
-            self.save_as_pointer(Device::Touch, id as u32, phase, pos);
-            return;
-        }
-        if self.chrome.prompt.is_some() || self.chrome.overview.is_some() {
-            return;
-        }
-        match phase {
-            Phase::Down => {
-                self.ws.view.stop();
-                self.basic_touches.insert(id, pos);
-                self.basic_pinch = self.basic_pinch_state();
-            }
-            Phase::Move => {
-                let Some(old) = self.basic_touches.insert(id, pos) else { return };
-                if self.basic_touches.len() == 1 {
-                    self.ws.pan_px(pos[0] - old[0], pos[1] - old[1]);
-                } else if let (Some(prev), Some(now)) = (self.basic_pinch.take(), self.basic_pinch_state()) {
-                    if prev.0 > 1.0 {
-                        self.ws.fit_mode = false;
-                        let zoom = self.ws.view.zoom * now.0 / prev.0;
-                        self.ws.zoom_about(zoom, now.1);
-                    }
-                    self.ws.pan_px(now.1[0] - prev.1[0], now.1[1] - prev.1[1]);
-                    self.basic_pinch = Some(now);
-                }
-                self.ws.redraw = true;
-            }
-            Phase::Up | Phase::Cancel => {
-                self.basic_touches.remove(&id);
-                self.basic_pinch = self.basic_pinch_state();
-            }
-            // (A touch that is only a place does not hover.)
-            Phase::Hover | Phase::Leave => {}
-        }
-    }
-
-    fn basic_pinch_state(&self) -> Option<(f32, [f32; 2])> {
-        let mut ids: Vec<&u64> = self.basic_touches.keys().collect();
-        ids.sort();
-        let (a, b) = (self.basic_touches.get(ids.first()?)?, self.basic_touches.get(ids.get(1)?)?);
-        Some((((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt(), [(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0]))
-    }
-
-    /// Whether a second finger or the pinch fallback means the zoom is in motion.
+    /// Whether a second finger means the zoom is in motion.
     pub fn pinching(&self) -> bool {
-        self.basic_pinch.is_some() || self.fingers.fingers() >= 2
+        self.fingers.fingers() >= 2
     }
 }

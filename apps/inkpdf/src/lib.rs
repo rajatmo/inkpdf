@@ -80,6 +80,13 @@ impl ApplicationHandler for App {
         }
     }
 
+    fn new_events(&mut self, _el: &ActiveEventLoop, _cause: winit::event::StartCause) {
+        // (The first thing of every turn of the toolkit's loop: before it reads the input queue, a source that shares it reads it.)
+        if let Some(state) = &mut self.state {
+            state.early_pump();
+        }
+    }
+
     fn suspended(&mut self, _el: &ActiveEventLoop) {
         if let Some(state) = &mut self.state {
             state.suspended();

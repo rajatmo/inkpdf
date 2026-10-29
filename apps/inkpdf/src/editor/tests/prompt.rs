@@ -105,8 +105,8 @@ fn nothing_underneath_hears_anything_while_it_is_up() {
     ed.mouse_button(ButtonState::Released, MouseButton::Right);
     ed.wheel(Wheel::Lines(0.0, -5.0));
     ed.wheel(Wheel::Lines(0.0, 5.0));
-    ed.basic_touch(Phase::Down, 1, a);
-    ed.basic_touch(Phase::Move, 1, b);
+    ed.pointer_event(touch(1, Phase::Down, a, 0.0));
+    ed.pointer_event(touch(1, Phase::Move, b, 0.0));
     // The toolbar's buttons are out of reach too.
     let close = ed.toolbar().centre_of(Item::Close);
     mouse_click_at(&mut ed, close);

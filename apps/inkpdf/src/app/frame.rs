@@ -41,6 +41,9 @@ impl State {
             for ev in pointer.drain() {
                 self.ed.handle(InputEvent::Pointer(ev));
             }
+            for ev in pointer.drain_other() {
+                self.ed.handle(ev);
+            }
         }
     }
 

@@ -286,12 +286,8 @@ fn ctrl_shift_s_asks_for_save_as_and_ctrl_s_for_save_and_neither_while_it_is_up(
 }
 
 #[test]
-fn loading_another_document_puts_it_away_and_touch_through_winit_works_too() {
+fn loading_another_document_puts_it_away() {
     let mut ed = asking(Mode::Tablet);
-    let save = at(&ed, SaveAsHit::Save);
-    ed.basic_touch(Phase::Down, 7, save);
-    ed.basic_touch(Phase::Up, 7, save);
-    assert!(ed.requests.take(&Request::SaveTo(PathBuf::from(DOCUMENTS).join("Untitled.pdf"))), "the fallback touch is a tap too");
     ed.load(crate::view::Layout::new(&[[612.0, 792.0]]), vec![]);
     assert!(!ed.save_as_open());
 }

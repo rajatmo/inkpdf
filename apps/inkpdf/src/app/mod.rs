@@ -211,6 +211,13 @@ impl State {
         Ok(state)
     }
 
+    /// Let the OS's own reader take the input that is waiting before the toolkit does (see `PointerSource::pump_early`).
+    pub fn early_pump(&mut self) {
+        if let Some(pointer) = &mut self.pointer {
+            pointer.pump_early();
+        }
+    }
+
     /// The window was taken away (the app went to the background): no drawing until [`Self::resumed`].
     pub fn suspended(&mut self) {
         self.suspended = true;
@@ -257,8 +264,14 @@ impl State {
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => self.key_pressed(&event),
             // With the pointer layer installed pen and touch never reach winit; this is only the
             // fallback if it could not be installed.
-            WindowEvent::Touch(t) if self.pointer.is_none() => {
-                self.ed.handle(InputEvent::Touch { phase: translate::touch_phase(t.phase), id: t.id, pos: [t.location.x as f32, t.location.y as f32] })
+            // A touch the toolkit reports. With the OS's own reader installed it has taken pen and touch before the toolkit saw them
+            // (a few arrive in the moment between: the reader makes them what they already were); without one, it is a finger.
+            WindowEvent::Touch(t) => {
+                let ev = translate::touch(&t, crate::clock::now_ms());
+                match &mut self.pointer {
+                    Some(pointer) => pointer.late_touch(ev),
+                    None => self.ed.handle(InputEvent::Pointer(ev)),
+                }
             }
             _ => {}
         }

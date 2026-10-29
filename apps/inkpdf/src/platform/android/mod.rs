@@ -7,6 +7,8 @@ use std::sync::{Arc, OnceLock};
 use winit::platform::android::activity::AndroidApp;
 use winit::window::Window;
 
+mod reader;
+
 use super::PointerSource;
 use super::generic::{existing_places, first_folder, home_dir};
 use crate::browse::Place;
@@ -43,7 +45,7 @@ pub fn set_text_input(active: bool) {
 /// The first-start document: a short welcome with a page to write on, put in the app's Documents folder (once, so that what
 /// is drawn on it and saved is not overwritten) and opened.
 pub fn welcome_document() -> Option<PathBuf> {
-    const WELCOME: &[u8] = include_bytes!("../../assets/android/welcome.pdf");
+    const WELCOME: &[u8] = include_bytes!("../../../assets/android/welcome.pdf");
     let path = documents_dir().join("Welcome to InkPDF.pdf");
     if !path.exists() {
         std::fs::write(&path, WELCOME).ok()?;
@@ -87,6 +89,8 @@ pub fn open_url(url: &str) {
     }
 }
 
+/// The pen, touch and key reader: it shares the activity's input queue with the toolkit and reads it first (see `reader`).
 pub fn install_pointer(_window: &Arc<Window>) -> Result<Box<dyn PointerSource>, String> {
-    Err("no native stylus reader on Android yet".into())
+    let app = APP.get().ok_or("the activity has not been handed over")?.clone();
+    Ok(Box::new(reader::AndroidPointer::new(app)))
 }

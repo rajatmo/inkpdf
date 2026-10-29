@@ -53,8 +53,8 @@ jobs:
         run: tools/e2e/linux-smoke.sh
 
   android:
-    # Type-check only for now: it keeps the shared code free of anything Windows- or desktop-only. Running on a device
-    # needs the packaging and the stylus reader (docs/PORTING.md, steps A1 to A3).
+    # The program type-checks for Android, and an installable test APK is built from it (arm64, signed with the debug key in
+    # tools/android). The SDK and NDK are the ones installed on GitHub's Ubuntu runners.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -64,3 +64,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Check
         run: cargo check -p inkpdf-android --target aarch64-linux-android
+      - name: Build the APK
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+          export ANDROID_BUILD_TOOLS="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          export ANDROID_JAR="$(ls -d "$ANDROID_HOME"/platforms/android-3* | sort -V | tail -1)/android.jar"
+          tools/android/build-apk.sh release "$PWD/inkpdf-android-test.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inkpdf-android-test-apk
+          path: inkpdf-android-test.apk

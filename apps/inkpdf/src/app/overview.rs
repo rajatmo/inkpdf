@@ -72,6 +72,22 @@ impl State {
         true
     }
 
+    /// The Save As dialog takes the window as the overview does: its panels and lines go where the interface's do, and its text
+    /// is drawn to bitmaps by [`Self::overview_frame`] (the dialog has no pictures). `true` if it is up.
+    pub(super) fn sync_save_as_ui(&mut self) -> bool {
+        if !self.ed.save_as_open() {
+            return false;
+        }
+        let mut ui = Ui::default();
+        self.ed.draw_save_as(&mut ui);
+        self.gpu.set_ui(&ui.panels, &ui.lines);
+        self.overview.images.clear();
+        self.overview.labels = ui.labels;
+        // What the interface was built from is gone from the GPU: it is built afresh when the dialog leaves.
+        self.ui_built = None;
+        true
+    }
+
     /// The quads of the overview's text and pictures, and the ink in the pictures, for this frame; the bitmaps and the
     /// small renders they need are made sure of first.
     pub(super) fn overview_frame(&mut self) {

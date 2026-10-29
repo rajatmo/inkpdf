@@ -186,6 +186,9 @@ impl State {
         if self.sync_overview_ui() {
             return;
         }
+        if self.sync_save_as_ui() {
+            return;
+        }
         let ed = &self.ed;
         let state = ed.toolbar_state();
         let [w, h] = ed.view.viewport.map(f32::to_bits);

@@ -1,6 +1,7 @@
 //! Windows: pen and touch from `WM_POINTER*` messages (with the history Windows batches between messages), message
 //! boxes, `ShellExecute`, the clipboard, animation settings and the convertible's posture. The only module with Win32.
 
+mod folders;
 mod native;
 mod pointer;
 mod posture;
@@ -12,6 +13,7 @@ use winit::window::Window;
 use super::PointerSource;
 use crate::input::{Mode, PointerEvent};
 
+pub use folders::{documents_dir, places};
 pub use native::{SystemClipboard, attach_parent_console, error_box, motion_prefs, open_url, report_fatal};
 
 /// The mode the machine's posture calls for (a convertible in slate posture is a tablet).

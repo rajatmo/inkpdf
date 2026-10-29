@@ -41,10 +41,6 @@ bytemuck = { version = "1", features = ["derive"] }
 # Typed text: reads the outlines of a system font (the same font parser the page renderer uses).
 skrifa = "0.47"
 
-# The system's file dialogs (Android has none this crate can use: its picker is an Intent, see `platform::save_file_dialog`).
-[target.'cfg(not(target_os = "android"))'.dependencies]
-rfd = { workspace = true }
-
 # Linux: a window on Wayland or X11, whichever the session runs (decided when the window is made). The Wayland client
 # library is loaded when needed, so one binary starts on either.
 [target.'cfg(all(unix, not(target_os = "android")))'.dependencies]
@@ -60,6 +56,8 @@ winit = { version = "0.30", default-features = false, features = ["rwh_06", "and
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Com",
     "Win32_System_Console",
     "Win32_System_DataExchange",
     "Win32_System_Memory",

@@ -14,6 +14,7 @@ subgraph cluster_plat { label="platform/  (adapter layer, picks one backend at c
   "p_android" [label="platform/android.rs", color="#8e44ad", penwidth=2];
   "p_generic" [label="platform/generic.rs", color="#7f8c8d", penwidth=2];
   "p_linux" [label="platform/linux.rs", color="#27ae60", penwidth=2];
+  "p_windows_folders" [label="platform/windows/folders.rs", color="#2e86c1", penwidth=2];
   "p_windows_mod" [label="platform/windows/mod.rs", color="#2e86c1", penwidth=2];
   "p_windows_native" [label="platform/windows/native.rs", color="#2e86c1", penwidth=2];
   "p_windows_pointer" [label="platform/windows/pointer.rs", color="#2e86c1", penwidth=2];
@@ -36,6 +37,7 @@ subgraph cluster_ext { label="outside crates"; style="rounded,filled"; fillcolor
 "p_generic" -> "x_winit" [color="#7f8c8d", style=dashed]
 "platform_mod" -> "p_linux" [label="cfg(unix, not android)", color="#27ae60", penwidth=2, fontcolor="#27ae60"]
 "p_linux" -> "x_winit" [color="#27ae60", style=dashed]
+"p_windows_folders" -> "x_windows_sys" [color="#2e86c1", style=dashed]
 "platform_mod" -> "p_windows_mod" [label="cfg(windows)", color="#2e86c1", penwidth=2, fontcolor="#2e86c1"]
 "p_windows_mod" -> "x_winit" [color="#2e86c1", style=dashed]
 "p_windows_native" -> "x_windows_sys" [color="#2e86c1", style=dashed]

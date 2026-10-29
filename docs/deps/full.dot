@@ -1,6 +1,6 @@
 digraph G {
 rankdir=BT; newrank=true; compound=true; splines=true; nodesep=0.35; ranksep=0.9; pad=0.4;
-label=<<b>InkPDF module dependencies (all 112 edges; arrows point at what is used; line weight = uses)</b>>; labelloc=t; fontsize=22; fontname="Helvetica";
+label=<<b>InkPDF module dependencies (all 116 edges; arrows point at what is used; line weight = uses)</b>>; labelloc=t; fontsize=22; fontname="Helvetica";
 node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=13, margin="0.14,0.07", color="#888888"];
 edge [arrowsize=0.6];
 subgraph cluster_Base { label="base — plain data and arithmetic"; labeljust=l; fontname="Helvetica"; fontsize=14; style="rounded,filled"; fillcolor="#e8f1fb55"; color="#4a7fb5";
@@ -25,6 +25,7 @@ subgraph cluster_Model { label="model — what a drawing is made of"; labeljust=
   "pages" [fillcolor="white"];
 }
 subgraph cluster_Domain { label="domain — what devices and tools mean"; labeljust=l; fontname="Helvetica"; fontsize=14; style="rounded,filled"; fillcolor="#fdf3d655"; color="#b8860b";
+  "browse" [fillcolor="white"];
   "input" [fillcolor="white"];
   "requests" [fillcolor="white"];
   "selection" [fillcolor="white"];
@@ -50,6 +51,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
   "thumbnail" [fillcolor="white"];
   "tiles" [fillcolor="white"];
 }
+"app" -> "browse" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "app" -> "clock" [color="#55555599", penwidth=1.80, tooltip="3 uses"];
 "app" -> "doc" [color="#55555599", penwidth=1.80, tooltip="3 uses"];
 "app" -> "editor" [color="#55555599", penwidth=1.96, tooltip="4 uses"];
@@ -74,22 +76,23 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "doc" -> "pages" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "doc" -> "tiles" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "doc" -> "view" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
+"editor" -> "browse" [color="#6a5acd99", penwidth=1.30, tooltip="1 uses"];
 "editor" -> "clipboard" [color="#6a5acd99", penwidth=1.30, tooltip="1 uses"];
 "editor" -> "clock" [color="#6a5acd99", penwidth=1.30, tooltip="1 uses"];
 "editor" -> "colour" [color="#6a5acd99", penwidth=1.30, tooltip="1 uses"];
 "editor" -> "figure" [color="#6a5acd99", penwidth=1.30, tooltip="1 uses"];
 "editor" -> "geometry" [color="#6a5acd99", penwidth=1.30, tooltip="1 uses"];
 "editor" -> "ink" [color="#6a5acd99", penwidth=2.38, tooltip="8 uses"];
-"editor" -> "input" [color="#6a5acd99", penwidth=2.80, tooltip="15 uses"];
+"editor" -> "input" [color="#6a5acd99", penwidth=2.88, tooltip="17 uses"];
 "editor" -> "links" [color="#6a5acd99", penwidth=1.80, tooltip="3 uses"];
 "editor" -> "motion" [color="#6a5acd99", penwidth=1.59, tooltip="2 uses"];
 "editor" -> "outline" [color="#6a5acd99", penwidth=1.80, tooltip="3 uses"];
 "editor" -> "pages" [color="#6a5acd99", penwidth=1.59, tooltip="2 uses"];
-"editor" -> "requests" [color="#6a5acd99", penwidth=1.96, tooltip="4 uses"];
+"editor" -> "requests" [color="#6a5acd99", penwidth=2.09, tooltip="5 uses"];
 "editor" -> "settings" [color="#6a5acd99", penwidth=1.80, tooltip="3 uses"];
 "editor" -> "tool" [color="#6a5acd99", penwidth=1.96, tooltip="4 uses"];
-"editor" -> "toolbar" [color="#6a5acd99", penwidth=2.30, tooltip="7 uses"];
-"editor" -> "tools" [color="#6a5acd99", penwidth=2.20, tooltip="6 uses"];
+"editor" -> "toolbar" [color="#6a5acd99", penwidth=2.38, tooltip="8 uses"];
+"editor" -> "tools" [color="#6a5acd99", penwidth=2.30, tooltip="7 uses"];
 "editor" -> "view" [color="#6a5acd99", penwidth=1.59, tooltip="2 uses"];
 "editor" -> "workspace" [color="#6a5acd99", penwidth=1.59, tooltip="2 uses"];
 "figure" -> "geometry" [color="#3a8f5c99", penwidth=1.59, tooltip="2 uses"];
@@ -113,6 +116,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "links" -> "view" [color="#3a8f5c99", penwidth=1.30, tooltip="1 uses"];
 "outline" -> "pages" [color="#3a8f5c99", penwidth=1.30, tooltip="1 uses"];
 "pages" -> "view" [color="#3a8f5c99", penwidth=1.30, tooltip="1 uses"];
+"platform" -> "browse" [color="#55555599", penwidth=1.96, tooltip="4 uses"];
 "platform" -> "clipboard" [color="#55555599", penwidth=1.59, tooltip="2 uses"];
 "platform" -> "clock" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "platform" -> "input" [color="#55555599", penwidth=2.20, tooltip="6 uses"];
@@ -132,15 +136,16 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "tiles" -> "view" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "tool" -> "figure" [color="#b8860b99", penwidth=1.30, tooltip="1 uses"];
 "tool" -> "ink" [color="#b8860b99", penwidth=1.30, tooltip="1 uses"];
+"toolbar" -> "browse" [color="#a14a9699", penwidth=1.30, tooltip="1 uses"];
 "toolbar" -> "colour" [color="#a14a9699", penwidth=1.30, tooltip="1 uses"];
 "toolbar" -> "figure" [color="#a14a9699", penwidth=1.59, tooltip="2 uses"];
 "toolbar" -> "geometry" [color="#a14a9699", penwidth=1.30, tooltip="1 uses"];
-"toolbar" -> "ink" [color="#a14a9699", penwidth=2.09, tooltip="5 uses"];
+"toolbar" -> "ink" [color="#a14a9699", penwidth=2.20, tooltip="6 uses"];
 "toolbar" -> "input" [color="#a14a9699", penwidth=1.59, tooltip="2 uses"];
 "toolbar" -> "outline" [color="#a14a9699", penwidth=1.30, tooltip="1 uses"];
 "toolbar" -> "requests" [color="#a14a9699", penwidth=1.30, tooltip="1 uses"];
-"toolbar" -> "scene" [color="#a14a9699", penwidth=2.96, tooltip="19 uses"];
-"toolbar" -> "text" [color="#a14a9699", penwidth=1.30, tooltip="1 uses"];
+"toolbar" -> "scene" [color="#a14a9699", penwidth=3.00, tooltip="20 uses"];
+"toolbar" -> "text" [color="#a14a9699", penwidth=1.59, tooltip="2 uses"];
 "toolbar" -> "tool" [color="#a14a9699", penwidth=1.80, tooltip="3 uses"];
 "toolbar" -> "view" [color="#a14a9699", penwidth=1.30, tooltip="1 uses"];
 "tools" -> "figure" [color="#d2691e99", penwidth=1.96, tooltip="4 uses"];

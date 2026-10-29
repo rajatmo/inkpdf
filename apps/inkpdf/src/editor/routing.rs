@@ -71,7 +71,9 @@ impl Editor {
 
     /// Whether the keyboard is heard: a text box is being typed into.
     pub fn is_typing(&self) -> bool {
-        self.ws.tool == Tool::Text && self.tools.text.is_typing() && self.chrome.prompt.is_none()
+        // (The Save As dialog types the file's name.)
+        self.chrome.save_as.is_some() && self.chrome.prompt.is_none()
+            || self.ws.tool == Tool::Text && self.tools.text.is_typing() && self.chrome.prompt.is_none()
     }
 
     /// Type `typed` at the end of the text (see [`crate::text::clean`]). Heard only while typing.
@@ -109,6 +111,9 @@ impl Editor {
     fn key(&mut self, key: Key<'_>) -> bool {
         if self.chrome.prompt.is_some() {
             return false;
+        }
+        if self.chrome.save_as.is_some() {
+            return self.save_as_key(key);
         }
         if self.chrome.overview.is_some() {
             return self.overview_key(key);
@@ -149,7 +154,7 @@ impl Editor {
     /// S saves; A selects all of what the tool made, C copies, X cuts, V pastes, D duplicates. Returns whether it
     /// was one.
     pub fn shortcut(&mut self, key: &str, shift: bool) -> bool {
-        if self.chrome.prompt.is_some() {
+        if self.chrome.prompt.is_some() || self.chrome.save_as.is_some() {
             return false;
         }
         let letter = key.to_ascii_lowercase();
@@ -170,7 +175,11 @@ impl Editor {
         match (letter.as_str(), shift) {
             ("z", false) => self.undo(),
             ("z", true) | ("y", _) => self.redo(),
-            ("s", _) => {
+            ("s", true) => {
+                self.settle();
+                self.ws.requests.push(Request::SaveAs);
+            }
+            ("s", false) => {
                 self.settle();
                 self.ws.requests.push(Request::Save);
             }

@@ -36,6 +36,8 @@ pub struct Chrome {
     pub colour_hsv: Hsv,
     /// The pages overview, while it is up (see [`super::overview`]).
     pub overview: Option<super::overview::OverviewState>,
+    /// The Save As dialog, while it is up (see [`super::save_as`]).
+    pub save_as: Option<super::save_as::SaveAsState>,
     /// The press under way on the window's own controls, if any.
     pub(crate) act: Act,
 }
@@ -45,8 +47,18 @@ impl Chrome {
     pub(super) fn clear_press_and_prompt(&mut self) {
         self.act = Act::Idle;
         self.overview = None;
+        self.save_as = None;
         self.prompt = None;
         self.prompt_grab = None;
+    }
+
+    /// Put the Save As dialog up, and everything else of the chrome away.
+    pub(super) fn put_up_save_as(&mut self, state: super::save_as::SaveAsState) {
+        self.act = Act::Idle;
+        self.overview = None;
+        self.panel = None;
+        self.hover = None;
+        self.save_as = Some(state);
     }
 
     /// Put the prompt up, and everything else of the chrome away.

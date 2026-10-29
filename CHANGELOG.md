@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- Save As is the app's own card, on every platform (it replaces the system's save window, which stays hidden when raised from a
+  pen tap and looks different everywhere): it opens on the Documents folder (the one Windows names, which may be in OneDrive;
+  on Linux the desktop's own; the document's folder when it already has a file), offers `Untitled.pdf` with its name selected,
+  and has places to start from, the folder you are in with an up button, its subfolders and PDFs, and Cancel and Save. A new
+  document saves through it from Ctrl+S or the save button; Ctrl+Shift+S saves any document under another name.
+- Every device finishes it: the left mouse button and keyboard at a desk, the stylus's tip on a slate (the name offered can be
+  saved as it is, so no keyboard is needed), a finger taps and drags the list, the wheel scrolls it. A name is checked
+  (no `/ \ : * ? " < > |`, no `CON`/`NUL`, no trailing dot, `.pdf` added) so a file saved here opens anywhere; a file that
+  is there is replaced only when Save is pressed a second time.
+- Inside: `browse.rs` (the entries, the places and the file-name rules, no file system), `editor/save_as.rs` (the state, which
+  asks the shell to list a folder and to write the file through `Request`s), `toolbar/save_as.rs` (layout and drawing as plain
+  data), `app/folders.rs` (folders are read on a thread of their own, so a slow drive cannot stall a frame). The `rfd`
+  dependency is gone. New tests: the name rules, the dialog's state machine, every device through the editor, and a hostile storm.
+
 ## 1.0.0
 
 Motion, the Material way: the interface now moves instead of switching.

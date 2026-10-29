@@ -21,7 +21,6 @@
 //!
 //! A new OS therefore adds one `PointerSource`; it changes nothing above this module.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use winit::window::Window;
@@ -44,7 +43,7 @@ use linux as os;
 #[cfg(windows)]
 use windows as os;
 
-pub use os::{SystemClipboard, attach_parent_console, detect_mode, error_box, motion_prefs, open_url, report_fatal};
+pub use os::{SystemClipboard, attach_parent_console, detect_mode, documents_dir, error_box, motion_prefs, open_url, places, report_fatal};
 
 /// A pen, touch and posture reader that is the OS's own: the one place input is taken from before winit sees it.
 pub trait PointerSource {
@@ -63,20 +62,6 @@ pub trait PointerSource {
 
     /// Stop receiving; called when the app exits.
     fn uninstall(&mut self);
-}
-
-/// Where to save a new document, asked for with the system's save window, `name` suggested. `None` if cancelled.
-#[cfg(not(target_os = "android"))]
-pub fn save_file_dialog(name: &str) -> Option<PathBuf> {
-    rfd::FileDialog::new().add_filter("PDF", &["pdf"]).set_file_name(name).save_file()
-}
-
-/// Android's save window is the Storage Access Framework, an `Intent` answered with a `content://` address rather than
-/// a path, which needs the Java side (`docs/PORTING.md`, step A4). Until then a new document cannot be saved anywhere.
-#[cfg(target_os = "android")]
-pub fn save_file_dialog(_name: &str) -> Option<PathBuf> {
-    eprintln!("cannot ask where to save on Android yet");
-    None
 }
 
 /// Start the OS's own pen and touch reader for `window`. An `Err` is not fatal: the shell falls back to the basic

@@ -1,6 +1,6 @@
 //! What the editor asks of the shell: opening and saving files, the context menu, settings.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use winit::window::Fullscreen;
 
@@ -12,7 +12,7 @@ use crate::platform;
 use crate::requests::Choice;
 use crate::settings;
 
-use super::{InkStamp, State};
+use super::{InkStamp, State, folders};
 
 /// What to do once any unsaved work has been dealt with.
 #[derive(Debug, PartialEq)]
@@ -37,6 +37,10 @@ impl State {
     /// wait for the answer (see [`Self::answered`]). While a prompt is up, further requests are
     /// ignored.
     pub(super) fn after_settling(&mut self, then: Then) {
+        // (The Save As dialog is a prompt too: what is asked while it is up waits for the person to finish with it.)
+        if self.ed.save_as_open() {
+            return;
+        }
         self.ed.settle();
         if !self.ed.ink.is_dirty() {
             self.run(then);
@@ -58,6 +62,11 @@ impl State {
     /// The prompt was answered.
     pub(super) fn answered(&mut self, choice: Choice) {
         let Some(then) = self.then.take() else { return };
+        // A document with no file yet is asked where to go: what was waiting follows when the file has been written.
+        if choice == Choice::Save && self.ed.ink.is_dirty() && self.doc.as_ref().is_some_and(|d| d.path.is_none()) {
+            self.begin_save_as(Some(then));
+            return;
+        }
         if proceeds(choice, || self.save_now()) {
             self.run(then);
         }
@@ -71,6 +80,7 @@ impl State {
         self.ed.links = doc.take_links();
         self.ed.outline = doc.take_outline();
         self.doc = Some(doc);
+        self.save_then = None;
         self.ink_built = InkStamp::NEVER;
         self.last_zoom = self.ed.view.zoom;
         self.title.clear();
@@ -109,13 +119,49 @@ impl State {
         self.after_settling(Then::Blank);
     }
 
-    /// Where to save a new document, asked for with the system's save window. `None` if cancelled.
-    fn save_dialog(&self) -> Option<PathBuf> {
-        let mut path = platform::save_file_dialog(&format!("{UNTITLED}.pdf"))?;
-        if path.extension().is_none() {
-            path.set_extension("pdf");
+    /// Put the Save As dialog up, and let `then` (if there is one) wait for it. It starts in the folder the document is in, or in
+    /// the Documents folder for a document that has no file yet, offering the document's name, or `Untitled.pdf`.
+    pub(super) fn begin_save_as(&mut self, then: Option<Then>) {
+        if self.ed.save_as_open() {
+            return;
         }
-        Some(path)
+        self.ed.settle();
+        self.save_then = then;
+        let file = self.doc.as_ref().and_then(|d| d.path.clone());
+        let dir = file.as_deref().and_then(Path::parent).filter(|p| p.is_dir()).map_or_else(platform::documents_dir, Path::to_path_buf);
+        let name = file.as_deref().and_then(Path::file_name).map_or_else(|| format!("{UNTITLED}.pdf"), |n| n.to_string_lossy().into_owned());
+        self.ed.ask_save_as(dir, &name, platform::places());
+        self.window.request_redraw();
+    }
+
+    /// The Save As dialog was confirmed with `path`: the document is written there, and becomes that file.
+    fn save_to(&mut self, path: PathBuf) {
+        let result = match &mut self.doc {
+            Some(doc) => doc.save_as(&path, &self.ed.ink),
+            None => Err("there is no document to save".to_string()),
+        };
+        match result {
+            Ok(()) => {
+                self.ed.document_saved();
+                self.ed.save_as_done(Ok(()));
+                self.title.clear();
+                self.window.request_redraw();
+                if let Some(then) = self.save_then.take() {
+                    self.run(then);
+                }
+            }
+            Err(e) => {
+                eprintln!("save failed: {e}");
+                self.ed.save_as_done(Err(format!("Could not save: {e}")));
+            }
+        }
+    }
+
+    /// The folders the dialog asked for that have been read: handed to the editor.
+    fn take_listings(&mut self) {
+        while let Ok(listed) = self.listings.1.try_recv() {
+            self.ed.folder_listed(&listed.dir, listed.result);
+        }
     }
 
     /// Write the ink into the PDF; a document with no file yet asks where to save it first.
@@ -126,20 +172,14 @@ impl State {
             return true;
         }
         let Some(has_file) = self.doc.as_ref().map(|d| d.path.is_some()) else { return true };
-        // A document with no file yet is saved where the person says, or not at all.
-        let new_path = if has_file {
-            None
-        } else if let Some(path) = self.save_dialog() {
-            Some(path)
-        } else {
+        // A document with no file yet is saved where the person says: the dialog asks, and the write follows from it
+        // (see `save_to`), so nothing has been saved yet.
+        if !has_file {
+            self.begin_save_as(None);
             return false;
-        };
+        }
         let Some(doc) = &mut self.doc else { return true };
-        let result = match &new_path {
-            Some(path) => doc.save_as(path, &self.ed.ink),
-            None => doc.save(&self.ed.ink),
-        };
-        match result {
+        match doc.save(&self.ed.ink) {
             Ok(()) => {
                 self.ed.document_saved();
                 self.title.clear();
@@ -178,6 +218,11 @@ impl State {
     }
 
     pub(super) fn request_close(&mut self) {
+        // Closing the window puts the Save As dialog away first (what it was for is not going to happen).
+        if self.ed.save_as_open() {
+            self.ed.cancel_save_as();
+            self.save_then = None;
+        }
         self.after_settling(Then::Exit);
     }
 
@@ -199,12 +244,20 @@ impl State {
 
     /// Do what the editor asked for after an input event, in the order it asked.
     pub(super) fn service(&mut self) {
+        self.take_listings();
         while let Some(request) = self.ed.requests().pop() {
             match request {
                 Request::Answer(choice) => self.answered(choice),
                 Request::SettingsChanged => self.save_settings(),
                 Request::Save => {
                     self.save_now();
+                }
+                Request::SaveAs => self.begin_save_as(None),
+                Request::ListFolder(dir) => folders::spawn(dir, self.window.clone(), self.listings.0.clone()),
+                Request::SaveTo(path) => self.save_to(path),
+                Request::SaveAsCancelled => {
+                    self.save_then = None;
+                    self.window.request_redraw();
                 }
                 Request::Fullscreen => self.toggle_fullscreen(),
                 Request::Close => self.close_document(),

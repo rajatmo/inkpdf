@@ -58,7 +58,7 @@ ones below; no two modules may reach each other, directly or through others.
 | session | `editor` |
 | tools | `tools` |
 | ui | `toolbar` |
-| domain | `tool`, `input`, `requests`, `workspace`, `selection`, `settings` |
+| domain | `tool`, `browse`, `input`, `requests`, `workspace`, `selection`, `settings` |
 | model | `figure`, `ink`, `laser`, `links`, `outline`, `pages` |
 | base | `plane`, `motion`, `scene`, `clock`, `geometry`, `colour`, `coords`, `view`, `text`, `smooth`, `clipboard` |
 
@@ -94,6 +94,20 @@ ones below; no two modules may reach each other, directly or through others.
    * `Editor` derefs to the document state read-only outside tests, so only the editor and the tools change it, and the
      shell asks for changes in the editor's terms (`set_dpr`, `document_saved`, `requests()`, ...);
    * the editor reads the time from its own clock, not from the pointer layer.
+### The Save As card
+
+An in-app modal like the prompt and the pages overview (a system save window stays hidden when raised from a pen tap and looks
+different on every platform). It is three parts and a thread, one per layer, so none of it needs a platform:
+
+* `browse.rs` (domain): `Entry`, `Place`, the file-name rules (`clean_name`: no `/ \ : * ? " < > |`, no device names, no trailing
+  dot, `.pdf` added) and the ordering. No file system.
+* `editor/save_as.rs` (session): `SaveAsState`, a state machine that takes pointers, keys and the wheel from any device, and asks
+  the shell through `Request::ListFolder` and `Request::SaveTo` (answered by `Editor::folder_listed` and `Editor::save_as_done`,
+  or `SaveAsCancelled`). The shell keeps what was waiting on it (`Then`) across the dialog.
+* `toolbar/save_as.rs` (ui): `SaveAsLayout` (where everything is, hit testing, scrolling) and the drawing as panels, lines and labels.
+* `app/folders.rs` (adapter): folders are read on a thread of their own and handed back through a channel.
+* `platform::documents_dir()` and `platform::places()` say where it opens: Documents as the OS names it, then the other places.
+
 ### Platforms (`src/platform/`)
 
 Everything that differs by operating system is behind `platform/mod.rs`, chosen at compile time: `windows/` (Win32

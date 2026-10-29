@@ -26,7 +26,8 @@ Branch `linux-android-port`. `main` is untouched and still the Windows app. Writ
 | Mouse draws, Ctrl+S saves an Ink annotation | as before | **yes** (`tools/e2e/linux-smoke.sh`) | no |
 | Pen pressure / eraser / barrel / history | yes | **not yet** (L2) | not yet (A2) |
 | Clipboard for text boxes | yes | in-memory only (L3) | in-memory only (A4) |
-| File dialog, error box | yes | file dialog yes (rfd), error box = terminal | none (A4) |
+| Save As | in-app card, opens on Documents | in-app card, opens on Documents (XDG) | in-app card, opens on shared Documents; needs the SAF for real saving (A4) |
+| Error box | yes | terminal | terminal |
 
 Not verified by me, because the container has no pen, no touch screen and no Windows: any real pen input, and the
 Windows tests *running* (they only build here). CI on `windows-latest` is still the arbiter for Windows.
@@ -46,7 +47,7 @@ The picture of all this, generated from the code: `docs/deps/platform.svg` (rout
   (font lookup: Windows fonts folder / Linux and Android font folders, Liberation Sans is Arial-metric),
   `gpu/device.rs` (DX12 / Vulkan), `settings.rs` (`%APPDATA%` / `$XDG_CONFIG_HOME`), `doc.rs` (a read-only file is
   refused on Linux too, and a saved file keeps its permissions), `inkpdf-bot` (Windows-only driver, gated).
-* Cargo: winit gets X11 + Wayland features on Linux and NativeActivity on Android; `rfd` is not built for Android.
+* Cargo: winit gets X11 + Wayland features on Linux and NativeActivity on Android; the `rfd` dependency is gone (Save As is the app's own card).
   Windows dependency features are exactly as before.
 * Layering test: `platform` replaces `win_pointer`/`native`/`posture` in `LAYERS`; the session still may not name it.
 
@@ -100,7 +101,7 @@ Android has had `MotionEvent` historical samples and `TOOL_TYPE_STYLUS` for a lo
 * Posture: no reliable signal on Linux; keep `--mode` and the toolbar's mode button.
 
 **L3. Linux polish.** Clipboard (Wayland: the fork already carries a clipboard in `platform::wayland::Clipboard`; X11:
-`arboard`), error dialog (`rfd::MessageDialog`), animations setting (`gsettings`/portal), packaging (AppImage or
+`arboard`), an in-app error card (like Save As), animations setting (`gsettings`/portal), packaging (AppImage or
 Flatpak; a `.desktop` file and icon), HiDPI check, the real `latency.sh` equivalent.
 
 **A1. Android build.** `cargo check` already passes. Needs a library target: `src/lib.rs` with the module list and an

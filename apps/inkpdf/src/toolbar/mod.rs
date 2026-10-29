@@ -12,6 +12,7 @@ mod icons;
 mod look;
 mod overview;
 mod prompt;
+mod save_as;
 mod theme;
 mod tool_panel;
 
@@ -32,6 +33,7 @@ pub use overview::{
 };
 pub use look::Look;
 pub use prompt::{PromptLayout, PromptView};
+pub use save_as::{ListingView, SaveAsHit, SaveAsLayout, SaveAsView};
 pub use theme::{Align, Image, Label, Ui};
 use theme::{ACCENT, ACCENT_WASH, HOVER_WASH, INK, INK_DIM, RIM, SEPARATOR};
 #[cfg(test)]

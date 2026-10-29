@@ -11,6 +11,7 @@
 
 mod bench;
 mod files;
+mod folders;
 mod frame;
 mod ink_layer;
 mod overview;
@@ -21,6 +22,7 @@ use std::collections::HashSet;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 
 use winit::dpi::LogicalSize;
@@ -110,6 +112,10 @@ pub struct State {
     drawing: bool,
     /// What is waiting on the unsaved-changes prompt.
     then: Option<files::Then>,
+    /// What is waiting on the Save As dialog: it follows when the file is written, and is dropped if the dialog is cancelled.
+    save_then: Option<files::Then>,
+    /// The folders read for the Save As dialog arrive here, from threads of their own (see [`folders`]).
+    listings: (Sender<folders::Listed>, Receiver<folders::Listed>),
     /// The mode was chosen on the command line, so a change of posture does not change it.
     mode_forced: bool,
     /// Which of Ctrl, Shift, … are held (for the desktop mode's shortcuts).
@@ -164,6 +170,8 @@ impl State {
             text_index: text_layer::TextIndex::default(),
             drawing: false,
             then: None,
+            save_then: None,
+            listings: std::sync::mpsc::channel(),
             mode_forced: opts.mode.is_some(),
             modifiers: ModifiersState::empty(),
         };

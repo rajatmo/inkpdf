@@ -29,6 +29,10 @@ impl Editor {
             self.prompt_pointer(Device::Mouse, 0, Phase::Move, pos);
             return;
         }
+        if self.chrome.save_as.is_some() {
+            self.save_as_pointer(Device::Mouse, 0, Phase::Move, pos);
+            return;
+        }
         if self.chrome.overview.is_some() {
             self.overview_pointer(Device::Mouse, 0, Phase::Move, pos);
             return;
@@ -93,6 +97,12 @@ impl Editor {
             return;
         }
         let pressed = state == ElementState::Pressed;
+        if self.chrome.save_as.is_some() {
+            if button == MouseButton::Left {
+                self.save_as_pointer(Device::Mouse, 0, if pressed { Phase::Down } else { Phase::Up }, self.cursor);
+            }
+            return;
+        }
         if self.chrome.overview.is_some() {
             if button == MouseButton::Left && self.chrome.prompt.is_none() {
                 self.overview_pointer(Device::Mouse, 0, if pressed { Phase::Down } else { Phase::Up }, self.cursor);
@@ -159,6 +169,10 @@ impl Editor {
     /// The wheel scrolls, up and down and (for a wheel that tilts or a touchpad) sideways.
     pub fn wheel(&mut self, delta: MouseScrollDelta) {
         if self.chrome.prompt.is_some() {
+            return;
+        }
+        if self.chrome.save_as.is_some() {
+            self.save_as_wheel(delta);
             return;
         }
         if self.chrome.overview.is_some() {

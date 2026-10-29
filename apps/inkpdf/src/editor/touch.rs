@@ -107,6 +107,16 @@ impl Editor {
     /// installed. Pans and zooms; it cannot tell a pen from a finger.
     pub fn basic_touch(&mut self, phase: winit::event::TouchPhase, id: u64, pos: [f32; 2]) {
         use winit::event::TouchPhase;
+        if self.chrome.save_as.is_some() && self.chrome.prompt.is_none() {
+            let phase = match phase {
+                TouchPhase::Started => Phase::Down,
+                TouchPhase::Moved => Phase::Move,
+                TouchPhase::Ended => Phase::Up,
+                TouchPhase::Cancelled => Phase::Cancel,
+            };
+            self.save_as_pointer(Device::Touch, id as u32, phase, pos);
+            return;
+        }
         if self.chrome.prompt.is_some() || self.chrome.overview.is_some() {
             return;
         }

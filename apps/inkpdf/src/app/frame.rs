@@ -25,7 +25,7 @@ impl State {
     pub(super) fn redraw(&mut self) {
         // A frame can be asked for again from inside a dialog's message loop; that one is skipped
         // (it would wait for the swap-chain image this frame is holding).
-        if std::mem::replace(&mut self.drawing, true) {
+        if self.suspended || std::mem::replace(&mut self.drawing, true) {
             return;
         }
         self.draw_frame();

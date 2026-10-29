@@ -112,6 +112,10 @@ pub struct State {
     drawing: bool,
     /// What is waiting on the unsaved-changes prompt.
     then: Option<files::Then>,
+    /// The app is in the background and has no window to draw to (Android): nothing is drawn, and nothing asks to be.
+    suspended: bool,
+    /// Whether the on-screen keyboard was last asked for (see `platform::set_text_input`).
+    keyboard_shown: bool,
     /// What is waiting on the Save As dialog: it follows when the file is written, and is dropped if the dialog is cancelled.
     save_then: Option<files::Then>,
     /// The folders read for the Save As dialog arrive here, from threads of their own (see [`folders`]).
@@ -170,6 +174,8 @@ impl State {
             text_index: text_layer::TextIndex::default(),
             drawing: false,
             then: None,
+            suspended: false,
+            keyboard_shown: false,
             save_then: None,
             listings: std::sync::mpsc::channel(),
             mode_forced: opts.mode.is_some(),
@@ -203,6 +209,21 @@ impl State {
         }
         state.window.request_redraw();
         Ok(state)
+    }
+
+    /// The window was taken away (the app went to the background): no drawing until [`Self::resumed`].
+    pub fn suspended(&mut self) {
+        self.suspended = true;
+        self.gpu.pause();
+    }
+
+    /// A window is back (the app came to the foreground): the surface is made again at the window's size.
+    pub fn resumed(&mut self) {
+        let size = self.window.inner_size();
+        self.gpu.resume(size.width, size.height);
+        self.ed.set_viewport([size.width.max(1) as f32, size.height.max(1) as f32]);
+        self.suspended = false;
+        self.window.request_redraw();
     }
 
     fn set_title(&mut self, title: String) {

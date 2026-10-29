@@ -2,7 +2,7 @@
 //! pen path slower is seen before it is felt. It is a benchmark, not a test of behaviour, so it is ignored by default; run it in
 //! release, where the numbers mean something:
 //!
-//! `cargo test --release -p inkpdf --bin inkpdf -- latency_budget --ignored --nocapture`
+//! `cargo test --release -p inkpdf --lib -- latency_budget --ignored --nocapture`
 //!
 //! The editor's share is tiny next to the display's (about a microsecond against a frame of 8 ms at 120 Hz), which is what lets
 //! the code above it be abstracted freely; the bound below is far looser than today's numbers and only catches something gross

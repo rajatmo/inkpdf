@@ -173,7 +173,7 @@ fn modules() -> BTreeSet<String> {
         let path = entry.path();
         let name = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
         let is_module = path.is_dir() || path.extension().is_some_and(|e| e == "rs");
-        if is_module && !matches!(name.as_str(), "main" | "bin" | "stress" | "architecture" | "testutil") {
+        if is_module && !matches!(name.as_str(), "main" | "lib" | "bin" | "stress" | "architecture" | "testutil") {
             found.insert(name);
         }
     }

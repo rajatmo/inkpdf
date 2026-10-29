@@ -16,6 +16,9 @@ use crate::input::{Mode, PointerEvent};
 pub use folders::{documents_dir, places};
 pub use native::{SystemClipboard, attach_parent_console, error_box, motion_prefs, open_url, report_fatal};
 
+/// An on-screen keyboard is the system's to show on Windows (a touch keyboard comes up by itself): nothing to do.
+pub fn set_text_input(_active: bool) {}
+
 /// The mode the machine's posture calls for (a convertible in slate posture is a tablet).
 pub fn detect_mode() -> Mode {
     posture::detect()

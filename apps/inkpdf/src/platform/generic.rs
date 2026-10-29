@@ -6,6 +6,10 @@ use winit::window::Window;
 
 use crate::clipboard::TextClipboard;
 
+/// Show or hide an on-screen keyboard: nothing on a desktop (the keyboard is there). (Android has its own.)
+#[cfg(not(target_os = "android"))]
+pub fn set_text_input(_active: bool) {}
+
 /// There is no terminal to join: a program started from one already has it.
 pub fn attach_parent_console() {}
 

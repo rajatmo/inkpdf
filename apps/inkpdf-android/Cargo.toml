@@ -1,0 +1,20 @@
+[package]
+name = "inkpdf-android"
+description = "InkPDF as an Android NativeActivity: the shared library the APK holds (empty on every other platform)"
+version = "0.1.0"
+authors = ["Rajat Mandal"]
+edition.workspace = true
+license.workspace = true
+publish = false
+
+# Not `[lints] workspace = true`: the activity's entry point is an exported C symbol and the log bridge calls into libc.
+
+[lib]
+name = "inkpdf_android"
+crate-type = ["cdylib"]
+
+[target.'cfg(target_os = "android")'.dependencies]
+inkpdf = { path = "../inkpdf" }
+# The type `android_main` takes; the NativeActivity glue is chosen here (the library is the one that holds the entry point).
+winit = { version = "0.30", default-features = false, features = ["rwh_06", "android-native-activity"] }
+libc = "0.2"

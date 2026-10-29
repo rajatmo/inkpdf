@@ -10,6 +10,11 @@ publish = false
 # Not `[lints] workspace = true`: the workspace forbids unsafe code, and reading the pen
 # through Win32 pointer messages (M2) needs it, confined to one small module.
 
+# The program is the library; the binary below is only its entry point (the Android library is another).
+[lib]
+name = "inkpdf"
+path = "src/lib.rs"
+
 [[bin]]
 name = "inkpdf"
 path = "src/main.rs"

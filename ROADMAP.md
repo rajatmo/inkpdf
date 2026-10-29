@@ -48,8 +48,8 @@ Non-negotiables, agreed with the owner:
   (`fn a_page_that_moves_slides_from_where_it_was_and_a_new_one_grows_in()`); `rustfmt.toml` is `max_width = 150`,
   `use_small_heuristics = "Max"`. Line endings are LF for Rust, Markdown, TOML and YAML (`.gitattributes`); `.ps1` and `.iss`
   are CRLF.
-- Unit tests are in the binary crate: `cargo test -p inkpdf --bin inkpdf` (there is no library target, `--lib` fails).
-  Storms scale with `INKPDF_STRESS=10 cargo test --release -p inkpdf --bin inkpdf -- --include-ignored`.
+- Unit tests are in the library crate (the program is `apps/inkpdf/src/lib.rs`; `main.rs` is only its entry point):
+  `cargo test -p inkpdf --lib`. Storms scale with `INKPDF_STRESS=10 cargo test --release -p inkpdf --lib -- --include-ignored`.
 - Build output and scratch belong **outside** the repository (`.cargo/config.toml` sends the build to `../inkpdf-build`).
 - Do not bump the version, rename `CHANGELOG.md` headings or build installers unless the task says so (section 7 lists what a
   release is).
@@ -387,7 +387,7 @@ Owner-run checks per milestone (say which ones in the pull request):
 
 | Check | How |
 |---|---|
-| All tests and storms at 10x | `INKPDF_STRESS=10 cargo test --release -p inkpdf --bin inkpdf -- --include-ignored` (about 40 s) |
+| All tests and storms at 10x | `INKPDF_STRESS=10 cargo test --release -p inkpdf --lib -- --include-ignored` (about 40 s) |
 | Real-input checks | `tools/e2e/run.ps1` in the foreground on a quiet machine (smoke, modes, overview, thumbs; add one script per milestone) |
 | Latency and idle CPU | `tools/e2e/latency.ps1` and the numbers in section 1; idle window 0% |
 | Soak | open and close the overview, add/delete/undo pages and draw for 30 rounds; memory, handles and threads must be flat after the texture cache fills (budget 768 MB) |

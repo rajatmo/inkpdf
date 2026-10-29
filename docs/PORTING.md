@@ -104,11 +104,12 @@ Android has had `MotionEvent` historical samples and `TOOL_TYPE_STYLUS` for a lo
 `arboard`), an in-app error card (like Save As), animations setting (`gsettings`/portal), packaging (AppImage or
 Flatpak; a `.desktop` file and icon), HiDPI check, the real `latency.sh` equivalent.
 
-**A1. Android build.** `cargo check` already passes. Needs a library target: `src/lib.rs` with the module list and an
-`android_main(app: AndroidApp)` (`#[no_mangle]`), `main.rs` becoming a thin caller, `crate-type = ["cdylib", "rlib"]`.
-This moves the unit tests from the bin to the lib (`cargo test --bin inkpdf` becomes `--lib`): the one change here that
-touches your Windows workflow, so decide before doing it. Packaging: `cargo-apk2` or `xbuild` first; Gradle only when
-the Java side is needed. Surface lifecycle (`Suspended`/`Resumed` destroy and recreate the wgpu surface).
+**A1. Android build. Done (first cut).** The program is now the library `apps/inkpdf/src/lib.rs` (`main.rs` only calls `inkpdf::run()`;
+unit tests are `cargo test -p inkpdf --lib`). `apps/inkpdf-android` is the `cdylib` the APK holds (`android_main`, stderr forwarded to
+logcat as tag `inkpdf`). The GPU surface is paused on `Suspended` and remade on `Resumed`. `tools/android/build-apk.sh` builds and
+signs an arm64 APK (NativeActivity, no Java); CI builds it as an artifact. **Not run on a device by the author**: expect first-run
+problems and read `adb logcat -s inkpdf`. Known gaps: pen pressure/eraser/barrel (A2), system bars and cutouts (A3), files from other apps
+and the clipboard (A4); saving goes to the app's own `Documents` folder (`Android/data/app.inkpdf.test/files/Documents`).
 
 **A2. Android stylus.** `platform/android/stylus.rs`: `MotionEvent` through `android-activity` (tool type
 stylus/eraser/finger, pressure, `ACTION_HOVER_*`, historical pointer samples = `samples[]`, `BUTTON_STYLUS_PRIMARY`).
@@ -129,7 +130,7 @@ sudo apt install mesa-vulkan-drivers libxkbcommon-x11-0 fonts-liberation   # plu
 cargo run -p inkpdf --bin inkpdf -- some.pdf --mode desktop
 WINIT_UNIX_BACKEND=wayland cargo run -p inkpdf --bin inkpdf     # or =x11
 tools/e2e/linux-smoke.sh                                                      # needs xvfb, xdotool
-cargo check -p inkpdf --bin inkpdf --target aarch64-linux-android            # rustup target add aarch64-linux-android first
+cargo check -p inkpdf-android --target aarch64-linux-android                  # rustup target add aarch64-linux-android first
 ```
 
 Cross-checking Windows from Linux (no Windows needed for compile errors): `rustup target add x86_64-pc-windows-msvc`,

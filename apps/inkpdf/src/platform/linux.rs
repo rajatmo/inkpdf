@@ -13,7 +13,7 @@ use super::generic::{existing_places, first_folder, home_dir, parse_user_dirs};
 use crate::browse::Place;
 use crate::input::Mode;
 
-pub use super::generic::{SystemClipboard, attach_parent_console, error_box, motion_prefs, report_fatal};
+pub use super::generic::{SystemClipboard, attach_parent_console, error_box, motion_prefs, report_fatal, set_text_input};
 
 /// The folders the desktop names (`$XDG_*_DIR`, else `~/.config/user-dirs.dirs`), by key, with the name they have when
 /// nothing says otherwise.

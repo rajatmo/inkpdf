@@ -41,6 +41,8 @@ pub struct Gpu {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     needs_reconfigure: bool,
+    /// The native window is gone (Android's suspend): nothing can be drawn until [`Gpu::resume`].
+    paused: bool,
     quads: QuadPipeline,
     capsules: CapsulePipeline,
     panels: PanelPipeline,
@@ -127,6 +129,7 @@ impl Gpu {
             queue,
             config,
             needs_reconfigure: false,
+            paused: false,
             quads,
             capsules,
             panels,
@@ -156,6 +159,27 @@ impl Gpu {
         self.config.height = height;
         self.surface.configure(&self.device, &self.config);
         self.write_globals();
+    }
+
+    /// The native window went away (Android destroys it when the app is put in the background): the surface is no good, and
+    /// nothing is drawn until [`Gpu::resume`]. The device, the pipelines and every texture are kept.
+    pub fn pause(&mut self) {
+        self.paused = true;
+    }
+
+    /// A native window is there again: a new surface for it, at its size `width` by `height`.
+    pub fn resume(&mut self, width: u32, height: u32) {
+        match self.instance.create_surface(self.window.clone()) {
+            Ok(surface) => {
+                self.surface = surface;
+                self.config.width = width.max(1);
+                self.config.height = height.max(1);
+                self.needs_reconfigure = true;
+                self.paused = false;
+                self.write_globals();
+            }
+            Err(e) => eprintln!("no surface after resuming: {e}"),
+        }
     }
 
     fn viewport(&self) -> [f32; 2] {
@@ -255,6 +279,9 @@ impl Gpu {
     /// the newest samples, not ones a whole refresh old. `None` when nothing can be drawn now
     /// (minimised, occluded, surface being rebuilt).
     pub fn acquire(&mut self) -> Option<wgpu::SurfaceTexture> {
+        if self.paused {
+            return None;
+        }
         if self.needs_reconfigure {
             self.surface.configure(&self.device, &self.config);
             self.needs_reconfigure = false;

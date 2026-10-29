@@ -44,7 +44,7 @@ jobs:
       - name: Clippy
         run: cargo clippy -p inkpdf --all-targets -- -D warnings
       - name: Tests
-        run: cargo test -p inkpdf --bin inkpdf
+        run: cargo test -p inkpdf --lib
       - name: Build
         run: cargo build -p inkpdf --bin inkpdf --bin inkpdf-gen
       - name: Dependency graphs are up to date
@@ -63,4 +63,4 @@ jobs:
           targets: aarch64-linux-android
       - uses: Swatinem/rust-cache@v2
       - name: Check
-        run: cargo check -p inkpdf --bin inkpdf --target aarch64-linux-android
+        run: cargo check -p inkpdf-android --target aarch64-linux-android

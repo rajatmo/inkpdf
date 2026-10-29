@@ -43,7 +43,11 @@ use linux as os;
 #[cfg(windows)]
 use windows as os;
 
-pub use os::{SystemClipboard, attach_parent_console, detect_mode, documents_dir, error_box, motion_prefs, open_url, places, report_fatal};
+pub use os::{
+    SystemClipboard, attach_parent_console, detect_mode, documents_dir, error_box, motion_prefs, open_url, places, report_fatal, set_text_input,
+};
+#[cfg(target_os = "android")]
+pub use os::{android_app_started, welcome_document};
 
 /// A pen, touch and posture reader that is the OS's own: the one place input is taken from before winit sees it.
 pub trait PointerSource {

@@ -270,6 +270,12 @@ impl State {
                 Request::OpenUrl(url) => platform::open_url(&url),
             }
         }
+        // The on-screen keyboard (a phone or tablet has none) is there while something wants typed text.
+        let typing = self.ed.is_typing();
+        if typing != self.keyboard_shown {
+            self.keyboard_shown = typing;
+            platform::set_text_input(typing);
+        }
         if self.ed.take_redraw() {
             self.window.request_redraw();
         }

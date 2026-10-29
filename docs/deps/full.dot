@@ -133,7 +133,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "platform" -> "browse" [color="#55555599", penwidth=2.09, tooltip="5 uses"];
 "platform" -> "clipboard" [color="#55555599", penwidth=1.80, tooltip="3 uses"];
 "platform" -> "clock" [color="#55555599", penwidth=1.80, tooltip="3 uses"];
-"platform" -> "input" [color="#55555599", penwidth=2.46, tooltip="9 uses"];
+"platform" -> "input" [color="#55555599", penwidth=2.70, tooltip="13 uses"];
 "platform" -> "motion" [color="#55555599", penwidth=2.38, tooltip="8 uses"];
 "platform" -> "path_store" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "platform" -> "store" [color="#55555599", penwidth=1.30, tooltip="1 uses"];

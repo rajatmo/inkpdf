@@ -85,7 +85,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "pdf_read" -> "outline" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "platform" -> "clipboard" [color="#55555599", penwidth=1.60, tooltip="3 uses"];
 "platform" -> "clock" [color="#55555599", penwidth=1.60, tooltip="3 uses"];
-"platform" -> "input" [color="#55555599", penwidth=1.60, tooltip="9 uses"];
+"platform" -> "input" [color="#55555599", penwidth=1.60, tooltip="13 uses"];
 "platform" -> "motion" [color="#55555599", penwidth=1.60, tooltip="8 uses"];
 "platform" -> "path_store" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "requests" -> "pages" [color="#b8860b99", penwidth=1.60, tooltip="1 uses"];

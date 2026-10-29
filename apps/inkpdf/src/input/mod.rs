@@ -22,6 +22,7 @@ mod gestures;
 pub(crate) mod motion;
 mod palm;
 mod predict;
+pub mod record;
 
 #[allow(unused_imports, dead_code, reason = "the checker is for the sources' tests and for replay, which validates a recorded session with it")]
 pub use contract::{Broken, Checker, check};

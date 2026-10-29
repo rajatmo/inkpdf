@@ -179,12 +179,12 @@ impl PointerSource for AndroidPointer {
         !self.ready.is_empty() || !self.other.is_empty()
     }
 
-    fn drain(&mut self) -> Vec<PointerEvent> {
-        std::mem::take(&mut self.ready)
+    fn drain_into(&mut self, out: &mut Vec<PointerEvent>) {
+        out.append(&mut self.ready);
     }
 
-    fn drain_other(&mut self) -> Vec<InputEvent> {
-        std::mem::take(&mut self.other)
+    fn drain_other_into(&mut self, out: &mut Vec<InputEvent>) {
+        out.append(&mut self.other);
     }
 
     fn late_touch(&mut self, ev: PointerEvent) {

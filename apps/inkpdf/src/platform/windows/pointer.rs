@@ -149,9 +149,9 @@ pub fn pending() -> bool {
     QUEUE.with(|q| !q.borrow().is_empty())
 }
 
-/// Take the events received since the last call, oldest first.
-pub fn drain() -> Vec<PointerEvent> {
-    QUEUE.with(|q| std::mem::take(&mut *q.borrow_mut()))
+/// Append the events received since the last call to `out`, oldest first. (The queue keeps its room.)
+pub fn drain_into(out: &mut Vec<PointerEvent>) {
+    QUEUE.with(|q| out.append(&mut q.borrow_mut()));
 }
 
 unsafe extern "system" fn subclass_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM, _id: usize, _data: usize) -> LRESULT {

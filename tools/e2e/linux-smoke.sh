@@ -15,7 +15,8 @@
 # Needs: xvfb (xvfb-run), xdotool, mesa-vulkan-drivers (lavapipe), libxkbcommon-x11-0, a system font (fonts-liberation).
 set -euo pipefail
 
-target="${CARGO_TARGET_DIR:-$(dirname "$0")/../../../inkpdf-build}"
+here="$(cd "$(dirname "$0")" && pwd)"
+target="${CARGO_TARGET_DIR:-$here/../../../inkpdf-build}"
 app="${1:-$target/debug/inkpdf}"
 gen="${2:-$target/debug/inkpdf-gen}"
 work="$(mktemp -d)"
@@ -78,6 +79,26 @@ sleep 3
 wait "\$pid"
 DRIVE
 
+# Record a short session, then play it back: the recording has the mouse's events, and the playback runs and ends by itself.
+cat >"$work/record.sh" <<DRIVE
+set -eu
+cd "$work"
+cp original.pdf r.pdf
+"$app" r.pdf --mode desktop --record input.txt --exit-after 5 2>record.err &
+pid=\$!
+sleep 2.5
+xdotool mousemove 500 400 mousedown 1 mousemove 560 430 mousemove 620 400 mouseup 1
+wait "\$pid"
+DRIVE
+cat >"$work/play.sh" <<DRIVE
+set -eu
+cd "$work"
+cp original.pdf r.pdf
+timeout 60 "$app" r.pdf --mode desktop --replay input.txt 2>play.err
+DRIVE
+xvfb-run -a -s "-screen 0 1280x960x24" bash "$work/record.sh"
+xvfb-run -a -s "-screen 0 1280x960x24" bash "$work/play.sh"
+
 xvfb-run -a -s "-screen 0 1280x960x24" bash "$work/open.sh"
 xvfb-run -a -s "-screen 0 1280x960x24" bash "$work/new.sh"
 
@@ -91,4 +112,6 @@ check "it is one of ours (inkpdf- name)" "grep -aq 'inkpdf-' '$work/t.pdf'"
 check "a new document asked where to save, and saved in Documents under the name typed" "test -f '$saved'"
 check "with its stroke" "grep -aq '/Subtype /Ink' '$saved'"
 check "and nothing else was written there" "test \"\$(ls '$work/home/Documents' | wc -l)\" = 1"
+check "the input was recorded" "grep -q 'button pressed left' '$work/input.txt'"
+check "and played back to the end" "grep -q '^opened r.pdf' '$work/play.err' && ! grep -qi panic '$work/play.err'"
 exit "$fail"

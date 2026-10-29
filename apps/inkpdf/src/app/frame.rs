@@ -38,12 +38,35 @@ impl State {
     /// must never happen while a frame is half drawn.
     fn take_pointer_input(&mut self) {
         if let Some(pointer) = &mut self.pointer {
-            for ev in pointer.drain() {
-                self.ed.handle(InputEvent::Pointer(ev));
-            }
-            for ev in pointer.drain_other() {
+            // (The buffers are kept from frame to frame, and the source's queue keeps its room: no allocation in a steady stream.)
+            let (mut pointers, mut others) = (std::mem::take(&mut self.timing.pointer_buf), std::mem::take(&mut self.timing.other_buf));
+            pointer.drain_into(&mut pointers);
+            pointer.drain_other_into(&mut others);
+            let events = pointers.drain(..).map(InputEvent::Pointer).chain(others.drain(..));
+            for ev in events {
+                if let Some(recorder) = &mut self.recorder {
+                    recorder.push(&ev);
+                }
                 self.ed.handle(ev);
             }
+            (self.timing.pointer_buf, self.timing.other_buf) = (pointers, others);
+        }
+        self.play_recording();
+    }
+
+    /// Hand the editor what a recording has come to the time of, and close the program a moment after the last of it.
+    fn play_recording(&mut self) {
+        let (due, finished) = match &mut self.player {
+            Some(player) => (player.due(crate::clock::now_ms()), player.finished()),
+            None => return,
+        };
+        for recorded in due {
+            self.feed(recorded.event);
+        }
+        if !finished {
+            self.window.request_redraw();
+        } else if self.timing.exit_at.is_none() {
+            self.timing.exit_at = Some(Instant::now() + Duration::from_millis(500));
         }
     }
 

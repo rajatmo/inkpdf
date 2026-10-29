@@ -46,6 +46,17 @@ pub(crate) fn source_contract(make: &Make) {
         assert_eq!((a.device, a.id, a.phase, &a.samples), (b.device, b.id, b.phase, &b.samples), "in the order it happened, as it was");
     }
     assert!(!source.pending() && source.drain().is_empty(), "a drain empties it");
+
+    // `drain_into` appends to what the caller holds and keeps the caller's room (the frame loop reuses one `Vec`).
+    screen.push_all(stroke(2, 0, 3));
+    source.pump();
+    let mut held = Vec::with_capacity(64);
+    held.push(got[0].clone());
+    let room = held.capacity();
+    source.drain_into(&mut held);
+    assert_eq!(held.len(), 1 + stroke(2, 0, 3).len(), "after what was there, in order");
+    assert_eq!(held.capacity(), room, "and without growing it");
+    assert!(!source.pending(), "and the source is empty");
     assert_eq!(input::check(&got), Ok(()), "and what a source hands over keeps the rules of a stream");
 
     // A flood does not hold the frame: each pump takes a bounded number, and nothing is lost, repeated or reordered.

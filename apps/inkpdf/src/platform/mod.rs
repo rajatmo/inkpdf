@@ -17,7 +17,7 @@
 //!
 //! 1. wait for the display (`Gpu::acquire`),
 //! 2. [`PointerSource::pump`]: take whatever the OS has queued *right now*, bypassing the event loop,
-//! 3. [`PointerSource::drain`]: hand the samples to the editor, then draw.
+//! 3. [`PointerSource::drain_into`]: hand the samples to the editor, then draw.
 //!
 //! A new OS therefore adds one `PointerSource`; it changes nothing above this module.
 
@@ -163,11 +163,21 @@ pub trait PointerSource {
     /// right after the display wait, so the frame carries the newest samples. Must be cheap and bounded.
     fn pump(&mut self);
 
-    /// Whether any events are waiting to be [`drain`](Self::drain)ed (the shell draws at once when there are).
+    /// Whether any events are waiting to be drained (the shell draws at once when there are).
     fn pending(&self) -> bool;
 
-    /// The events received since the last call, oldest first. A pen's batched points are in `samples`.
-    fn drain(&mut self) -> Vec<PointerEvent>;
+    /// Append the events received since the last call to `out`, oldest first. A pen's batched points are in `samples`. The
+    /// caller keeps `out` from frame to frame, and the source its own queue, so a steady stream takes no memory from the allocator
+    /// (a `Vec` handed over whole would have to grow again every frame).
+    fn drain_into(&mut self, out: &mut Vec<PointerEvent>);
+
+    /// The events received since the last call, as a new `Vec` (for tests: the frame loop uses [`drain_into`](Self::drain_into)).
+    #[cfg(test)]
+    fn drain(&mut self) -> Vec<PointerEvent> {
+        let mut out = Vec::new();
+        self.drain_into(&mut out);
+        out
+    }
 
     /// Whether the machine's posture changed since this was last asked (a convertible became a tablet, or back).
     fn take_posture_change(&mut self) -> bool;
@@ -177,10 +187,9 @@ pub trait PointerSource {
     /// touch). Nothing for the others.
     fn pump_early(&mut self) {}
 
-    /// The other input the source took from the queue because it shared it (keys, a mouse): handed over with the pointers.
-    fn drain_other(&mut self) -> Vec<crate::input::InputEvent> {
-        Vec::new()
-    }
+    /// Append the other input the source took from the queue because it shared it (keys, a mouse) to `out`: handed over with the
+    /// pointers.
+    fn drain_other_into(&mut self, _out: &mut Vec<crate::input::InputEvent>) {}
 
     /// A touch the toolkit reported after all (the source took the rest of the queue, but a few events arrive in the moment between):
     /// the source makes it the pointer it already was, or a finger. Nothing for a source that swallows pen and touch before the

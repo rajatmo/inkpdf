@@ -17,6 +17,7 @@ mod frame;
 mod ink_layer;
 mod overview;
 mod pages;
+mod replay;
 mod text_layer;
 mod translate;
 
@@ -72,6 +73,10 @@ pub struct Options {
     pub smoothing: Option<f32>,
     /// The mode to keep whatever the machine's posture is (--mode desktop|tablet); None follows the posture.
     pub mode: Option<Mode>,
+    /// Save the input given to the editor to this file when the program ends (--record).
+    pub record: Option<PathBuf>,
+    /// Play this recorded input, then close (--replay).
+    pub replay: Option<PathBuf>,
 }
 
 /// The frame loop's own business: its clock, what it is waiting for, how long things took.
@@ -93,6 +98,9 @@ struct FrameLoop {
     drawing: bool,
     /// The app is in the background and has no window to draw to (Android): nothing is drawn, and nothing asks to be.
     suspended: bool,
+    /// The events taken from the pointer source each frame, kept so that their room is.
+    pointer_buf: Vec<crate::input::PointerEvent>,
+    other_buf: Vec<InputEvent>,
 }
 
 /// The open document and what waits on it: the file, the store it lives in, and the questions asked about unsaved work.
@@ -148,6 +156,10 @@ pub struct State {
     mode_forced: bool,
     /// Which of Ctrl, Shift, … are held (for the desktop mode's shortcuts).
     modifiers: ModifiersState,
+    /// The input given to the editor, being copied to a file (`--record`).
+    recorder: Option<replay::Recorder>,
+    /// A recording being played (`--replay`).
+    player: Option<replay::Player>,
 }
 
 impl State {
@@ -181,9 +193,10 @@ impl State {
             }
         };
         let size = window.inner_size();
+        let window_scale = window.scale_factor() as f32;
         let now = Instant::now();
         let mut state = State {
-            ed: Editor::new([size.width.max(1) as f32, size.height.max(1) as f32], window.scale_factor() as f32),
+            ed: Editor::new([size.width.max(1) as f32, size.height.max(1) as f32], window_scale),
             window,
             gpu,
             timing: FrameLoop {
@@ -200,6 +213,8 @@ impl State {
                 read_age_ms: Vec::new(),
                 drawing: false,
                 suspended: false,
+                pointer_buf: Vec::new(),
+                other_buf: Vec::new(),
             },
             session: DocumentSession {
                 doc: None,
@@ -225,7 +240,13 @@ impl State {
             keyboard_shown: false,
             mode_forced: opts.mode.is_some(),
             modifiers: ModifiersState::empty(),
+            recorder: opts.record.map(replay::Recorder::new),
+            player: opts.replay.as_deref().map(replay::Player::load).transpose()?,
         };
+        // (A recording starts from the window as it is, so that it replays from the same.)
+        let (size, dpr) = ([size.width.max(1) as f32, size.height.max(1) as f32], window_scale);
+        state.feed(InputEvent::Resized(size));
+        state.feed(InputEvent::ScaleChanged(dpr));
         state.ed.apply_settings(&config::load(state.platform.config_dir()));
         state.ed.motions.set_prefs(state.platform.motion_prefs());
         // Text copied from a box can be pasted anywhere, and text copied anywhere into a box.
@@ -290,22 +311,22 @@ impl State {
             WindowEvent::CloseRequested => self.request_close(),
             WindowEvent::Resized(size) => {
                 self.gpu.resize(size.width, size.height);
-                self.ed.handle(InputEvent::Resized([size.width as f32, size.height as f32]));
+                self.feed(InputEvent::Resized([size.width as f32, size.height as f32]));
                 self.ed.chrome.fullscreen = self.window.fullscreen().is_some();
             }
-            WindowEvent::CursorLeft { .. } => self.ed.handle(InputEvent::MouseLeft),
-            WindowEvent::Focused(false) => self.ed.handle(InputEvent::FocusLost),
+            WindowEvent::CursorLeft { .. } => self.feed(InputEvent::MouseLeft),
+            WindowEvent::Focused(false) => self.feed(InputEvent::FocusLost),
             // (What was asked of motion in Windows' settings is read again when the window is come back to.)
             WindowEvent::Focused(true) => self.ed.motions.set_prefs(self.platform.motion_prefs()),
             WindowEvent::ModifiersChanged(m) => self.modifiers = m.state(),
-            WindowEvent::ScaleFactorChanged { scale_factor, .. } => self.ed.handle(InputEvent::ScaleChanged(scale_factor as f32)),
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => self.feed(InputEvent::ScaleChanged(scale_factor as f32)),
             WindowEvent::RedrawRequested => self.redraw(),
             WindowEvent::DroppedFile(path) => self.open(path),
-            WindowEvent::CursorMoved { position, .. } => self.ed.handle(InputEvent::MouseMoved([position.x as f32, position.y as f32])),
+            WindowEvent::CursorMoved { position, .. } => self.feed(InputEvent::MouseMoved([position.x as f32, position.y as f32])),
             WindowEvent::MouseInput { state, button, .. } => {
-                self.ed.handle(InputEvent::MouseButton { state: translate::button_state(state), button: translate::button(button) })
+                self.feed(InputEvent::MouseButton { state: translate::button_state(state), button: translate::button(button) })
             }
-            WindowEvent::MouseWheel { delta, .. } => self.ed.handle(InputEvent::Wheel(translate::wheel(delta))),
+            WindowEvent::MouseWheel { delta, .. } => self.feed(InputEvent::Wheel(translate::wheel(delta))),
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => self.key_pressed(&event),
             // With the pointer layer installed pen and touch never reach winit; this is only the
             // fallback if it could not be installed.
@@ -315,12 +336,20 @@ impl State {
                 let ev = translate::touch(&t, crate::clock::now_ms());
                 match &mut self.pointer {
                     Some(pointer) => pointer.late_touch(ev),
-                    None => self.ed.handle(InputEvent::Pointer(ev)),
+                    None => self.feed(InputEvent::Pointer(ev)),
                 }
             }
             _ => {}
         }
         self.service();
+    }
+
+    /// Give the editor an event, keeping a copy if the input is being recorded.
+    fn feed(&mut self, event: InputEvent) {
+        if let Some(recorder) = &mut self.recorder {
+            recorder.push(&event);
+        }
+        self.ed.handle(event);
     }
 
     /// Change how the devices are used (the posture changed, or it was asked for on the command line).
@@ -337,14 +366,14 @@ impl State {
     fn key_pressed(&mut self, event: &KeyEvent) {
         if self.modifiers.control_key() {
             if let Typed::Character(letter) = &event.logical_key {
-                self.ed.handle(InputEvent::Shortcut { letter: letter.to_string(), shift: self.modifiers.shift_key() });
+                self.feed(InputEvent::Shortcut { letter: letter.to_string(), shift: self.modifiers.shift_key() });
             }
             return;
         }
         // The tool in use says which of these it hears (see `InputPolicy`): a text box being typed into takes them
         // all; with something selected, Delete, Escape and the arrows work on that.
         if let Some(key) = translate::key(&event.logical_key, event.text.as_deref(), self.modifiers.shift_key(), self.ed.is_typing()) {
-            self.ed.handle(InputEvent::Key(key));
+            self.feed(InputEvent::Key(key));
         }
     }
 

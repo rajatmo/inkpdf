@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `--record FILE` saves the input the program was given (pen, touch, mouse, keys) as text, and `--replay FILE` plays it back at its
+  old pace and closes: the same recording gives the same document on every system, so a problem seen on one machine can be played
+  on another, and the speed of the editor can be measured with no one at the screen.
+- The pen's events are handed to the editor without allocating each frame.
 - Text boxes are set in Arial where Windows has it and in a built-in copy of Liberation Sans (as wide as Arial) everywhere else,
   so a text box takes the same room on every machine. Settings are kept in the platform's configuration folder (on Android, the
   app's private one), through the platform layer.

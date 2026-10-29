@@ -17,6 +17,7 @@ mod overview;
 mod pages;
 mod pen;
 mod prompt;
+mod replay;
 mod save_as;
 mod shapes;
 mod text;

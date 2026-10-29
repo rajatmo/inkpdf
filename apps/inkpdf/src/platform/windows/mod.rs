@@ -43,8 +43,8 @@ impl PointerSource for WindowsPointer {
         pointer::pending()
     }
 
-    fn drain(&mut self) -> Vec<PointerEvent> {
-        pointer::drain()
+    fn drain_into(&mut self, out: &mut Vec<PointerEvent>) {
+        pointer::drain_into(out);
     }
 
     fn take_posture_change(&mut self) -> bool {

@@ -126,12 +126,16 @@ Generic tests any source must pass, driven by a scripted fake: events in order, 
 `clock::now_ms` base, hover/leave pairing, `pump` bounded and allocation-free in steady state, nothing after `uninstall`.
 Document the timestamp conversion each OS must do (wire milliseconds to the app clock).
 
-### R8. Hot-path hygiene  *(small; only with hardware numbers)*
+### R8. Hot-path hygiene  *(small; only with hardware numbers; the allocation part done)*
+
+*Done.* `PointerSource::drain_into(&mut Vec<PointerEvent>)` (and `drain_other_into`) replace the `Vec`-returning drains: the shell keeps its two buffers and the source its queue, so a steady stream no longer re-grows a `Vec` every frame (the Windows reader used to `mem::take` its queue, leaving an empty one that grew again). The contract suite checks that it appends and keeps the caller's room. *Not done, waiting for `--stats` numbers from a real pen:* inline sample arrays in `PointerEvent` and reused history buffers in the Windows reader (they touch every consumer of `samples`).
 
 `drain_into(&mut Vec<PointerEvent>)`, reused sample buffers (inline small array), reused history buffers in the Windows reader. It
 removes allocator jitter (R-L3), not median latency, so do it last and keep it only if `--stats` p99 improves on a real pen.
 
-### R9. Record and replay  *(small, after R1)*
+### R9. Record and replay  *(small, after R1; done)*
+
+*Done.* `--record FILE` copies every event given to the editor (as `input::record` text, one line each, floats exact to the last bit); `--replay FILE` plays a recording at its old pace and closes half a second after the last event. A headless test plays a session through the text format into a fresh editor and compares the document; `tools/e2e/linux-smoke.sh` records and replays a real run.
 
 `--record FILE` / `--replay FILE` of the closed input vocabulary: the same stream gives the same document on every OS (CPU-side
 regression and the latency benchmark without a display), and a bug seen on one machine can be replayed on another.

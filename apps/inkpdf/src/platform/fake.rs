@@ -65,8 +65,8 @@ impl PointerSource for FakeSource {
         !self.ready.is_empty()
     }
 
-    fn drain(&mut self) -> Vec<PointerEvent> {
-        std::mem::take(&mut self.ready)
+    fn drain_into(&mut self, out: &mut Vec<PointerEvent>) {
+        out.append(&mut self.ready);
     }
 
     fn take_posture_change(&mut self) -> bool {

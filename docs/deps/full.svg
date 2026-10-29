@@ -1398,9 +1398,9 @@
 <!-- platform&#45;&gt;input -->
 <g id="edge80" class="edge">
 <title>platform&#45;&gt;input</title>
-<g id="a_edge80"><a xlink:title="10 uses">
-<path fill="none" stroke="#555555" stroke-width="2.53" stroke-opacity="0.600000" d="M138.38,-479.1C145.26,-482.33 152.71,-485.25 160,-487 246.87,-507.89 1687.64,-473.95 1768,-513 1779.24,-518.46 1788.33,-528.89 1794.89,-538.63"/>
-<polygon fill="#555555" fill-opacity="0.600000" stroke="#555555" stroke-width="2.53" stroke-opacity="0.600000" points="1793.28,-540.01 1798.28,-543.93 1796.82,-537.75 1793.28,-540.01"/>
+<g id="a_edge80"><a xlink:title="9 uses">
+<path fill="none" stroke="#555555" stroke-width="2.46" stroke-opacity="0.600000" d="M138.38,-479.1C145.26,-482.33 152.71,-485.25 160,-487 246.87,-507.89 1687.64,-473.95 1768,-513 1779.24,-518.46 1788.33,-528.89 1794.89,-538.63"/>
+<polygon fill="#555555" fill-opacity="0.600000" stroke="#555555" stroke-width="2.46" stroke-opacity="0.600000" points="1793.28,-540.01 1798.28,-543.93 1796.82,-537.75 1793.28,-540.01"/>
 </a>
 </g>
 </g>

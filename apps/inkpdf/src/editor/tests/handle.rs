@@ -111,7 +111,7 @@ fn a_session_handed_over_as_events_is_the_session_driven_by_the_methods() {
 
 mod from_motion_events {
     use super::*;
-    use crate::input::motion::{Action, Decoder, RawMotion, RawPointer, Tool as Held};
+    use crate::platform::motion_event::{Action, Decoder, RawMotion, RawPointer, Tool as Held};
 
     fn pointer(id: u32, tool: Held, pos: [f32; 2], pressure: f32) -> RawPointer {
         RawPointer { id, tool, pos, pressure, contact_px: 20.0, history: Vec::new() }

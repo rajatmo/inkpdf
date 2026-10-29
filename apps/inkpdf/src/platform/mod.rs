@@ -77,7 +77,12 @@ pub(crate) mod fake;
 #[cfg(target_os = "android")]
 mod android;
 #[cfg(not(windows))]
-mod generic;
+mod stubs;
+#[cfg(not(windows))]
+mod unix_dirs;
+
+#[allow(dead_code, reason = "read by the Android reader, tested everywhere")]
+pub(crate) mod motion_event;
 #[cfg(all(unix, not(target_os = "android")))]
 mod linux;
 #[cfg(windows)]

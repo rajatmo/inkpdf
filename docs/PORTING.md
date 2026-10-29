@@ -113,7 +113,7 @@ and the clipboard (A4); saving goes to the app's own `Documents` folder (`Androi
 
 **A2. Android stylus. Done (first cut, untested on a device).** `platform/android/reader.rs` reads the activity's input queue *before* winit
 does (at winit's `new_events`, and again after the display wait), because winit turns every `MotionEvent` into a plain touch (no tool type,
-no stylus buttons, no hover, no history). What it takes goes through `input::motion::Decoder`, which is tested on every platform: stylus =
+no stylus buttons, no hover, no history). What it takes goes through `platform::motion_event::Decoder`, which is tested on every platform: stylus =
 pen with pressure and the points between events (`samples[]`), eraser end = eraser, stylus button = barrel, hover and leave, finger = touch
 with its contact size, palm = rejected, mouse = the mouse; keys (Back = Escape, the soft keyboard's characters, Ctrl shortcuts). A few events
 arrive in the moment between the two reads and winit reports them as touch: `late_touch` makes them the pointer they already were.

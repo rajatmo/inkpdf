@@ -111,9 +111,10 @@ different on every platform). It is three parts and a thread, one per layer, so 
 ### Platforms (`src/platform/`)
 
 Everything that differs by operating system is behind `platform/mod.rs`, chosen at compile time: `windows/` (Win32
-pointer messages, message boxes, clipboard, posture), `linux/` and `android/` (winit's basic input for now) over a shared
-`generic.rs`. The shell holds a `Box<dyn PointerSource>`: `pump` (take what the OS has queued, right after the display
-wait), `pending`, `drain` (→ `PointerEvent`s with the OS's batched `samples`), `take_posture_change`, `uninstall`. A new
+pointer messages, message boxes, clipboard, posture), `linux/` and `android/` (winit's basic input for now) over the shared
+`unix_dirs.rs` (folders), `stubs.rs` (services with nothing behind them yet) and `motion_event.rs` (the pure decoder from an Android
+`MotionEvent`'s fields to events, tested everywhere). The shell holds a `Box<dyn PointerSource>`: `pump` (take what the OS has queued, right
+after the display wait), `pending`, `drain_into` (→ `PointerEvent`s with the OS's batched `samples`), `take_posture_change`, `uninstall`. A new
 OS adds one such source and changes nothing above `platform`; the session may not name it (tested). Small per-OS facts
 elsewhere (clock, font folders, GPU backend, settings folder) are `cfg` items in their own modules.
 

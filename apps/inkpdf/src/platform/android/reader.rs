@@ -6,12 +6,12 @@
 //! moment between, and winit reports those as touch (`late_touch`), which are made the pointer they already were.
 //!
 //! The reading is a thin copy of what the NDK says into [`RawMotion`] and [`RawKey`]; what they mean is decided by
-//! `crate::input::motion`, which is tested on every platform.
+//! `crate::platform::motion_event`, which is tested on every platform.
 
 use winit::platform::android::activity::input::{InputEvent as Event, KeyAction, KeyEvent, KeyMapChar, Keycode, MotionAction, MotionEvent, ToolType};
 use winit::platform::android::activity::{AndroidApp, InputStatus};
 
-use crate::input::motion::{Action, Decoder, HistoryPoint, KeyCode, RawKey, RawMotion, RawPointer, Tool};
+use crate::platform::motion_event::{Action, Decoder, HistoryPoint, KeyCode, RawKey, RawMotion, RawPointer, Tool};
 use crate::input::{InputEvent, PointerEvent};
 use crate::platform::{MAX_EVENTS_PER_PUMP, PointerSource};
 
@@ -130,7 +130,7 @@ impl AndroidPointer {
             None
         };
         let raw = RawKey { code, down: matches!(k.action(), KeyAction::Down), ctrl, shift: meta.shift_on(), unicode };
-        if crate::input::motion::key(&raw, out) { InputStatus::Handled } else { InputStatus::Unhandled }
+        if crate::platform::motion_event::key(&raw, out) { InputStatus::Handled } else { InputStatus::Unhandled }
     }
 
     /// Take what is in the queue, decode it, and sort it.

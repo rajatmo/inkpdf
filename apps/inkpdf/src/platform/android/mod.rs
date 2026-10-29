@@ -9,12 +9,12 @@ use winit::raw_window_handle::HasWindowHandle;
 
 mod reader;
 
-use super::generic::{existing_places, first_folder, home_dir};
+use super::unix_dirs::{existing_places, first_folder, home_dir};
 use super::{PointerSource, Waker};
 use crate::browse::Place;
 use crate::input::Mode;
 
-pub use super::generic::{SystemClipboard, system_font, attach_parent_console, error_box, motion_prefs, report_fatal};
+pub use super::stubs::{SystemClipboard, system_font, attach_parent_console, error_box, motion_prefs, report_fatal};
 
 /// The activity, kept for what only it can say: where the app's own folders are, and the soft keyboard.
 static APP: OnceLock<AndroidApp> = OnceLock::new();

@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 
-use super::{ButtonState, Device, InputEvent, KeyInput, MouseButton, PenButtons, Phase, PointerEvent, Sample};
+use crate::input::{ButtonState, Device, InputEvent, KeyInput, MouseButton, PenButtons, Phase, PointerEvent, Sample};
 
 /// What a pointer is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -389,10 +389,10 @@ pub fn key(k: &RawKey, out: &mut Vec<InputEvent>) -> bool {
         KeyCode::Delete => named(KeyInput::Delete, out),
         KeyCode::Escape | KeyCode::Back => named(KeyInput::Escape, out),
         KeyCode::Enter => named(KeyInput::Text("\n".to_string()), out),
-        KeyCode::Left => named(KeyInput::Arrow(super::Dir::Left, k.shift), out),
-        KeyCode::Right => named(KeyInput::Arrow(super::Dir::Right, k.shift), out),
-        KeyCode::Up => named(KeyInput::Arrow(super::Dir::Up, k.shift), out),
-        KeyCode::Down => named(KeyInput::Arrow(super::Dir::Down, k.shift), out),
+        KeyCode::Left => named(KeyInput::Arrow(crate::input::Dir::Left, k.shift), out),
+        KeyCode::Right => named(KeyInput::Arrow(crate::input::Dir::Right, k.shift), out),
+        KeyCode::Up => named(KeyInput::Arrow(crate::input::Dir::Up, k.shift), out),
+        KeyCode::Down => named(KeyInput::Arrow(crate::input::Dir::Down, k.shift), out),
         KeyCode::Home => named(KeyInput::Home(k.shift), out),
         KeyCode::End => named(KeyInput::End(k.shift), out),
         KeyCode::Other => match k.unicode.filter(|c| !c.is_control()) {

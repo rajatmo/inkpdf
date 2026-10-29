@@ -72,7 +72,7 @@ impl Editor {
 
     /// The palm guard takes note of the pen. If that gives up fingers that were down, what they had started stops.
     fn pen_seen(&mut self, ev: &PointerEvent) {
-        if self.palm.pen_event(ev, (self.clock)()) {
+        if self.palm.pen_event(ev) {
             self.cancel_touches();
         }
     }

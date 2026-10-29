@@ -340,7 +340,7 @@ impl Editor {
 
     /// A pen or touch event while the overview is up.
     pub(super) fn overview_event(&mut self, ev: &PointerEvent) {
-        if ev.device == Device::Touch && !self.palm.admit_touch(ev, (self.clock)(), super::touch::PALM_PX * self.ws.dpr) {
+        if ev.device == Device::Touch && !self.palm.admit_touch(ev, super::touch::PALM_PX * self.ws.dpr) {
             return;
         }
         let sample = if ev.phase == Phase::Down { ev.samples.first() } else { ev.samples.last() };

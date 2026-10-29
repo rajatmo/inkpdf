@@ -97,6 +97,8 @@ pub struct Decoder {
     down: HashMap<u32, Down>,
     /// A pen above the screen, by id (so that it is told when it goes out of range).
     hovering: HashMap<u32, f64>,
+    /// Whether the stylus has ever been seen hovering: only a screen that reports hover can say a lifted pen is still near.
+    hover_capable: bool,
     mouse_button: Option<MouseButton>,
 }
 
@@ -229,7 +231,11 @@ impl Decoder {
         let Some(state) = self.down.remove(&p.id) else { return };
         let last = self.sample(p.pos, p.pressure, m.t_ns, state.t_ms);
         // (A pen that lifts has no contact: its up says so, as a pointer message's does.)
-        let pen = if state.device == Device::Pen { Self::pen_buttons(m, state.eraser, false) } else { PenButtons::default() };
+        let pen = if state.device == Device::Pen {
+            PenButtons { in_range: self.hover_capable, ..Self::pen_buttons(m, state.eraser, false) }
+        } else {
+            PenButtons::default()
+        };
         out.push(InputEvent::Pointer(PointerEvent { device: state.device, id: p.id, phase: Phase::Up, samples: vec![last], pen, contact_px: 0.0 }));
     }
 
@@ -262,6 +268,7 @@ impl Decoder {
                 if self.down.contains_key(&p.id) {
                     return;
                 }
+                self.hover_capable = true;
                 let floor = self.hovering.get(&p.id).copied().unwrap_or(0.0);
                 let s = self.sample(p.pos, 0.0, m.t_ns, floor);
                 self.hovering.insert(p.id, s.t_ms);
@@ -322,7 +329,7 @@ impl Decoder {
             self.down.remove(&id);
         }
         let pen = if device == Device::Pen {
-            PenButtons { in_range: true, contact: phase != Phase::Up, eraser: false, barrel: false }
+            PenButtons { in_range: phase != Phase::Up || self.hover_capable, contact: phase != Phase::Up, eraser: false, barrel: false }
         } else {
             PenButtons::default()
         };
@@ -437,6 +444,20 @@ mod tests {
 
     fn pointers(events: &[InputEvent]) -> Vec<PointerEvent> {
         events.iter().filter_map(|e| if let InputEvent::Pointer(p) = e { Some(p.clone()) } else { None }).collect()
+    }
+
+    #[test]
+    fn a_lifted_pen_is_in_range_only_on_a_screen_that_reports_hover() {
+        let lifted = |events: &[RawMotion]| {
+            let mut d = Decoder::new(0.0);
+            let p = pointers(&run(&mut d, events));
+            p.into_iter().find(|e| e.phase == Phase::Up).expect("an up").pen.in_range
+        };
+        let down = motion(Action::Down, 0, 10, vec![pointer(3, Tool::Stylus, 8.0, 8.0, 0.3, &[])]);
+        let up = motion(Action::Up, 0, 20, vec![pointer(3, Tool::Stylus, 8.0, 8.0, 0.0, &[])]);
+        let hover = motion(Action::HoverMove, 0, 5, vec![pointer(3, Tool::Stylus, 5.0, 5.0, 0.0, &[])]);
+        assert!(lifted(&[hover, down.clone(), up.clone()]), "it hovered before, so it hovers after");
+        assert!(!lifted(&[down, up]), "a screen that never reports hover cannot say the lifted pen is near: palm rejection must not wait for it");
     }
 
     #[test]

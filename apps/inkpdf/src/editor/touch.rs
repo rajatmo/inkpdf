@@ -11,8 +11,7 @@ pub(super) const PALM_PX: f32 = 106.0;
 
 impl Editor {
     pub(super) fn touch_event(&mut self, ev: &PointerEvent) {
-        let now = ev.samples.last().map_or_else(self.clock, |s| s.t_ms);
-        if !self.palm.admit_touch(ev, now, PALM_PX * self.ws.dpr) {
+        if !self.palm.admit_touch(ev, PALM_PX * self.ws.dpr) {
             return;
         }
         let (Some(first), Some(last)) = (ev.samples.first(), ev.samples.last()) else { return };

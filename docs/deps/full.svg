@@ -789,9 +789,9 @@
 <!-- editor&#45;&gt;motion -->
 <g id="edge40" class="edge">
 <title>editor&#45;&gt;motion</title>
-<g id="a_edge40"><a xlink:title="2 uses">
-<path fill="none" stroke="#6a5acd" stroke-width="1.59" stroke-opacity="0.600000" d="M3237.75,-169.56C3215.43,-178.26 3185.05,-192.07 3162,-210 3035.24,-308.59 3074.54,-417.03 2930,-487 2837.25,-531.89 2097.2,-471.23 2003,-513 1990.49,-518.55 1979.7,-529.26 1971.72,-539.15"/>
-<polygon fill="#6a5acd" fill-opacity="0.600000" stroke="#6a5acd" stroke-width="1.59" stroke-opacity="0.600000" points="1970.04,-537.89 1968.03,-543.92 1973.36,-540.46 1970.04,-537.89"/>
+<g id="a_edge40"><a xlink:title="3 uses">
+<path fill="none" stroke="#6a5acd" stroke-width="1.8" stroke-opacity="0.600000" d="M3237.75,-169.56C3215.43,-178.26 3185.05,-192.07 3162,-210 3035.24,-308.59 3074.54,-417.03 2930,-487 2837.25,-531.89 2097.2,-471.23 2003,-513 1990.49,-518.55 1979.7,-529.26 1971.72,-539.15"/>
+<polygon fill="#6a5acd" fill-opacity="0.600000" stroke="#6a5acd" stroke-width="1.8" stroke-opacity="0.600000" points="1970.04,-537.89 1968.03,-543.92 1973.36,-540.46 1970.04,-537.89"/>
 </a>
 </g>
 </g>

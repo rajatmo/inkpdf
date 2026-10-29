@@ -94,7 +94,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "editor" -> "ink" [color="#6a5acd99", penwidth=2.38, tooltip="8 uses"];
 "editor" -> "input" [color="#6a5acd99", penwidth=2.92, tooltip="18 uses"];
 "editor" -> "links" [color="#6a5acd99", penwidth=1.80, tooltip="3 uses"];
-"editor" -> "motion" [color="#6a5acd99", penwidth=1.59, tooltip="2 uses"];
+"editor" -> "motion" [color="#6a5acd99", penwidth=1.80, tooltip="3 uses"];
 "editor" -> "outline" [color="#6a5acd99", penwidth=1.80, tooltip="3 uses"];
 "editor" -> "pages" [color="#6a5acd99", penwidth=1.59, tooltip="2 uses"];
 "editor" -> "requests" [color="#6a5acd99", penwidth=2.09, tooltip="5 uses"];

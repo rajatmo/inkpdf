@@ -665,7 +665,7 @@ mod tests {
         let sizes: Vec<[f32; 2]> = info.pages.iter().map(|p| [p.width, p.height]).collect();
         let layout = Layout::new(&sizes);
 
-        let mut ed = Editor::new([1200.0, 900.0], 1.0);
+        let mut ed = Editor::new([1200.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
         ed.load(layout.clone(), vec![]);
         ed.fit_mode = false;
         ed.view.zoom = 1.0;

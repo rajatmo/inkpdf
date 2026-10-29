@@ -29,9 +29,9 @@ pub struct Prefs {
 }
 
 impl Default for Prefs {
-    /// Full motion (under the tests' clocks, which do not run, none: what a test looks at is where things end up).
+    /// Full motion. (Tests ask for [`Prefs::REDUCED`] where they look at where things end up, not how they get there.)
     fn default() -> Self {
-        Self { reduced: cfg!(test) }
+        Self::FULL
     }
 }
 

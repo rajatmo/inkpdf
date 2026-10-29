@@ -213,7 +213,7 @@ impl State {
         let window_scale = window.scale_factor() as f32;
         let now = Instant::now();
         let mut state = State {
-            ed: Editor::new([size.width.max(1) as f32, size.height.max(1) as f32], window_scale),
+            ed: Editor::new([size.width.max(1) as f32, size.height.max(1) as f32], window_scale, platform.motion_prefs()),
             window,
             gpu,
             timing: FrameLoop {
@@ -265,7 +265,6 @@ impl State {
         state.feed(InputEvent::Resized(size));
         state.feed(InputEvent::ScaleChanged(dpr));
         state.ed.apply_settings(&config::load(state.platform.config_dir()));
-        state.ed.motions.set_prefs(state.platform.motion_prefs());
         // Text copied from a box can be pasted anywhere, and text copied anywhere into a box.
         if let Some(clipboard) = state.platform.clipboard(&*state.window) {
             state.ed.set_text_clipboard(clipboard);

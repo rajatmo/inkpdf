@@ -108,7 +108,8 @@ pub struct Editor {
 }
 
 impl Editor {
-    pub fn new(viewport: [f32; 2], dpr: f32) -> Self {
+    /// An editor for a window of `viewport` pixels at `dpr`, moving as `prefs` say (what the user asked of motion).
+    pub fn new(viewport: [f32; 2], dpr: f32, prefs: crate::motion::Prefs) -> Self {
         Self {
             ws: Workspace::new(viewport, dpr),
             cursor: [0.0; 2],
@@ -120,7 +121,7 @@ impl Editor {
             graves: HashMap::new(),
             tools: ToolSet::new(),
             chrome: Chrome::default(),
-            motions: motions::Motions::default(),
+            motions: motions::Motions::new(prefs),
             mode: Mode::default(),
             clock: crate::clock::now_ms,
             mouse_press: None,

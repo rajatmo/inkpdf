@@ -35,7 +35,7 @@ use crate::view::Layout;
 
 /// A 1200 x 900 window at 100% scale showing two 612 x 792 pages at zoom 1.
 fn editor() -> Editor {
-    let mut ed = Editor::new([1200.0, 900.0], 1.0);
+    let mut ed = Editor::new([1200.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
     ed.load(Layout::new(&[[612.0, 792.0], [612.0, 792.0]]), vec![]);
     ed.fit_mode = false;
     ed.view.zoom = 1.0;

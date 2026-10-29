@@ -800,7 +800,7 @@ fn check_editor(ed: &Editor, what: &str) {
 }
 
 fn editor_with_pages(pages: usize) -> Editor {
-    let mut ed = Editor::new([1100.0, 900.0], 1.0);
+    let mut ed = Editor::new([1100.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
     ed.load(Layout::new(&vec![[612.0, 792.0]; pages]), vec![]);
     ed
 }
@@ -1289,7 +1289,7 @@ fn stress_shapes_drawn_by_the_pen_stay_on_their_page_undo_redo_exactly_and_survi
     let path = dir.join("shapes.pdf");
     std::fs::write(&path, sample_pdf()).expect("write");
     let (mut doc, _) = Doc::open(&path).expect("open");
-    let mut ed = Editor::new([1100.0, 900.0], 1.0);
+    let mut ed = Editor::new([1100.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
     ed.load(doc.layout(), vec![]);
     ed.tool = Tool::Geometry;
     let mut rng = Rng::new(404);
@@ -1505,7 +1505,7 @@ fn stress_pages_inserted_anywhere_among_ink_keep_every_stroke_on_its_page_throug
     let path = dir.join("pages.pdf");
     std::fs::write(&path, sample_pdf()).expect("write");
     let (mut doc, _) = Doc::open(&path).expect("open");
-    let mut ed = Editor::new([1100.0, 900.0], 1.0);
+    let mut ed = Editor::new([1100.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
     ed.load(doc.layout(), vec![]);
     let mut rng = Rng::new(606);
     let (mut inserted, mut deleted, mut saves, mut moved) = (0, 0, 0, 0);
@@ -1685,7 +1685,7 @@ fn every_tool_together(seed: u64, rounds: usize) {
     let path = dir.join("all.pdf");
     std::fs::write(&path, sample_pdf()).expect("write");
     let (mut doc, _) = Doc::open(&path).expect("open");
-    let mut ed = Editor::new([1100.0, 900.0], 1.0);
+    let mut ed = Editor::new([1100.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
     ed.load(doc.layout(), vec![]);
     let mut rng = Rng::new(seed);
     let words = ["Hello", "wörld", "✓ done", "a longer line of text to type", "x", "日本語", "line\nbreak", "  spaced  "];
@@ -1932,7 +1932,7 @@ fn stress_the_pages_overview_under_hostile_input_keeps_the_pages_the_selection_a
     let path = dir.join("outline.pdf");
     std::fs::write(&path, crate::testutil::pdf_with_outline()).expect("write");
     let (mut doc, _) = Doc::open(&path).expect("open");
-    let mut ed = Editor::new([1280.0, 800.0], 1.25);
+    let mut ed = Editor::new([1280.0, 800.0], 1.25, crate::motion::Prefs::REDUCED);
     ed.load(doc.layout(), vec![]);
     ed.outline = doc.take_outline();
     ed.links = doc.take_links();
@@ -2206,7 +2206,7 @@ fn stress_hostile_outlines_and_page_trees_open_or_are_refused_and_what_opens_edi
             assert!(entry.title.chars().count() <= 200 && !entry.title.chars().any(char::is_control), "file {i}: a title that is not clean");
             assert!(entry.page.is_none_or(|p| p < doc.page_count()), "file {i}: an entry goes to page {:?} of {}", entry.page, doc.page_count());
         }
-        let mut ed = Editor::new([1100.0, 800.0], 1.0);
+        let mut ed = Editor::new([1100.0, 800.0], 1.0, crate::motion::Prefs::REDUCED);
         ed.load(doc.layout(), strokes);
         ed.outline = items;
         ed.links = doc.take_links();
@@ -2276,7 +2276,7 @@ fn arrive(ed: &mut Editor) {
 /// The same random events, one at a time with everything arriving in between, once with motion reduced and once not: the
 /// document and its overview must be in the same place after each.
 fn run_with(prefs: crate::motion::Prefs, seed: u64, rounds: usize) -> Vec<Outcome> {
-    let mut ed = Editor::new([1280.0, 800.0], 1.25);
+    let mut ed = Editor::new([1280.0, 800.0], 1.25, crate::motion::Prefs::REDUCED);
     ed.load(crate::view::Layout::new(&[[612.0, 792.0]; 12]), vec![]);
     ed.motions.set_prefs(prefs);
     let mut rng = Rng::new(seed);

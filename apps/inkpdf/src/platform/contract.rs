@@ -112,7 +112,7 @@ fn the_frame_loop_gets_the_same_document_from_a_source_as_from_the_events_handed
     // A source adds nothing and drops nothing between the OS and the editor: the ink is the same either way.
     let events = stroke(1, 0, 40);
     let draw = |events: Vec<PointerEvent>| {
-        let mut ed = crate::editor::Editor::new([1200.0, 900.0], 1.0);
+        let mut ed = crate::editor::Editor::new([1200.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
         ed.load(crate::view::Layout::new(&[[612.0, 792.0]]), vec![]);
         for ev in events {
             ed.pointer_event(PointerEvent {

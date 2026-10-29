@@ -72,7 +72,10 @@ pub struct RawMotion {
     pub action_index: usize,
     /// When, in nanoseconds on the monotonic clock.
     pub t_ns: i64,
+    /// The stylus's first button. On Android it is the one button a Samsung S Pen has, and it erases (as in Samsung Notes) for a
+    /// pen with no eraser end; the eraser end itself is `Tool::Eraser`.
     pub stylus_primary: bool,
+    /// The stylus's second button: the barrel button, which lassos.
     pub stylus_secondary: bool,
     /// A mouse's left and right buttons.
     pub primary: bool,
@@ -171,7 +174,7 @@ impl Decoder {
     }
 
     fn pen_buttons(m: &RawMotion, eraser: bool, contact: bool) -> PenButtons {
-        PenButtons { in_range: true, contact, eraser, barrel: m.stylus_primary || m.stylus_secondary }
+        PenButtons { in_range: true, contact, eraser: eraser || m.stylus_primary, barrel: m.stylus_secondary }
     }
 
     fn pointer_down(&mut self, m: &RawMotion, p: &RawPointer, out: &mut Vec<InputEvent>) {
@@ -465,7 +468,7 @@ mod tests {
         let mut d = Decoder::new(0.0);
         let mut barrel =
             motion(Action::Move, 0, 30, vec![pointer(3, Tool::Stylus, 30.0, 12.0, 0.7, &[(10.0, 10.0, 0.4, 20), (20.0, 11.0, 0.5, 25)])]);
-        barrel.stylus_primary = true;
+        barrel.stylus_secondary = true;
         let events = run(
             &mut d,
             &[

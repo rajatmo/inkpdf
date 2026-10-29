@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- On Android the stylus's first button (the S Pen's one button) erases, as in Samsung Notes; a second button is the barrel button (lasso), and a
+  real eraser end erases as before. Windows and Linux are unchanged: the eraser end erases and the barrel button lassos.
 - `--record FILE` saves the input the program was given (pen, touch, mouse, keys) as text, and `--replay FILE` plays it back at its
   old pace and closes: the same recording gives the same document on every system, so a problem seen on one machine can be played
   on another, and the speed of the editor can be measured with no one at the screen.

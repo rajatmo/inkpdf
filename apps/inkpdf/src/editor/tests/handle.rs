@@ -195,9 +195,21 @@ mod from_motion_events {
         let ring: Vec<[f32; 2]> =
             [[50.0, 350.0], [350.0, 350.0], [350.0, 450.0], [50.0, 450.0], [50.0, 350.0]].iter().map(|p| on_page(&ed, p[0], p[1])).collect();
         let mut barrel = gesture(Held::Stylus, 4, 100, &ring);
-        barrel.iter_mut().for_each(|m| m.stylus_primary = true);
+        barrel.iter_mut().for_each(|m| m.stylus_secondary = true);
         feed(&mut ed, &mut decoder, barrel);
         assert_eq!(ed.selection, vec![id], "the barrel button looped it");
+    }
+
+    #[test]
+    fn the_one_button_of_an_s_pen_erases_where_a_pen_with_no_eraser_end_has_no_other_way() {
+        let (mut ed, mut decoder) = (tablet(), Decoder::new(0.0));
+        add_stroke(&mut ed, &[[100.0, 300.0], [300.0, 300.0]]);
+        let across = [on_page(&ed, 90.0, 300.0), on_page(&ed, 200.0, 300.0), on_page(&ed, 310.0, 300.0)];
+        let mut button = gesture(Held::Stylus, 3, 10, &across);
+        button.iter_mut().for_each(|m| m.stylus_primary = true);
+        feed(&mut ed, &mut decoder, button);
+        assert_eq!(ed.ink.len(), 0, "the stylus's button erased it");
+        assert!(ed.selection.is_empty(), "and did not lasso");
     }
 
     #[test]

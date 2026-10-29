@@ -4,6 +4,8 @@ Written 2026-10-29 on `linux-android-port`, after R1 to R9. Numbers are counted 
 
 ## TL;DR
 
+**Status: S1 to S7 are done; see "Result" below.** The rest of this page is the survey as it was written.
+
 1. **The dependency graph is already healthy.** 35 modules, 127 edges, no cycles, nothing points up a layer, and only
    **1 of 127 edges** breaks Martin's Stable Dependencies Principle (`ink -> figure`, 0.23 vs 0.25: noise). There is no graph
    to untangle; the gains left are in **cohesion** (what lives together), not in fewer arrows.
@@ -117,8 +119,37 @@ Different clients, different reasons to change. *Fix:* `text/{font, layout, rast
 | S4 | extract `PageTable` | 2 h | low | page logic testable with no PDF |
 | S5 | `UiLayers` owns the presenter | 2 h | low | `State` is loop + workflow |
 
-Expected change in the graph: **about -2 edges** (`platform -> links`, and the drawn `platform -> editor`), which is the point: the arrows were fine, the *boxes* were mixed. After S2 and S3 the layering test can say two more things it cannot say today:
-"no module below the adapters imports a PDF, GPU or windowing crate", and "`input` knows no wire format".
+## Result (S1 to S7 done, 2026-10-29)
+
+All seven landed, one commit each, with Linux tests (713), clippy `-D warnings` on Linux, the Windows cross-target and Android, the
+Linux smoke test and the graph check green.
+
+| Measure | Before | After |
+|---|---|---|
+| modules / edges in `docs/deps/full.dot` | 35 / 127 | 38 / 133 |
+| edges that break the Stable Dependencies Principle | 1 (`ink -> figure`) | 1 (same) |
+| editor cost per pen move, release (mean / p99) | 0.89 / 2.2 µs | 0.75 / 2.4 µs (same within noise) |
+| inner layers that import a PDF, GPU or windowing crate | `links`, `outline`, `coords` | none, and a test says so |
+| `platform` modules that check a URL | 3 | 0 (the shell checks once) |
+
+**The edge count went up, not down** (I had predicted about -2). Splitting a module into two gives the new one its own edges: `pdf_read`
+adds 7, `page_table` adds 3, and fewer than the 4 removed come out. That is the honest trade: more, smaller boxes with the same
+direction of every arrow, and each box now has one reason to change. What got better is not the count but what the layering test can
+now assert: *nothing below the adapters touches a file, the environment, the OS, a PDF crate, `wgpu` or `winit`* (it also found that
+`figure.rs` had never been scanned, because the test looked at the `figure/` directory only; fixed).
+
+What each change did:
+
+* **S1** `PenTool` and `role()` are gone; `PenButtons::role()` returns `Role`.
+* **S7** `graph.py` and `architecture.rs` both skip `#[cfg(test)]` modules; the drawn `platform -> editor` edge went away.
+* **S2** `pdf_read` (adapter) reads links, outline and page geometry; `links` and `outline` keep only the model; the shell calls
+  `links::safe_url` once before `Platform::open_url`.
+* **S3** `input/motion.rs` is `platform/motion_event.rs`; `platform/generic.rs` is `unix_dirs.rs` and `stubs.rs`; the platform view of
+  the graph was brought up to date (it still mentioned `rfd` and `save_file_dialog`).
+* **S6** `text/{font, layout, raster}.rs`, same public API.
+* **S4** `page_table` (model) holds the page bookkeeping; six new tests need no PDF; `Doc` keeps the renderer, the bytes and the save.
+* **S5** `UiLayers` owns the presenters (`sync_committed`, `sync_ui`, `sync_texts`, `overview_frame`, `scene`); they take a `Paint`
+  (editor, GPU, document, frame number) built by `paint!(self)`, so `State` is the loop and the document workflow.
 
 ## References
 

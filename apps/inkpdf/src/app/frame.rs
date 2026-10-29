@@ -6,8 +6,8 @@ use crate::gpu::{Drawn, InkScene};
 use crate::input::InputEvent;
 use crate::tiles::{self, Key};
 
-use super::State;
 use super::bench::FrameParts;
+use super::{State, ink_layer, paint};
 
 const BACKGROUND: [f64; 4] = [0.93, 0.936, 0.947, 1.0];
 /// Texture memory kept for page tiles and previews.
@@ -97,8 +97,8 @@ impl State {
         let pending = self.stream_tiles(settled);
 
         let t_plan = Instant::now();
-        self.sync_texts();
-        let scene = self.scene();
+        self.layers.sync_texts(&mut paint!(self));
+        let scene = self.layers.scene(&paint!(self));
         let t_scene = Instant::now();
         if scene.blank_pages > 0
             && let Some(bench) = &mut self.timing.bench
@@ -109,12 +109,12 @@ impl State {
             self.gpu.touch(key, self.timing.frame);
         }
 
-        self.sync_committed();
-        self.sync_ui();
-        self.overview_frame();
-        let ranges = self.visible_ink_ranges();
+        self.layers.sync_committed(&mut paint!(self));
+        self.layers.sync_ui(&mut paint!(self));
+        self.layers.overview_frame(&mut paint!(self));
+        let ranges = self.layers.visible_ink_ranges(&paint!(self));
         let buf = std::mem::take(&mut self.layers.overlay_buf);
-        let overlays = self.overlays(pen_clock, buf);
+        let overlays = ink_layer::overlays(&self.ed, pen_clock, buf);
         let ink_scene = InkScene {
             scroll: self.ed.view.scroll,
             zoom: self.ed.view.zoom,

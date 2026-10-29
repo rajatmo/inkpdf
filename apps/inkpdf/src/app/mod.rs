@@ -136,6 +136,23 @@ struct UiLayers {
     text_index: text_layer::TextIndex,
 }
 
+/// What the presenters (the methods of [`UiLayers`]) read and write besides the layers themselves: the editor to show, the GPU to put it on,
+/// the document whose pictures are used, and the number of the frame being made. Built from the fields of [`State`] with
+/// [`paint!`], so the borrow is of those fields alone and `layers` stays free to be borrowed mutably beside it.
+pub(super) struct Paint<'a> {
+    pub ed: &'a Editor,
+    pub gpu: &'a mut Gpu,
+    pub doc: Option<&'a Doc>,
+    pub frame: u64,
+}
+
+macro_rules! paint {
+    ($state:ident) => {
+        $crate::app::Paint { ed: &$state.ed, gpu: &mut $state.gpu, doc: $state.session.doc.as_ref(), frame: $state.timing.frame }
+    };
+}
+pub(super) use paint;
+
 /// The shell: the window and the GPU, the editor, and three plain groups of what the shell keeps (no indirection on the frame
 /// path: they are fields, not objects).
 pub struct State {

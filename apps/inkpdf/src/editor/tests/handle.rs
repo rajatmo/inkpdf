@@ -160,6 +160,131 @@ mod from_motion_events {
         ed
     }
 
+    /// What a finger dragged up the page does after the pen has written: it pans (the page moves, the zoom does not).
+    fn finger_after(ed: &mut Editor, decoder: &mut Decoder, t0: i64) -> (bool, f32) {
+        let before = (ed.view.scroll, ed.view.zoom);
+        let drag = gesture(
+            Held::Finger,
+            0,
+            t0,
+            &[on_page(ed, 300.0, 700.0), on_page(ed, 300.0, 650.0), on_page(ed, 300.0, 600.0), on_page(ed, 300.0, 550.0), on_page(ed, 300.0, 500.0)],
+        );
+        feed(ed, decoder, drag);
+        settle(ed);
+        (ed.view.scroll != before.0, ed.view.zoom / before.1)
+    }
+
+    #[test]
+    fn a_finger_pans_after_the_pen_has_written_whatever_the_screen_reports_of_hover() {
+        let line = |ed: &Editor| vec![on_page(ed, 100.0, 300.0), on_page(ed, 160.0, 330.0), on_page(ed, 220.0, 300.0)];
+        // (name, hover reported before and after the stroke, hover exit reported)
+        for (name, hover, exit) in [("no hover at all", false, false), ("hover, and the pen leaves", true, true), ("hover, and no exit", true, false)] {
+            let (mut ed, mut decoder) = (tablet(), Decoder::new(0.0));
+            let stroke = line(&ed);
+            let mut motions = Vec::new();
+            if hover {
+                motions.push(motion(Action::HoverEnter, 1, vec![pointer(0, Held::Stylus, stroke[0], 0.0)]));
+            }
+            motions.extend(gesture(Held::Stylus, 0, 10, &stroke));
+            if hover {
+                motions.push(motion(Action::HoverMove, 60, vec![pointer(0, Held::Stylus, stroke[2], 0.0)]));
+            }
+            if exit {
+                motions.push(motion(Action::HoverExit, 80, vec![pointer(0, Held::Stylus, stroke[2], 0.0)]));
+            }
+            feed(&mut ed, &mut decoder, motions);
+            assert_eq!(ed.ink.len(), 1, "{name}: written");
+            if hover && !exit {
+                continue; // (a pen that never says it left is still near: a finger is a palm until it does)
+            }
+            let (moved, zoom) = finger_after(&mut ed, &mut decoder, 2000);
+            assert!(moved && (zoom - 1.0).abs() < 1e-4, "{name}: the finger pans (moved {moved}, zoom x{zoom})");
+            assert_eq!(ed.fingers.fingers(), 0, "{name}: nothing is left of the finger");
+        }
+    }
+
+    /// Whatever pen, finger and hover events a device sends, once every pointer has lifted nothing of a finger is left in the editor
+    /// (a finger left behind turns the next one-finger pan into a pinch).
+    #[test]
+    fn no_finger_is_left_behind_whatever_order_pen_and_fingers_come_in() {
+        use crate::stress::Rng;
+        use std::collections::BTreeMap;
+        for seed in 0..300u64 {
+            let mut rng = Rng::new(seed + 1);
+            let (mut ed, mut decoder) = (tablet(), Decoder::new(0.0));
+            let mut active: BTreeMap<u32, Held> = BTreeMap::new();
+            let mut hovering = false;
+            let mut t = 100_i64;
+            let mut log = Vec::new();
+            let hover_capable = rng.chance(0.5);
+            for _ in 0..60 {
+                t += 7;
+                let pos = [rng.range(100.0, 900.0), rng.range(100.0, 700.0)];
+                let all = |active: &BTreeMap<u32, Held>| -> Vec<RawPointer> { active.iter().map(|(&id, &tool)| pointer(id, tool, pos, 0.5)).collect() };
+                let index_of = |active: &BTreeMap<u32, Held>, id: u32| active.keys().position(|&k| k == id).unwrap_or(0);
+                let motions: Vec<RawMotion> = match rng.below(8) {
+                    0 | 1 => {
+                        let id = rng.below(4) as u32;
+                        if active.contains_key(&id) {
+                            continue;
+                        }
+                        let tool = if rng.chance(0.4) { Held::Stylus } else { Held::Finger };
+                        if tool == Held::Stylus && active.values().any(|&k| k == Held::Stylus) {
+                            continue;
+                        }
+                        active.insert(id, tool);
+                        hovering = false;
+                        let mut m = motion(Action::Down, t, all(&active));
+                        m.action_index = index_of(&active, id);
+                        log.push(format!("down {id} {tool:?}"));
+                        vec![m]
+                    }
+                    2..=4 => {
+                        if active.is_empty() {
+                            continue;
+                        }
+                        log.push("move".to_string());
+                        vec![motion(Action::Move, t, all(&active))]
+                    }
+                    5 => {
+                        let Some(&id) = active.keys().nth(rng.below(active.len().max(1))) else { continue };
+                        let mut m = motion(Action::Up, t, all(&active));
+                        m.action_index = index_of(&active, id);
+                        log.push(format!("up {id}"));
+                        active.remove(&id);
+                        vec![m]
+                    }
+                    6 if hover_capable && !active.values().any(|&k| k == Held::Stylus) => {
+                        let action = if hovering && rng.chance(0.4) { Action::HoverExit } else { Action::HoverMove };
+                        hovering = action != Action::HoverExit;
+                        log.push(format!("{action:?}"));
+                        vec![motion(action, t, vec![pointer(0, Held::Stylus, pos, 0.0)])]
+                    }
+                    7 if rng.chance(0.15) => {
+                        active.clear();
+                        log.push("cancel".to_string());
+                        vec![motion(Action::Cancel, t, Vec::new())]
+                    }
+                    _ => continue,
+                };
+                feed(&mut ed, &mut decoder, motions);
+            }
+            // Everything lifts.
+            while let Some((&id, _)) = active.iter().next() {
+                t += 7;
+                let mut m = motion(Action::Up, t, all_pointers(&active, pointer));
+                m.action_index = active.keys().position(|&k| k == id).unwrap_or(0);
+                active.remove(&id);
+                feed(&mut ed, &mut decoder, vec![m]);
+            }
+            assert_eq!(ed.fingers.fingers(), 0, "seed {seed}: a finger was left behind after {log:?}");
+        }
+    }
+
+    fn all_pointers(active: &std::collections::BTreeMap<u32, Held>, make: fn(u32, Held, [f32; 2], f32) -> RawPointer) -> Vec<RawPointer> {
+        active.iter().map(|(&id, &tool)| make(id, tool, [300.0, 300.0], 0.5)).collect()
+    }
+
     #[test]
     fn a_stylus_draws_and_a_finger_does_not() {
         let line =

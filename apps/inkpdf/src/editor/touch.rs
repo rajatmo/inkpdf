@@ -50,13 +50,15 @@ impl Editor {
                 }
             }
             Phase::Up | Phase::Cancel => {
+                // (A touch the system gave up on presses, taps and flings nothing.)
+                let lifted = ev.phase == Phase::Up;
                 if matches!(self.chrome.act, Act::Toolbar { dev: Device::Touch, id, .. } if id == ev.id) {
-                    self.release_toolbar(Device::Touch, ev.id, Some(last.pos));
+                    self.release_toolbar(Device::Touch, ev.id, lifted.then_some(last.pos));
                     self.chrome.act = Act::Idle;
                     return;
                 }
                 if matches!(self.chrome.act, Act::Context { dev: Device::Touch, id, .. } if id == ev.id) {
-                    self.release_context(Device::Touch, ev.id, Some(last.pos));
+                    self.release_context(Device::Touch, ev.id, lifted.then_some(last.pos));
                     self.chrome.act = Act::Idle;
                     return;
                 }
@@ -66,13 +68,13 @@ impl Editor {
                     return;
                 }
                 let released = self.fingers.up(ev.id, last.pos, last.t_ms);
-                if let Some(v) = released.fling {
+                if let Some(v) = released.fling.filter(|_| lifted) {
                     self.ws.scroll_by_px(v[0] * FLING_SECONDS, v[1] * FLING_SECONDS);
                 }
                 if self.fingers.fingers() == 0 {
                     self.end_pull();
                 }
-                if let Some(pos) = released.tap {
+                if let Some(pos) = released.tap.filter(|_| lifted) {
                     // A tap follows a link under the finger; failing that, on the page it lets go of
                     // a selection.
                     if !self.follow_link_at(pos) {

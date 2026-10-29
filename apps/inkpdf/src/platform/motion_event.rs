@@ -90,14 +90,21 @@ struct Down {
     eraser: bool,
     /// The time of its last sample, so that what it reports never goes back.
     t_ms: f64,
+    /// Where it was last, and how hard it pressed: what its cancel is stamped with, so a cancel says where it happened.
+    pos: [f32; 2],
+    pressure: f32,
 }
+
+/// A pointer is told by its device and its id: a stylus and a finger can have the same id (a pen digitiser and a touch screen number
+/// their pointers apart), and neither is the other.
+type Key = (Device, u32);
 
 /// The decoder: it remembers which pointers are down and what they are.
 #[derive(Debug, Default)]
 pub struct Decoder {
     /// Milliseconds to take off the toolkit's clock to get the program's (see `clock`).
     offset_ms: f64,
-    down: HashMap<u32, Down>,
+    down: HashMap<Key, Down>,
     /// A pen above the screen, by id (so that it is told when it goes out of range).
     hovering: HashMap<u32, f64>,
     /// Whether the stylus has ever been seen hovering: only a screen that reports hover can say a lifted pen is still near.
@@ -118,12 +125,13 @@ impl Decoder {
 
     /// Whether a pointer that is down is one the program was told of (its up is still to come).
     pub fn is_down(&self, id: u32) -> bool {
-        self.down.contains_key(&id)
+        self.device_of(id).is_some()
     }
 
     /// The device of a pointer that is down.
     pub fn device_of(&self, id: u32) -> Option<Device> {
-        self.down.get(&id).map(|d| d.device)
+        // (A finger first: the toolkit's own touch events, which this is asked for, cannot tell a stylus from a finger.)
+        [Device::Touch, Device::Pen].into_iter().find(|&d| self.down.contains_key(&(d, id)))
     }
 
     fn sample(&self, pos: [f32; 2], pressure: f32, t_ns: i64, floor: f64) -> Sample {
@@ -149,7 +157,7 @@ impl Decoder {
                     self.pointer_up(m, p, out);
                 }
             }
-            Action::Cancel => self.cancel_all(out),
+            Action::Cancel => self.cancel_pointers(m, out),
             Action::HoverEnter | Action::HoverMove => {
                 for p in &m.pointers {
                     self.hover(m, p, out);
@@ -187,14 +195,16 @@ impl Decoder {
             return;
         }
         // (A pointer that goes down twice missed its up: it is ended before it starts again.)
-        if self.down.contains_key(&p.id) {
-            self.cancel(p.id, out);
+        if self.down.contains_key(&(device, p.id)) {
+            self.cancel((device, p.id), out);
         }
         // A pen that was above the screen comes down: it is no longer only hovering.
-        self.hovering.remove(&p.id);
+        if device == Device::Pen {
+            self.hovering.remove(&p.id);
+        }
         let eraser = p.tool == Tool::Eraser;
         let first = self.sample(p.pos, p.pressure, m.t_ns, 0.0);
-        self.down.insert(p.id, Down { device, eraser, t_ms: first.t_ms });
+        self.down.insert((device, p.id), Down { device, eraser, t_ms: first.t_ms, pos: first.pos, pressure: first.pressure });
         let pen = if device == Device::Pen { Self::pen_buttons(m, eraser, true) } else { PenButtons::default() };
         let contact_px = if device == Device::Touch { p.contact_px.max(0.0) } else { 0.0 };
         out.push(InputEvent::Pointer(PointerEvent { device, id: p.id, phase: Phase::Down, samples: vec![first], pen, contact_px }));
@@ -205,7 +215,8 @@ impl Decoder {
             out.push(InputEvent::MouseMoved(p.pos));
             return;
         }
-        let Some(state) = self.down.get(&p.id).copied() else { return };
+        let Some(device) = Self::device_for(p.tool) else { return };
+        let Some(state) = self.down.get(&(device, p.id)).copied() else { return };
         // The points it passed through, then where it is now: what a fast pen draws smoothly from.
         let mut floor = state.t_ms;
         let mut samples = Vec::with_capacity(p.history.len() + 1);
@@ -215,8 +226,8 @@ impl Decoder {
             samples.push(s);
         }
         samples.push(self.sample(p.pos, p.pressure, m.t_ns, floor));
-        if let Some(d) = self.down.get_mut(&p.id) {
-            d.t_ms = samples.last().map_or(floor, |s| s.t_ms);
+        if let (Some(d), Some(last)) = (self.down.get_mut(&(device, p.id)), samples.last()) {
+            (d.t_ms, d.pos, d.pressure) = (last.t_ms, last.pos, last.pressure);
         }
         let pen = if state.device == Device::Pen { Self::pen_buttons(m, state.eraser, true) } else { PenButtons::default() };
         let contact_px = if state.device == Device::Touch { p.contact_px.max(0.0) } else { 0.0 };
@@ -231,7 +242,8 @@ impl Decoder {
             }
             return;
         }
-        let Some(state) = self.down.remove(&p.id) else { return };
+        let Some(device) = Self::device_for(p.tool) else { return };
+        let Some(state) = self.down.remove(&(device, p.id)) else { return };
         let last = self.sample(p.pos, p.pressure, m.t_ns, state.t_ms);
         // (A pen that lifts has no contact: its up says so, as a pointer message's does.)
         let pen = if state.device == Device::Pen {
@@ -242,22 +254,44 @@ impl Decoder {
         out.push(InputEvent::Pointer(PointerEvent { device: state.device, id: p.id, phase: Phase::Up, samples: vec![last], pen, contact_px: 0.0 }));
     }
 
-    fn cancel(&mut self, id: u32, out: &mut Vec<InputEvent>) {
-        if let Some(state) = self.down.remove(&id) {
+    fn cancel(&mut self, key: Key, out: &mut Vec<InputEvent>) {
+        if let Some(state) = self.down.remove(&key) {
             let pen = if state.device == Device::Pen {
                 PenButtons { in_range: true, contact: true, eraser: state.eraser, barrel: false }
             } else {
                 PenButtons::default()
             };
-            out.push(InputEvent::Pointer(PointerEvent { device: state.device, id, phase: Phase::Cancel, samples: Vec::new(), pen, contact_px: 0.0 }));
+            // (It carries where it was: whoever is told of a cancel needs a place to cancel at.)
+            let at = Sample { pos: state.pos, pressure: state.pressure, t_ms: state.t_ms };
+            out.push(InputEvent::Pointer(PointerEvent {
+                device: state.device,
+                id: key.1,
+                phase: Phase::Cancel,
+                samples: vec![at],
+                pen,
+                contact_px: 0.0,
+            }));
+        }
+    }
+
+    /// The system gave up on the pointers a motion event lists (a screen cancels its touches when a pen comes near): those, and not
+    /// the pointers of another device. A cancel that lists none is for all.
+    fn cancel_pointers(&mut self, m: &RawMotion, out: &mut Vec<InputEvent>) {
+        let mut keys: Vec<Key> = m.pointers.iter().filter_map(|p| Some((Self::device_for(p.tool)?, p.id))).collect();
+        if keys.is_empty() {
+            return self.cancel_all(out);
+        }
+        keys.sort_unstable_by_key(|&(d, id)| (id, d as u8));
+        for key in keys {
+            self.cancel(key, out);
         }
     }
 
     fn cancel_all(&mut self, out: &mut Vec<InputEvent>) {
-        let mut ids: Vec<u32> = self.down.keys().copied().collect();
-        ids.sort_unstable();
-        for id in ids {
-            self.cancel(id, out);
+        let mut keys: Vec<Key> = self.down.keys().copied().collect();
+        keys.sort_unstable_by_key(|&(d, id)| (id, d as u8));
+        for key in keys {
+            self.cancel(key, out);
         }
         if let Some(button) = self.mouse_button.take() {
             out.push(InputEvent::MouseButton { state: ButtonState::Released, button });
@@ -268,7 +302,7 @@ impl Decoder {
         match p.tool {
             Tool::Mouse => out.push(InputEvent::MouseMoved(p.pos)),
             Tool::Stylus | Tool::Eraser => {
-                if self.down.contains_key(&p.id) {
+                if self.down.contains_key(&(Device::Pen, p.id)) {
                     return;
                 }
                 self.hover_capable = true;
@@ -310,33 +344,34 @@ impl Decoder {
     /// moment between the two): it is a pointer like the others, and is whatever its id already is if it is down, else a finger.
     pub fn late_touch(&mut self, id: u32, phase: Phase, pos: [f32; 2], pressure: f32, t_ms: f64, out: &mut Vec<InputEvent>) {
         let device = self.device_of(id).unwrap_or(Device::Touch);
+        let key = (device, id);
+        let pressure = if pressure.is_finite() { pressure.clamp(0.0, 1.0) } else { 0.5 };
         match phase {
             Phase::Down => {
-                if self.down.contains_key(&id) {
-                    self.cancel(id, out);
+                if self.down.contains_key(&key) {
+                    self.cancel(key, out);
                 }
-                self.down.insert(id, Down { device, eraser: false, t_ms });
+                self.down.insert(key, Down { device, eraser: false, t_ms, pos, pressure });
             }
             Phase::Move | Phase::Up => {
-                let Some(state) = self.down.get_mut(&id) else { return };
-                state.t_ms = state.t_ms.max(t_ms);
+                let Some(state) = self.down.get_mut(&key) else { return };
+                (state.t_ms, state.pos, state.pressure) = (state.t_ms.max(t_ms), pos, pressure);
             }
             Phase::Cancel => {
-                self.cancel(id, out);
+                self.cancel(key, out);
                 return;
             }
             Phase::Hover | Phase::Leave => return,
         }
-        let t_ms = self.down.get(&id).map_or(t_ms, |d| d.t_ms);
+        let t_ms = self.down.get(&key).map_or(t_ms, |d| d.t_ms);
         if phase == Phase::Up {
-            self.down.remove(&id);
+            self.down.remove(&key);
         }
         let pen = if device == Device::Pen {
             PenButtons { in_range: phase != Phase::Up || self.hover_capable, contact: phase != Phase::Up, eraser: false, barrel: false }
         } else {
             PenButtons::default()
         };
-        let pressure = if pressure.is_finite() { pressure.clamp(0.0, 1.0) } else { 0.5 };
         out.push(InputEvent::Pointer(PointerEvent { device, id, phase, samples: vec![Sample { pos, pressure, t_ms }], pen, contact_px: 0.0 }));
     }
 }
@@ -708,5 +743,60 @@ mod tests {
         assert!(key(&RawKey { code: KeyCode::Back, down: false, ctrl: false, shift: false, unicode: None }, &mut out), "its release is taken too");
         assert!(out.is_empty());
         assert!(!key(&RawKey { code: KeyCode::Other, down: false, ctrl: false, shift: false, unicode: Some('a') }, &mut out));
+    }
+
+    #[test]
+    fn a_cancel_says_where_it_happened_so_whoever_is_told_can_let_the_pointer_go() {
+        let mut d = Decoder::new(0.0);
+        let events = run(
+            &mut d,
+            &[
+                motion(Action::Down, 0, 10, vec![pointer(1, Tool::Finger, 50.0, 60.0, 0.5, &[])]),
+                motion(Action::Move, 0, 20, vec![pointer(1, Tool::Finger, 70.0, 80.0, 0.5, &[])]),
+                motion(Action::Cancel, 0, 30, vec![pointer(1, Tool::Finger, 70.0, 80.0, 0.5, &[])]),
+            ],
+        );
+        let p = pointers(&events);
+        let cancel = p.last().expect("a cancel");
+        assert_eq!((cancel.phase, cancel.samples.iter().map(|s| s.pos).collect::<Vec<_>>()), (Phase::Cancel, vec![[70.0, 80.0]]));
+        assert_eq!(check(&p), Ok(()));
+    }
+
+    #[test]
+    fn a_stylus_and_a_finger_with_the_same_id_are_two_pointers() {
+        // A pen digitiser and a touch screen number their pointers apart: both can be pointer 0.
+        let mut d = Decoder::new(0.0);
+        let events = run(
+            &mut d,
+            &[
+                motion(Action::Down, 0, 10, vec![pointer(0, Tool::Stylus, 10.0, 10.0, 0.5, &[])]),
+                motion(Action::Down, 0, 12, vec![pointer(0, Tool::Finger, 300.0, 300.0, 0.5, &[])]),
+                // The screen gives up on its touch (the pen is near): the stroke goes on.
+                motion(Action::Cancel, 0, 14, vec![pointer(0, Tool::Finger, 300.0, 300.0, 0.5, &[])]),
+                motion(Action::Move, 0, 16, vec![pointer(0, Tool::Stylus, 20.0, 20.0, 0.5, &[])]),
+                motion(Action::Up, 0, 18, vec![pointer(0, Tool::Stylus, 20.0, 20.0, 0.0, &[])]),
+            ],
+        );
+        let p = pointers(&events);
+        assert_eq!(
+            p.iter().map(|e| (e.device, e.phase)).collect::<Vec<_>>(),
+            [
+                (Device::Pen, Phase::Down),
+                (Device::Touch, Phase::Down),
+                (Device::Touch, Phase::Cancel),
+                (Device::Pen, Phase::Move),
+                (Device::Pen, Phase::Up)
+            ]
+        );
+        // And a finger 0 down does not hide a stylus 0 hovering.
+        let mut d = Decoder::new(0.0);
+        let events = run(
+            &mut d,
+            &[
+                motion(Action::Down, 0, 10, vec![pointer(0, Tool::Finger, 300.0, 300.0, 0.5, &[])]),
+                motion(Action::HoverMove, 0, 12, vec![pointer(0, Tool::Stylus, 10.0, 10.0, 0.0, &[])]),
+            ],
+        );
+        assert_eq!(pointers(&events).last().map(|e| (e.device, e.phase)), Some((Device::Pen, Phase::Hover)));
     }
 }

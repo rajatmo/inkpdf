@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- The line being drawn no longer swings: the short stretch the pen's predicted position adds ahead of the ink was a
+  straight guess, which stuck out of a turn by up to several pixels and snapped back with the next sample. It is now
+  aimed along the path's heading and cut short on a tight turn (at most half a pixel off the path), and is full length
+  on a straight run.
+
+- The ends of a tap-drawn spline are no longer pointed: an open end leaves with no curvature, as in Inkscape's Spiro
+  and a natural spline, instead of running straight along the chord to the next point. Closed splines and the inner
+  points are as before, and splines already saved keep their shape.
+
 ## 0.6.0
 
 Input methods: with a tool chosen, every item it made can now be created, selected, moved, restyled, duplicated,

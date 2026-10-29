@@ -286,6 +286,70 @@ fn a_corner_becomes_smooth_and_a_smooth_anchor_a_corner() {
     }
 }
 
+fn ring(n: usize, r: f32) -> Vec<P> {
+    (0..n).map(|k| {
+        let a = -std::f32::consts::FRAC_PI_2 + k as f32 * std::f32::consts::TAU / n as f32;
+        [200.0 + r * a.cos(), 200.0 + r * a.sin()]
+    }).collect()
+}
+
+#[test]
+fn an_open_spline_has_no_curvature_at_its_ends() {
+    let f = Figure::spline(&[[0.0, 0.0], [40.0, 30.0], [90.0, 10.0], [130.0, 60.0], [150.0, 20.0]], false).expect("spline");
+    let a = spline_anchors(&f);
+    let n = a.len();
+    // The second derivative of a cubic at its end is 0 when the end's control point is halfway to the next one.
+    let first = (add(a[0].pos, a[0].fwd), add(a[1].pos, a[1].back));
+    assert!(near(first.0, scale(add(a[0].pos, first.1), 0.5)), "{first:?}");
+    let last = (add(a[n - 1].pos, a[n - 1].back), add(a[n - 2].pos, a[n - 2].fwd));
+    assert!(near(last.0, scale(add(a[n - 1].pos, last.1), 0.5)), "{last:?}");
+    assert_eq!((a[0].back, a[n - 1].fwd), ([0.0; 2], [0.0; 2]), "an end has the one handle");
+    // The inner nodes are as before: tangent along the line between the neighbours, a third of the way to each.
+    let t = with_length(sub(a[2].pos, a[0].pos), 1.0);
+    assert!(near(a[1].fwd, scale(t, length(sub(a[2].pos, a[1].pos)) / 3.0)));
+}
+
+#[test]
+fn the_ends_of_a_spline_through_points_on_a_circle_stay_near_the_circle() {
+    let nodes = ring(8, 100.0);
+    let f = Figure::spline(&nodes[..], false).expect("spline");
+    let stray = |f: &Figure| f.points().iter().map(|&p| (length(sub(p, [200.0, 200.0])) - 100.0).abs()).fold(0.0, f32::max);
+    // The same nodes with the ends leaving along the chord, as splines used to: the tips cut in.
+    let mut chord = f.clone();
+    if let Figure::Path { anchors, .. } = &mut chord {
+        let n = anchors.len();
+        anchors[0].fwd = scale(sub(anchors[1].pos, anchors[0].pos), 1.0 / 3.0);
+        anchors[n - 1].back = scale(sub(anchors[n - 2].pos, anchors[n - 1].pos), 1.0 / 3.0);
+    }
+    let (relaxed, cut) = (stray(&f), stray(&chord));
+    assert!(relaxed < 3.0 && relaxed < 0.6 * cut, "relaxed ends stray {relaxed} from the circle, chord ends {cut}");
+}
+
+#[test]
+fn a_spline_of_two_nodes_is_a_straight_line_and_a_closed_one_is_smooth_all_round() {
+    let two = Figure::spline(&[[0.0, 0.0], [60.0, 0.0]], false).expect("spline");
+    assert!(two.points().iter().all(|p| p[1].abs() < 1e-3), "{:?}", two.points());
+    let a = spline_anchors(&two);
+    assert!(near(a[0].fwd, [20.0, 0.0]) && near(a[1].back, [-20.0, 0.0]), "{a:?}");
+    let ring = Figure::spline(&ring(6, 80.0), true).expect("closed");
+    for a in spline_anchors(&ring) {
+        assert!(a.smooth && length(a.back) > 1.0 && length(a.fwd) > 1.0);
+        assert!(near(with_length(a.back, 1.0), scale(with_length(a.fwd, 1.0), -1.0)), "a tangent line through every node: {a:?}");
+    }
+}
+
+#[test]
+fn an_end_made_smooth_next_to_a_corner_stays_straight_and_next_to_a_smooth_node_relaxes() {
+    let mut f = Figure::Path { anchors: vec![Anchor::corner([0.0, 0.0]), Anchor::corner([30.0, 0.0]), Anchor::corner([60.0, 30.0])], closed: false };
+    assert!(f.toggle_smooth(0));
+    assert!(near(spline_anchors(&f)[0].fwd, [10.0, 0.0]), "the neighbour has no handle: a straight segment");
+    assert!(f.toggle_smooth(0), "back to a corner");
+    assert!(f.toggle_smooth(1));
+    assert!(f.toggle_smooth(0));
+    let a = spline_anchors(&f);
+    assert!(near(a[0].fwd, scale(add(sub(a[1].pos, a[0].pos), a[1].back), 0.5)), "{a:?}");
+}
+
 #[test]
 fn a_spline_anchor_inserted_on_a_curve_is_smooth_and_the_shape_does_not_change() {
     let mut f = curve();

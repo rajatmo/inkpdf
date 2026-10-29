@@ -48,3 +48,15 @@ Check (-not (Dirty)) "save writes the file ($(Title))"
 Reopen
 Check ((Pages)[1] -eq 1) "reopened: the file has the one page that is left"
 Stop-App
+
+# ---- 3. A spline through eight points of a circle, left open: its ends follow the circle (they do not cut in along the chord).
+Launch "tool geometry`nshape curve`nshape-slot 3`nshape-width 3.00`n" "" @("--mode", "desktop")
+foreach ($k in 0..7) { $a = -[math]::PI / 2 + $k * [math]::PI / 4; Click (0.5 + 0.15 * [math]::Cos($a)) (0.58 + 0.28 * [math]::Sin($a)) }
+Use-Tool pen     # leaves the shape tool: the spline is made
+Check ((Count 38 160 84) -gt 600) "eight taps make a spline of green ink"
+# The window is 2000 x 1070 units; the circle's centre is (1000, 620) and its radius 300. The chord from a tip's node to its neighbour
+# passes 23 units inside the circle at its middle; a curve that leaves the node along the circle does not.
+$cut = (Count 38 160 84 1099 357 1113 371) + (Count 38 160 84 737 507 751 521)
+Check ($cut -eq 0) "the tips follow the circle: no ink on the chords ($cut px)"
+Check ((Alive) -and ((Errs).Count -eq 0)) "no crash, nothing printed to stderr"
+Stop-App

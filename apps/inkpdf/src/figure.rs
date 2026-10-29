@@ -203,6 +203,16 @@ fn axis_direction(origin: P, end: [P; 2]) -> P {
     longest.and_then(unit).unwrap_or([1.0, 0.0])
 }
 
+/// The handle of an open end `p` whose neighbour `q` has the handle `toward` on the side facing `p`: the end's
+/// control point halfway between `p` and the neighbour's, so the curve has no curvature at `p`. Next to a
+/// node without handles the segment is straight, with a handle a third of the way along it.
+fn end_handle(p: P, q: P, toward: P) -> P {
+    if toward == [0.0, 0.0] {
+        return scale(sub(q, p), 1.0 / 3.0);
+    }
+    scale(sub(add(q, toward), p), 0.5)
+}
+
 /// `p` moved onto the line through `through` running along `dir`.
 fn onto_line(p: P, through: P, dir: P) -> P {
     add(through, scale(dir, dot(sub(p, through), dir)))
@@ -270,11 +280,15 @@ impl Figure {
     }
 
     /// The spline through `nodes`, every node smooth with its tangents along the line between its
-    /// neighbours; closed into a loop if asked. `None` if there are too few distinct nodes.
+    /// neighbours and the open ends relaxed (no curvature there); closed into a loop if asked. `None` if
+    /// there are too few distinct nodes.
     pub fn spline(nodes: &[P], closed: bool) -> Option<Figure> {
         let Some(Figure::Poly { points, closed }) = Figure::polyline(nodes, closed) else { return None };
         let mut figure = Figure::Path { anchors: points.into_iter().map(Anchor::corner).collect(), closed };
-        for i in 0..figure.anchor_count() {
+        // The inner nodes first: an end takes its shape from its neighbour's handle.
+        let n = figure.anchor_count();
+        let order: Vec<usize> = if closed { (0..n).collect() } else { (1..n - 1).chain([0, n - 1]).collect() };
+        for i in order {
             figure.toggle_smooth(i);
         }
         figure.valid().then_some(figure)
@@ -488,14 +502,24 @@ impl Figure {
     }
 
     /// Switch spline anchor `i` between a corner (no handles) and a smooth point: one with handles is
-    /// made a corner; a corner gets handles along the line between its neighbours. Returns whether
-    /// anything changed. (Only a spline has smooth points: straight lines stay straight.)
+    /// made a corner; a corner gets handles along the line between its neighbours, or, at an open end,
+    /// the handle that leaves the curve with no curvature there. Returns whether anything changed. (Only a spline has smooth points: straight lines stay straight.)
     pub fn toggle_smooth(&mut self, i: usize) -> bool {
         let Figure::Path { anchors, closed } = self else { return false };
         let n = anchors.len();
         let Some(&a) = anchors.get(i) else { return false };
         if a.has_handles() {
             anchors[i] = Anchor::corner(a.pos);
+            return true;
+        }
+        if !*closed && n >= 2 && (i == 0 || i == n - 1) {
+            // An open end leaves with no curvature, as in a natural spline: the neighbour's handle decides.
+            let (q, toward) = if i == 0 { (anchors[1], anchors[1].back) } else { (anchors[n - 2], anchors[n - 2].fwd) };
+            let h = end_handle(a.pos, q.pos, toward);
+            if h == [0.0, 0.0] {
+                return false;
+            }
+            anchors[i] = if i == 0 { Anchor { pos: a.pos, back: [0.0; 2], fwd: h, smooth: true } } else { Anchor { pos: a.pos, back: h, fwd: [0.0; 2], smooth: true } };
             return true;
         }
         let wrap = |k: isize| -> Option<P> {

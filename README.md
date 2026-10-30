@@ -23,7 +23,7 @@ just the page and your pen.
 |---|---|---|
 | **Windows 10/11** | the main platform: full pen support (pressure, eraser end, barrel button) | installer or portable zip |
 | **Linux** (X11, Wayland) | works; the pen is read as basic mouse/touch for now (no pressure yet) | portable tarball |
-| **Android** (arm64 tablets and phones) | test build: S Pen and finger work; it starts on a welcome PDF; Open and Save use the system's file picker; copy, paste and links go through the system (written but not yet tried on a device) | APK |
+| **Android** (arm64 tablets and phones) | test build: S Pen and finger work; it starts on a blank page, as everywhere; Open and Save use the system's file picker; copy, paste and links go through the system (written but not yet tried on a device) | APK |
 
 ## Get started
 

@@ -54,7 +54,6 @@ check "the app is still running at the end" alive
 adb logcat -d -s inkpdf >"$out/logcat-inkpdf.txt"
 adb logcat -d >"$out/logcat-all.txt"
 check "the app reported its GPU" "grep -q 'GPU:' '$out/logcat-inkpdf.txt'"
-check "it opened the welcome document" "grep -q 'opened Welcome' '$out/logcat-inkpdf.txt'"
 check "nothing panicked" "! grep -q 'panicked' '$out/logcat-inkpdf.txt'"
 echo "$([ $fail = 0 ] && echo PASS || echo FAIL)" >"$out/verdict.txt"
 cat "$out/verdict.txt"

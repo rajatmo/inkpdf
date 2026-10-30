@@ -226,7 +226,7 @@ pub fn run_android(android: winit::platform::android::activity::AndroidApp) {
         }
     };
     let options = app::Options {
-        path: platform::welcome_document(),
+        path: None,
         bench: false,
         exit_after: None,
         topmost: false,

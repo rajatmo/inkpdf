@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.6
+
+- **Android starts on a blank page**, like the other platforms, not on a welcome PDF (the PDF is no longer in the app). A document another app
+  hands over ("Open with") or the Open button still opens as before.
+
 ## 1.3.5
 
 - **The lasso and the eraser are tools** of the toolbar (after the text tool), not three buttons of the bar under the tools. The lasso's tip loops

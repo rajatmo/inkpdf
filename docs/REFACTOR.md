@@ -86,7 +86,7 @@ something outside the crate needs it. The shell's `sync_*_ui` trio becomes one `
 
 ### R3. Platform as an object, not free functions  *(medium, low risk; done)*
 
-*Done.* `platform::Platform` (documents, places, mode, motion prefs, open_url, error box, text input, clipboard, `install_pointer`) is built once by `platform::native()` and held by `State`. The window crosses the seam as `&dyn HasWindowHandle` plus a `Waker`; Windows keeps an `HWND`, not an `Arc<Window>`. `platform::fake::FakePlatform` runs the shell's calls with no OS. Process-level calls before a window exists (`attach_parent_console`, `report_fatal`, Android's `android_app_started`/`welcome_document`) stay free functions.
+*Done.* `platform::Platform` (documents, places, mode, motion prefs, open_url, error box, text input, clipboard, `install_pointer`) is built once by `platform::native()` and held by `State`. The window crosses the seam as `&dyn HasWindowHandle` plus a `Waker`; Windows keeps an `HWND`, not an `Arc<Window>`. `platform::fake::FakePlatform` runs the shell's calls with no OS. Process-level calls before a window exists (`attach_parent_console`, `report_fatal`, Android's `android_app_started`) stay free functions.
 
 *Problem.* `platform` re-exports the same names from three modules; nothing but a build on each OS checks they agree, nothing
 can be mocked, and Linux cannot choose Wayland or X11 at run time.

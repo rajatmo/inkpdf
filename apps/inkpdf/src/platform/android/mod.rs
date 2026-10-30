@@ -70,17 +70,6 @@ pub fn set_text_input(active: bool) {
     }
 }
 
-/// The first-start document: a short welcome with a page to write on, put in the app's Documents folder (once, so that what
-/// is drawn on it and saved is not overwritten) and opened.
-pub fn welcome_document() -> Option<PathBuf> {
-    const WELCOME: &[u8] = include_bytes!("../../../assets/android/welcome.pdf");
-    let path = documents_dir().join("Welcome to InkPDF.pdf");
-    if !path.exists() {
-        std::fs::write(&path, WELCOME).ok()?;
-    }
-    Some(path)
-}
-
 /// The shared storage as an app sees it before it has a `Context` to ask (`docs/PORTING.md`, step A4: the app's own
 /// folder from `AndroidApp::external_data_path`, which needs no permission, is where saving will really go). Writing here
 /// can be refused by scoped storage; the dialog shows the error when it is.

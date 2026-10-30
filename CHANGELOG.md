@@ -2,6 +2,7 @@
 
 ## 1.3.3
 
+- The **Open button** (where the system has a file picker: Android) sits just left of Save, with the buttons that act on the document, not out among the page and search buttons.
 - **Links work with every pointer.** A finger's tap was judged in screen pixels (10 px, 300 ms), so on a dense tablet screen the natural wobble of a
   fingertip made most taps "a swipe" and the link was never followed. The slop is now 12 logical pixels (scaled by the screen's scale), the
   time 350 ms, and a fling needs a speed in logical pixels too.

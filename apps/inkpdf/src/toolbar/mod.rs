@@ -86,7 +86,7 @@ pub enum Item {
     AddPage,
     /// Open the pages overview.
     Pages,
-    /// Ask the system's picker for a PDF to open (there only where the system has one).
+    /// Ask the system's picker for a PDF to open (there only where the system has one); it sits just left of Save.
     Open,
     /// Open or close the search card.
     Search,
@@ -211,7 +211,7 @@ impl Toolbar {
         let mut left = [None; LEFT.len() + 1];
         let mut left_len = 0;
         for slot in LEFT {
-            if slot == Some(Item::Search) && registry.has_open_button() {
+            if slot == Some(Item::Save) && registry.has_open_button() {
                 left[left_len] = Some(Item::Open);
                 left_len += 1;
             }

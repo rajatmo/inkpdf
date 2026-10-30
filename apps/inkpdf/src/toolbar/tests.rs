@@ -255,9 +255,9 @@ fn with_a_picker_the_left_pill_has_a_button_to_open_a_pdf_and_everything_still_f
         assert!(rect_contains(tb.pills[0], [(open[0] + open[2]) / 2.0, (open[1] + open[3]) / 2.0]), "in the left pill at {w}");
         assert!(tb.pills[0][2] < tb.pills[1][0] && tb.pills[1][2] < tb.pills[2][0], "three separate pills at {w}: {:?}", tb.pills);
         assert_eq!(tb.hit([(open[0] + open[2]) / 2.0, (open[1] + open[3]) / 2.0]), Some(Item::Open));
-        // It is between the pages button and the search button.
-        let (pages, search) = (tb.button(Item::Pages).expect("pages"), tb.button(Item::Search).expect("search"));
-        assert!(pages[2] <= open[0] + 0.5 && open[2] <= search[0] + 0.5, "{w}");
+        // It is right beside the save button, on its left.
+        let (redo, save) = (tb.button(Item::Redo).expect("redo"), tb.button(Item::Save).expect("save"));
+        assert!(redo[2] <= open[0] + 0.5 && (open[2] - save[0]).abs() < 0.5, "{w}");
     }
     assert!(Toolbar::layout([1100.0, 900.0], 1.0).button(Item::Open).is_none(), "and without one there is none");
 }

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.5
+
+- **The lasso and the eraser are tools** of the toolbar (after the text tool), not three buttons of the bar under the tools. The lasso's tip loops
+  or taps to pick up items of any kind (ink, shapes, text boxes), drags what is picked up, and its bar has duplicate, copy, paste, delete, the
+  colours and the settings for what it holds; the eraser's tip takes away whatever it passes over, of any kind. The stylus's eraser end and
+  barrel button, and the mouse's right and middle buttons, still erase and loop with the pen, shape and text tools, each on its own kind.
+  Up to ten tools fit the toolbar (it was eight); under about 550 points wide the pills no longer fit side by side.
+
 ## 1.3.4
 
 - **Android: the full-screen button hides and shows the system bars** (status and navigation). It did nothing there, as Android's window cannot be

@@ -10,6 +10,7 @@ mod ext;
 pub mod gestures;
 pub mod paint;
 mod pen;
+mod picker;
 mod select;
 mod shape;
 mod shortcuts;
@@ -22,6 +23,7 @@ use crate::workspace::Workspace;
 pub use ext::ExtTool;
 pub use paint::Painter;
 pub use pen::PenTool;
+pub use picker::PickTool;
 pub use select::SelectTool;
 #[cfg(test)]
 pub use shape::Draft;
@@ -179,6 +181,8 @@ pub struct ToolSet {
     pub shape: ShapeTool,
     pub text: TextTool,
     pub select: SelectTool,
+    pub lasso: PickTool,
+    pub eraser: PickTool,
     ext: Vec<ExtTool>,
 }
 
@@ -195,6 +199,8 @@ impl ToolSet {
             shape: ShapeTool::default(),
             text: TextTool::default(),
             select: SelectTool::default(),
+            lasso: PickTool::default(),
+            eraser: PickTool::default(),
             ext: extensions.iter().map(ExtTool::new).collect(),
         }
     }
@@ -206,6 +212,8 @@ impl ToolSet {
             ToolId::Geometry => &self.shape,
             ToolId::Text => &self.text,
             ToolId::Select => &self.select,
+            ToolId::Lasso => &self.lasso,
+            ToolId::Eraser => &self.eraser,
             other => match self.ext.iter().find(|t| t.id() == other) {
                 Some(t) => t,
                 None => &self.select,
@@ -219,6 +227,8 @@ impl ToolSet {
             ToolId::Geometry => &mut self.shape,
             ToolId::Text => &mut self.text,
             ToolId::Select => &mut self.select,
+            ToolId::Lasso => &mut self.lasso,
+            ToolId::Eraser => &mut self.eraser,
             other => match self.ext.iter().position(|t| t.id() == other) {
                 Some(at) => &mut self.ext[at],
                 None => &mut self.select,
@@ -227,7 +237,7 @@ impl ToolSet {
     }
 
     fn each(&mut self) -> Vec<&mut dyn Tool> {
-        let mut all: Vec<&mut dyn Tool> = vec![&mut self.pen, &mut self.shape, &mut self.text, &mut self.select];
+        let mut all: Vec<&mut dyn Tool> = vec![&mut self.pen, &mut self.shape, &mut self.text, &mut self.select, &mut self.lasso, &mut self.eraser];
         all.extend(self.ext.iter_mut().map(|t| t as &mut dyn Tool));
         all
     }
@@ -235,7 +245,7 @@ impl ToolSet {
     /// Whether any tool has a gesture, or work not yet made part of the document, under way.
     #[cfg(test)]
     pub fn busy(&self) -> bool {
-        [&self.pen as &dyn Tool, &self.shape, &self.text, &self.select].iter().any(|t| t.busy()) || self.ext.iter().any(|t| t.busy())
+        [&self.pen as &dyn Tool, &self.shape, &self.text, &self.select, &self.lasso, &self.eraser].iter().any(|t| t.busy()) || self.ext.iter().any(|t| t.busy())
     }
 
     /// Time has passed: whether any extension's tool is still moving by itself (the frames go on while one is).

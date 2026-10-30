@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use crate::clipboard::{MemoryClipboard, TextClipboard};
 use crate::geometry::Shape;
 use crate::ink::{InkStore, P, Stroke};
-use crate::input::{Intent, PenButtons, Role, role_with};
+use crate::input::{PenButtons, Role};
 use crate::palette::{Palette, Scheme};
 use crate::settings::Appearance;
 use crate::tool::{PALETTE, Tool, ToolStyle};
@@ -28,9 +28,6 @@ pub struct Workspace {
     pub erasing: HashSet<u64>,
     /// The tool in use.
     pub tool: Tool,
-    /// What the plain tip of the stylus (or the left mouse button) does with the tool in use: draw, select or
-    /// erase. Back to drawing whenever the tool changes.
-    pub intent: Intent,
     /// What was copied: the items themselves, to be pasted again (see [`crate::selection`]).
     pub clipboard: Vec<Stroke>,
     /// How many times the clipboard has been pasted since it was filled.
@@ -45,6 +42,8 @@ pub struct Workspace {
     pub palette: [[u8; 4]; 5],
     pub pen: ToolStyle,
     pub shape_style: ToolStyle,
+    /// How the lasso restyles what it picked up (not kept in the settings: it is chosen anew each time).
+    pub lasso_style: ToolStyle,
     pub text_style: ToolStyle,
     /// The shape the shape tool makes.
     pub shape: Shape,
@@ -75,7 +74,6 @@ impl Workspace {
             selection: Vec::new(),
             erasing: HashSet::new(),
             tool: Tool::Select,
-            intent: Intent::default(),
             clipboard: Vec::new(),
             pasted: 0,
             text_clipboard: Box::new(MemoryClipboard::default()),
@@ -83,6 +81,7 @@ impl Workspace {
             palette: PALETTE,
             pen: ToolStyle::PEN,
             shape_style: ToolStyle::SHAPES,
+            lasso_style: ToolStyle::PEN,
             text_style: ToolStyle::TEXT,
             shape: Shape::default(),
             smoothing: crate::smooth::DEFAULT_AMOUNT,
@@ -97,9 +96,13 @@ impl Workspace {
     }
 
     /// What a press of the stylus (or the mouse standing in for it) does: its own buttons if one is held, else
-    /// what was chosen on screen.
+    /// what the tool in use makes of the plain tip (the lasso tool loops, the eraser tool erases).
     pub fn role(&self, pen: &PenButtons) -> Role {
-        role_with(pen, self.intent)
+        match (pen.role(), self.tool) {
+            (Role::Draw, Tool::Lasso) => Role::Lasso,
+            (Role::Draw, Tool::Eraser) => Role::Erase,
+            (held, _) => held,
+        }
     }
 
     /// A screen position in document space.
@@ -134,6 +137,7 @@ impl Workspace {
         match tool {
             Tool::Geometry => self.shape_style,
             Tool::Text => self.text_style,
+            Tool::Lasso => self.lasso_style,
             _ => self.pen,
         }
     }
@@ -142,6 +146,7 @@ impl Workspace {
         match self.tool {
             Tool::Geometry => &mut self.shape_style,
             Tool::Text => &mut self.text_style,
+            Tool::Lasso => &mut self.lasso_style,
             _ => &mut self.pen,
         }
     }

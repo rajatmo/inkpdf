@@ -28,7 +28,8 @@ enforced by tests (`src/architecture.rs`, `src/editor/tests/contract.rs`).
   (ink, selection, view, layout, styles, redraw flag); `requests.rs` is the queue of asks to the shell.
 * **tools** (`src/tools/`) — `Tool` trait (`policy`, `pointer`, `owns`, `busy`, `end`, `settle`, `leave`,
   `cancel`, `key`, `undo`, `redo`, `restyled`, `drag_offset`, `paint`); `PenTool`, `ShapeTool` (with
-  `anchors` and `draft` modules), `TextTool`, `PointerTool`; shared gesture parts in `gestures.rs`
+  `anchors` and `draft` modules), `TextTool`, `SelectTool`, `PickTool` (the lasso and the eraser: the same type, which of the two a press is
+  decided by `Workspace::role`); shared gesture parts in `gestures.rs`
   (`Mover`, `Eraser`, `Lasso`); `paint.rs` (`Painter` trait and line helpers). A tool never names another
   tool, the toolbar, the editor, the window or the GPU.
 * **session** (`src/editor/`) — `Editor` is the facade the shell talks to. `routing.rs` hands pointer
@@ -333,6 +334,8 @@ The rules depend on a `Mode`, which follows the machine's posture (`src/posture.
 |---|---|---|---|---|---|
 | Pen | draw, erase (eraser end), lasso (barrel) | as a stylus: left tip, right eraser end, middle barrel | scroll | pan/zoom | desktop: the selection's keys |
 | Shape | select, draw, erase, lasso (tap-drawn polylines and splines) | as a stylus | scroll | pan/zoom | desktop: the selection's keys, Backspace on a point |
+| Lasso | tip loops or taps, picks any kind of item, drags what is picked | as a stylus | scroll | pan/zoom | desktop: the selection's keys |
+| Eraser | tip erases any kind of item | as a stylus | scroll | pan/zoom | none |
 | Pointer | point | as a stylus (dot follows the mouse) | scroll | pan/zoom | none |
 | Text | desktop: none; tablet: place/select/move text | place/select/move text | scroll | pan/zoom | types, caret, selection |
 
@@ -346,16 +349,18 @@ guarantees (desktop: left button and keyboard; tablet: the stylus tip). `editor/
 tool and mode and runs it through those devices alone; the stylus's barrel button and eraser end and the mouse's
 right and middle buttons are shortcuts and no test may need them.
 
-* **Intent** (`input::Intent`: draw, select, erase) is what the plain tip does. `Workspace::role` is the one
-  place that combines it with the pen's own buttons (a held button wins), so every tool that takes a stylus gets
-  select and erase for free: the pen and shape tools in `down`, the text tool in `press_at`.
+* **Role** (`input::Role`: draw, erase, lasso) is what a press does. `Workspace::role` is the one place that combines the pen's own
+  buttons (a held button wins) with the tool: the lasso tool's plain tip is a lasso, the eraser tool's an eraser, any other tool's a draw. So
+  the stylus's eraser end and barrel button erase and loop with every tool that makes items (the pen and shape tools in `down`, the text tool
+  in `press_at`), and the two tools are the same gestures with the tip alone.
 * **The selection's operations** live once, on the workspace (`selection.rs`): select all, delete, duplicate,
   copy, cut, paste, nudge, restyle. Each is one undo step (`InkStore::add_copies`, `replace_many` with its
   `Cmd::Restyle`, which coalesces a slider drag into one step). Keys, shortcuts and the buttons of the bar call
   these; nothing is implemented twice.
 * **Tool scope** (`selection::Kind`): selecting, erasing, select-all and paste only touch the tool's own kind of
-  item (handwriting, shapes, text boxes), so tools stay independent and a loop cannot grab what another tool made.
-* **The bar** (`toolbar/context_bar.rs`, `editor/context.rs`): buttons for the intents, the selection operations, the
+  item (handwriting, shapes, text boxes), so tools stay independent and a loop cannot grab what another tool made. The exceptions are the
+  lasso and the eraser (`Tool::picks_any`), whose job is every kind.
+* **The bar** (`toolbar/context_bar.rs`, `editor/context.rs`): buttons for the selection operations, the
   points of the shape being edited (`selection::NodeAction`, done by `ShapeTool::node_action`, the same edits the
   barrel button and a double tap make), the five colours, and the settings button. It is a chrome interaction
   (`Act::Context`) like the toolbar's, so every device presses it. The tool's panel is not a separate pop-up: it

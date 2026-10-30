@@ -1,7 +1,7 @@
 //! Toolbar presses, the tools, and the tool panel under the toolbar.
 
 use crate::ink::Restyle;
-use crate::input::{Device, Intent, Mode};
+use crate::input::{Device, Mode};
 use crate::scene::Xform;
 use crate::tool::Tool;
 use crate::toolbar::{Channel, Item, PromptLayout, Slider, Ui};
@@ -151,7 +151,7 @@ impl Editor {
     /// Give what is selected the colour or thickness just chosen. (A text box being typed into takes it through the
     /// tool instead; the pointer tool has nothing to restyle.)
     fn restyle_selected(&mut self, change: Restyle, continuing: bool) {
-        if self.ws.tool.makes_items() && !self.is_typing() {
+        if self.ws.tool.selects_items() && !self.is_typing() {
             self.ws.restyle_selection(change, continuing);
         }
     }
@@ -189,7 +189,6 @@ impl Editor {
         if self.ws.tool != tool {
             self.settle();
             self.ws.tool = tool;
-            self.ws.intent = Intent::Draw;
             self.ws.selection.clear();
             self.tools.leave_all(&mut self.ws);
             self.chrome.panel = None;

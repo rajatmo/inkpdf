@@ -12,7 +12,7 @@ use crate::editor::{Editor, Request};
 use crate::figure::NodeAction;
 use crate::geometry::Shape;
 use crate::ink::{InkStore, P, PageStroke, Style};
-use crate::input::{ButtonState, Device, Intent, MouseButton, PenButtons, Phase, PointerEvent, Sample, Wheel};
+use crate::input::{ButtonState, Device, MouseButton, PenButtons, Phase, PointerEvent, Sample, Wheel};
 use crate::links::{Link, Target};
 use crate::pages::PageEdit;
 use crate::smooth::{PenFilter, curve_through};
@@ -398,9 +398,6 @@ fn poke(ed: &mut Editor, rng: &mut Rng, hostile: bool) -> String {
         32 | 33 => {
             // A button of the bar under the tools (select, erase, delete, copy, paste, a shape's points, the style).
             let items = [
-                ContextItem::Intent(Intent::Draw),
-                ContextItem::Intent(Intent::Select),
-                ContextItem::Intent(Intent::Erase),
                 ContextItem::Duplicate,
                 ContextItem::Copy,
                 ContextItem::Paste,
@@ -458,6 +455,8 @@ fn poke(ed: &mut Editor, rng: &mut Rng, hostile: bool) -> String {
                 Item::Tool(Tool::Text),
                 Item::Tool(Tool::Text),
                 Item::Tool(Tool::Select),
+                Item::Tool(Tool::Lasso),
+                Item::Tool(Tool::Eraser),
                 Item::Tool(LASER),
                 Item::Fullscreen,
                 Item::AddPage,
@@ -961,7 +960,6 @@ fn use_tool(ed: &mut Editor, tool: Tool) {
     ed.tool = tool;
     // (A random press can land on the bar under the tools and choose to select or erase; choosing a tool starts
     // with the tip drawing again.)
-    ed.intent = crate::input::Intent::Draw;
 }
 
 /// The stylus's other ends: the eraser end or the barrel button, dragged along `path`.
@@ -1220,7 +1218,7 @@ fn check_motion(ed: &Editor, what: &str) {
     let unit = |v: f32| v.is_finite() && (-1e-3..=1.0 + 1e-3).contains(&v);
     let look = ed.toolbar_look();
     assert!(look.hover.iter().chain(&look.enabled).chain(&look.ripple).all(|&v| unit(v)), "{what}: {look:?}");
-    assert!(look.tool.is_finite() && (-1e-3..=4.0 + 1e-3).contains(&look.tool) && unit(look.unsaved), "{what}: {look:?}");
+    assert!(look.tool.is_finite() && (-1e-3..=crate::tool::MAX_TOOLS as f32 + 1e-3).contains(&look.tool) && unit(look.unsaved), "{what}: {look:?}");
     assert!(unit(ed.overview_appear()) && unit(ed.overview_leaving()) && unit(ed.motions.bar_amount()), "{what}");
     assert!(ed.prompt_look().is_none_or(|(_, a)| unit(a)) && ed.panel_look().is_none_or(|(_, a)| unit(a)), "{what}");
     if ed.overview_open() {

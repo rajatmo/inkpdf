@@ -13,7 +13,6 @@
 
 use crate::figure::NodeAction;
 use crate::ink::{MarkupKind, rect_contains};
-use crate::input::Intent;
 use crate::tool::{MAX_ACTIONS, ToolAction};
 
 use super::Tool;
@@ -23,8 +22,6 @@ use super::theme::Ui;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ContextItem {
-    /// What the tip does: draw, select or erase.
-    Intent(Intent),
     Duplicate,
     Copy,
     Paste,
@@ -42,7 +39,6 @@ pub enum ContextItem {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ContextState {
     pub tool: Tool,
-    pub intent: Intent,
     /// Something is selected.
     pub selection: bool,
     /// The clipboard holds something the tool can paste.
@@ -61,7 +57,6 @@ impl Default for ContextState {
     fn default() -> Self {
         Self {
             tool: Tool::Pen,
-            intent: Intent::Draw,
             selection: false,
             paste: false,
             actions: [None; MAX_ACTIONS],
@@ -101,7 +96,6 @@ fn slots(actions: &[ToolAction], compact: bool) -> ([Option<ContextItem>; SLOTS]
         }
         return (out, len);
     }
-    let tip = [Some(ContextItem::Intent(Intent::Draw)), Some(ContextItem::Intent(Intent::Select)), Some(ContextItem::Intent(Intent::Erase)), None];
     let selection = [Some(Duplicate), Some(Copy), Some(Paste), Some(Delete), None];
     let colours = [Some(Swatch(0)), Some(Swatch(1)), Some(Swatch(2)), Some(Swatch(3)), Some(Swatch(4)), None];
     let look = [Some(Style)];
@@ -109,7 +103,7 @@ fn slots(actions: &[ToolAction], compact: bool) -> ([Option<ContextItem>; SLOTS]
     let mut len = 0;
     let own = actions.iter().take(MAX_ACTIONS).map(|a| Some(Action(*a))).chain((!actions.is_empty()).then_some(None));
     let colours = colours.iter().filter(|_| !compact).copied();
-    for slot in tip.iter().chain(&selection).copied().chain(own).chain(colours).chain(look) {
+    for slot in selection.iter().copied().chain(own).chain(colours).chain(look) {
         out[len] = slot;
         len += 1;
     }
@@ -220,7 +214,7 @@ impl ContextBar {
             ContextItem::Duplicate | ContextItem::Copy | ContextItem::Delete => state.selection,
             ContextItem::Paste => state.paste,
             ContextItem::Action(a) => state.actions.iter().flatten().any(|(own, on)| *own == a && *on),
-            ContextItem::Intent(_) | ContextItem::Swatch(_) | ContextItem::Style => true,
+            ContextItem::Swatch(_) | ContextItem::Style => true,
         }
     }
 
@@ -245,7 +239,6 @@ impl ContextBar {
         for &(item, r) in self.items() {
             let (cx, cy) = ((r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0);
             let on = match item {
-                ContextItem::Intent(i) => i == state.intent,
                 ContextItem::Style => state.style_open,
                 _ => false,
             };
@@ -261,15 +254,6 @@ impl ContextBar {
                 ui.pal.ink_dim
             };
             let icon = match item {
-                // Drawing is what the tool in use does, so its own icon stands for it.
-                ContextItem::Intent(Intent::Draw) => match state.tool {
-                    Tool::Geometry => &all.geometry,
-                    Tool::Text => &all.text,
-                    Tool::Select => &all.text_select,
-                    _ => &all.pen,
-                },
-                ContextItem::Intent(Intent::Select) => &all.select,
-                ContextItem::Intent(Intent::Erase) => &all.erase,
                 ContextItem::Duplicate => &all.duplicate,
                 ContextItem::Copy => &all.copy,
                 ContextItem::Paste => &all.paste,
@@ -337,8 +321,8 @@ mod tests {
             }
             let node_buttons = seen.iter().filter(|i| matches!(i, ContextItem::Action(_))).count();
             assert_eq!(node_buttons, if nodes { 3 } else { 0 });
-            assert_eq!(seen.len(), if nodes { 16 } else { 13 });
-            assert_eq!(seen.first(), Some(&ContextItem::Intent(Intent::Draw)));
+            assert_eq!(seen.len(), if nodes { 13 } else { 10 });
+            assert_eq!(seen.first(), Some(&ContextItem::Duplicate));
             assert_eq!(seen.last(), Some(&ContextItem::Style));
             let colours: Vec<&ContextItem> = seen.iter().filter(|i| matches!(i, ContextItem::Swatch(_))).collect();
             assert_eq!(colours.len(), 5, "the five colours, one by one");
@@ -393,8 +377,8 @@ mod tests {
         let (_, bar) = bar_at(1650.0, 1.5, false);
         assert_eq!(bar.hit([5.0, 5.0]), None);
         assert!(!bar.contains([5.0, 5.0]));
-        let (a, b) = (bar.items()[2].1, bar.items()[3].1);
-        // The gap after the three intents.
+        let (a, b) = (bar.items()[3].1, bar.items()[4].1);
+        // The gap after the four buttons for what is selected.
         assert_eq!(bar.hit([(a[2] + b[0]) / 2.0, (a[1] + a[3]) / 2.0]), None);
     }
 
@@ -407,9 +391,6 @@ mod tests {
         }
         assert!(!ContextBar::enabled(ContextItem::Paste, &none));
         assert!(ContextBar::enabled(ContextItem::Paste, &ContextState { paste: true, ..none }));
-        for intent in [Intent::Draw, Intent::Select, Intent::Erase] {
-            assert!(ContextBar::enabled(ContextItem::Intent(intent), &none));
-        }
         // A tool's own action is dim unless the tool says it can be done now.
         let remove = ContextItem::Action(ToolAction::Node(NodeAction::Remove));
         let add = ContextItem::Action(ToolAction::Node(NodeAction::Add));
@@ -420,7 +401,7 @@ mod tests {
     }
 
     #[test]
-    fn the_chosen_intent_the_colour_in_use_and_the_unfolded_panel_change_what_is_drawn() {
+    fn the_colour_in_use_and_the_unfolded_panel_change_what_is_drawn() {
         let (_, bar) = bar_at(1650.0, 1.5, true);
         let count = |state: &ContextState, drawer: Option<f32>| {
             let mut ui = Ui::default();
@@ -430,7 +411,6 @@ mod tests {
         let plain = count(&ContextState::default(), None);
         assert!(plain.0 > 0 && plain.1 > 0);
         let busy = ContextState {
-            intent: Intent::Erase,
             selection: true,
             paste: true,
             actions: [Some((NODE_ACTIONS[0], true)), None, None],
@@ -438,7 +418,7 @@ mod tests {
             colour: 3,
             ..ContextState::default()
         };
-        assert_ne!(plain, count(&busy, None), "erase chosen and a selection draw differently");
+        assert_ne!(plain, count(&busy, None), "a selection and a pasteable clipboard draw differently");
         // Unfolded, the card and a hairline take the place of the pill.
         let open = count(&ContextState::default(), Some(bar.rect[3] + 300.0));
         assert_eq!(open.0, plain.0 + 1, "one hairline more");

@@ -5,7 +5,6 @@
 //! other buttons, are shortcuts; nothing here may need them.)
 
 use crate::geometry::Shape;
-use crate::input::Intent;
 use crate::tool::Kind;
 use crate::toolbar::{ContextItem, Slider};
 use crate::tools::{Dir, Key};
@@ -77,9 +76,11 @@ impl Rig {
         self.tap(at);
     }
 
-    fn choose(&mut self, intent: Intent) {
-        self.bar(ContextItem::Intent(intent));
-        assert_eq!(self.ed.intent, intent);
+    /// Choose a tool with its button on the toolbar.
+    fn choose(&mut self, tool: Tool) {
+        let at = self.ed.toolbar().centre_of(Item::Tool(tool));
+        self.tap(at);
+        assert_eq!(self.ed.tool, tool);
     }
 
     /// Take back the last step with the toolbar's undo button.
@@ -178,7 +179,7 @@ fn every_tool_makes_an_item_in_both_modes() {
 fn a_tap_with_select_chosen_selects_the_item_under_it_and_a_tap_elsewhere_lets_go() {
     for_each_tool_and_mode(|rig| {
         let id = rig.make();
-        rig.choose(Intent::Select);
+        rig.choose(Tool::Lasso);
         let on = rig.on_item();
         rig.tap(on);
         assert_eq!(rig.ed.selection, [id], "{}: a tap on it", rig.label());
@@ -192,7 +193,7 @@ fn a_tap_with_select_chosen_selects_the_item_under_it_and_a_tap_elsewhere_lets_g
 fn a_loop_with_select_chosen_selects_what_it_encloses() {
     for_each_tool_and_mode(|rig| {
         let id = rig.make();
-        rig.choose(Intent::Select);
+        rig.choose(Tool::Lasso);
         let ring = [rig.at(60.0, 260.0), rig.at(340.0, 260.0), rig.at(340.0, 400.0), rig.at(60.0, 400.0), rig.at(60.0, 262.0)];
         rig.drag(&ring);
         assert_eq!(rig.ed.selection, [id], "{}", rig.label());
@@ -204,7 +205,7 @@ fn a_selected_item_is_dragged_where_it_is_taken_and_undo_puts_it_back() {
     for_each_tool_and_mode(|rig| {
         let id = rig.make();
         let from = rig.first_point(id);
-        rig.choose(Intent::Select);
+        rig.choose(Tool::Lasso);
         let on = rig.on_item();
         rig.tap(on);
         let to = [on[0] + 60.0, on[1] + 40.0];
@@ -225,13 +226,13 @@ fn the_colour_and_thickness_chosen_in_the_panel_restyle_what_is_selected_and_und
     for_each_tool_and_mode(|rig| {
         let id = rig.make();
         let (colour, size) = rig.look(id);
-        rig.choose(Intent::Select);
+        rig.choose(Tool::Lasso);
         let on = rig.on_item();
         rig.tap(on);
         // The bar's style button opens the tool's panel; a colour pressed there is the item's colour.
         rig.bar(ContextItem::Style);
         assert!(rig.ed.chrome.panel.is_some(), "{}", rig.label());
-        let panel = || rig.ed.toolbar().tool_panel(rig.tool, rig.ed.view.viewport[0], false).expect("panel");
+        let panel = || rig.ed.toolbar().tool_panel(rig.ed.tool, rig.ed.view.viewport[0], false).expect("panel");
         let (swatch, wide) = (panel().swatch_centre(3), panel().point_on(Slider::Width, 0.95));
         let want = rig.ed.palette[3];
         rig.tap(swatch);
@@ -254,7 +255,7 @@ fn a_colour_in_the_bar_is_one_tap_for_the_tool_and_for_what_is_selected_and_the_
     for_each_tool_and_mode(|rig| {
         let id = rig.make();
         let (colour, size) = rig.look(id);
-        rig.choose(Intent::Select);
+        rig.choose(Tool::Lasso);
         let on = rig.on_item();
         rig.tap(on);
         let want = rig.ed.palette[3];
@@ -303,11 +304,11 @@ fn dragging_the_thickness_slider_over_a_selection_is_one_undo_step() {
     for_each_tool_and_mode(|rig| {
         let id = rig.make();
         let (colour, size) = rig.look(id);
-        rig.choose(Intent::Select);
+        rig.choose(Tool::Lasso);
         let on = rig.on_item();
         rig.tap(on);
         rig.bar(ContextItem::Style);
-        let panel = rig.ed.toolbar().tool_panel(rig.tool, rig.ed.view.viewport[0], false).expect("panel");
+        let panel = rig.ed.toolbar().tool_panel(rig.ed.tool, rig.ed.view.viewport[0], false).expect("panel");
         let path: Vec<[f32; 2]> = [0.2, 0.4, 0.6, 0.8, 0.95].iter().map(|&t| panel.point_on(Slider::Width, t)).collect();
         rig.drag(&path);
         assert!(rig.look(id).1 > size, "{}: the drag made it bigger", rig.label());
@@ -321,7 +322,7 @@ fn duplicate_copies_the_selection_and_selects_the_copy() {
     for_each_tool_and_mode(|rig| {
         let id = rig.make();
         let from = rig.first_point(id);
-        rig.choose(Intent::Select);
+        rig.choose(Tool::Lasso);
         let on = rig.on_item();
         rig.tap(on);
         rig.bar(ContextItem::Duplicate);
@@ -343,7 +344,7 @@ fn copy_then_paste_brings_the_item_back_as_often_as_asked_each_time_a_little_fur
         let id = rig.make();
         // (The text tool can always try: words may be on the system clipboard from somewhere else.)
         assert_eq!(rig.ed.can_paste(), rig.tool == Tool::Text, "{}: nothing to paste yet", rig.label());
-        rig.choose(Intent::Select);
+        rig.choose(Tool::Lasso);
         let on = rig.on_item();
         rig.tap(on);
         rig.bar(ContextItem::Copy);
@@ -370,7 +371,7 @@ fn copy_then_paste_brings_the_item_back_as_often_as_asked_each_time_a_little_fur
 fn delete_takes_the_selection_away_and_undo_brings_it_back() {
     for_each_tool_and_mode(|rig| {
         let id = rig.make();
-        rig.choose(Intent::Select);
+        rig.choose(Tool::Lasso);
         let on = rig.on_item();
         rig.tap(on);
         rig.bar(ContextItem::Delete);
@@ -384,14 +385,14 @@ fn delete_takes_the_selection_away_and_undo_brings_it_back() {
 fn with_erase_chosen_the_tip_erases_what_it_passes_over_and_undo_brings_it_back() {
     for_each_tool_and_mode(|rig| {
         let id = rig.make();
-        rig.choose(Intent::Erase);
+        rig.choose(Tool::Eraser);
         let across = rig.across();
         rig.drag(&across);
         assert!(rig.items().is_empty(), "{}", rig.label());
         rig.undo();
         assert_eq!(rig.items(), [id], "{}: undone", rig.label());
         // Back to drawing, the tip makes things again.
-        rig.choose(Intent::Draw);
+        rig.choose(rig.tool);
         rig.make_lower(200.0);
     });
 }
@@ -414,22 +415,25 @@ fn a_tool_selects_erases_and_pastes_only_what_it_made() {
             rig.ed.selection = vec![ink, shape, text];
             assert!(rig.ed.copy_selection());
             rig.ed.selection.clear();
-            // Select all, loops, taps and the eraser pick out only the tool's own.
+            // Select all picks out only the tool's own; the lasso and the eraser tools work on all three.
             rig.ed.select_all();
             assert_eq!(rig.ed.selection, [mine], "{}: select all", rig.label());
             rig.ed.selection.clear();
-            rig.choose(Intent::Select);
+            rig.choose(Tool::Lasso);
             let ring = [rig.at(60.0, 260.0), rig.at(340.0, 260.0), rig.at(340.0, 400.0), rig.at(60.0, 400.0), rig.at(60.0, 262.0)];
             rig.drag(&ring);
-            assert_eq!(rig.ed.selection, [mine], "{}: a loop round all three", rig.label());
+            let mut picked = rig.ed.selection.clone();
+            picked.sort_unstable();
+            assert_eq!(picked, [ink, shape, text], "{}: a loop round all three", rig.label());
             rig.ed.selection.clear();
-            rig.choose(Intent::Erase);
+            rig.choose(Tool::Eraser);
             let across =
                 [rig.at(110.0, 285.0), rig.at(110.0, 310.0), rig.at(110.0, 345.0), rig.at(200.0, 285.0), rig.at(200.0, 325.0), rig.at(200.0, 365.0)];
             rig.drag(&across);
             let left: Vec<u64> = rig.ed.ink.strokes().iter().map(|s| s.id).collect();
-            assert!(!left.contains(&mine) && [ink, shape, text].iter().filter(|id| left.contains(id)).count() == 2, "{}: the eraser", rig.label());
-            // Paste brings back one item, of the tool's kind.
+            assert!(!left.contains(&mine), "{}: the eraser", rig.label());
+            // Back to the tool: paste brings back one item, of its kind.
+            rig.choose(rig.tool);
             let before = rig.ed.ink.len();
             rig.ed.selection.clear();
             assert!(rig.ed.paste());
@@ -535,12 +539,12 @@ fn the_bar_is_there_for_the_tools_that_make_items_and_not_for_the_pointer_or_whi
 }
 
 #[test]
-fn choosing_a_tool_puts_the_tip_back_to_drawing() {
+fn choosing_another_tool_after_the_eraser_gives_that_tool() {
     let mut rig = Rig::new(Tool::Pen, Mode::Tablet);
-    rig.choose(Intent::Erase);
+    rig.choose(Tool::Eraser);
     let at = rig.ed.toolbar().centre_of(Item::Tool(Tool::Geometry));
     rig.tap(at);
-    assert_eq!((rig.ed.tool, rig.ed.intent), (Tool::Geometry, Intent::Draw));
+    assert_eq!(rig.ed.tool, Tool::Geometry);
 }
 
 #[test]
@@ -548,7 +552,7 @@ fn the_shape_buttons_edit_a_points_of_a_line_with_the_tip_alone() {
     for mode in MODES {
         let mut rig = Rig::new(Tool::Geometry, mode);
         let id = rig.make();
-        rig.choose(Intent::Select);
+        // (The shape tool picks a shape up by a tap itself.)
         let on = rig.on_item();
         rig.tap(on);
         let nodes = |rig: &Rig| rig.ed.ink.get(id).and_then(|s| s.figure.as_ref()).map_or(0, |f| f.anchor_count());

@@ -389,6 +389,8 @@ impl Toolbar {
                     ui.disc(dot, 0.24 * u, ui.pal.rim);
                     ui.disc(dot, 0.2 * u, colour);
                 }
+                Item::Tool(Tool::Lasso) => icons.select.draw(&mut ui.lines, cx, cy, half * 1.05, line, tool_ink(self.tool_index(Tool::Lasso))),
+                Item::Tool(Tool::Eraser) => icons.erase.draw(&mut ui.lines, cx, cy, half * 1.05, line, tool_ink(self.tool_index(Tool::Eraser))),
                 Item::Tool(Tool::Select) => icons.text_select.draw(&mut ui.lines, cx, cy, half * 1.05, line, tool_ink(self.tool_index(Tool::Select))),
                 // An extension's tool: its own icon.
                 Item::Tool(other) => {

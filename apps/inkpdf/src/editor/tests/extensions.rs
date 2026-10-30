@@ -89,7 +89,7 @@ const DUMMY: Tool = Tool::named("dummy");
 fn a_tool_registered_from_outside_is_on_the_toolbar_and_the_others_do_not_have_it() {
     let ed = with_dummy();
     assert_eq!(ed.toolbar().tools().last(), Some(&DUMMY), "after the program's own tools");
-    assert_eq!(ed.toolbar().tools().len(), 5);
+    assert_eq!(ed.toolbar().tools().len(), 7);
     assert!(editor().toolbar().tool_index(DUMMY).is_none(), "an editor without it has no button for it");
     assert!(!Tool::all().contains(&DUMMY), "and the program's own list is not touched");
     // The button is drawn (its icon is the extension's own).

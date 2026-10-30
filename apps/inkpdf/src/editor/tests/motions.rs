@@ -136,7 +136,7 @@ fn a_look_in_motion_stays_within_its_ends_whatever_the_frame_times() {
         let look = ed.toolbar_look();
         let inside = |v: f32| v.is_finite() && (-1e-4..=1.0 + 1e-4).contains(&v);
         assert!(look.hover.iter().chain(&look.enabled).chain(&look.ripple).all(|&v| inside(v)), "{look:?}");
-        assert!(look.tool.is_finite() && (0.0..=4.0).contains(&look.tool) && inside(look.unsaved), "{look:?}");
+        assert!(look.tool.is_finite() && (0.0..=crate::tool::MAX_TOOLS as f32).contains(&look.tool) && inside(look.unsaved), "{look:?}");
     }
 }
 

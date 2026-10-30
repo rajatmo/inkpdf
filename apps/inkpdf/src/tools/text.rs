@@ -10,7 +10,7 @@
 //! if it was emptied). Undo while typing throws the typing away.
 
 use crate::ink::{P, Style, TextBlock};
-use crate::input::{Device, Intent, Mode, Phase, Role, Sample};
+use crate::input::{Device, Mode, Phase, Role, Sample};
 use crate::text;
 use crate::workspace::Workspace;
 
@@ -276,11 +276,6 @@ impl TextTool {
     fn press_at(&mut self, ws: &mut Workspace, ev: &PageEvent<'_>, p: P) {
         let (dev, id) = (ev.dev, ev.id);
         let grab = |start| Press::Grab(Mover::begin(dev, id, start));
-        // Chosen to select: a press on what is selected takes hold of it (a click that does not drag still edits a box).
-        if ev.pen.role() == Role::Draw && ws.intent == Intent::Select && ws.selection_hit(p) {
-            self.press = grab(p);
-            return;
-        }
         if let Some(pick) = Pick::begin(ws, ev, p, false) {
             self.press = Press::Pick(pick);
             return;

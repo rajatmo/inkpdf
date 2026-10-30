@@ -42,8 +42,9 @@ driver (`mesa-vulkan-drivers` on most distributions) and, on X11, `libxkbcommon-
 
 1. It opens on a blank page the size of your screen: start writing. To work on a PDF, drag it onto the window,
    use "Open with", or run `inkpdf file.pdf`.
-2. Pick a tool on the left bar (pen, shapes, text, pointer), a colour and a thickness. A bar under the tools has
-   draw, select, erase, duplicate, copy, paste and delete.
+2. Pick a tool in the middle bar (select text, pen, shapes, text, lasso, eraser, pointer), a colour and a thickness. The lasso
+   picks up anything drawn (a loop, or a tap); a bar under the tools has duplicate, copy, paste and delete for what is picked up.
+   The eraser takes away whatever it passes over.
 3. Press the disk button (or Ctrl+S) to save. A new page asks where to save it (it opens in your Documents folder);
    a PDF you opened is updated in place.
 4. The pages button opens an overview of every page and the table of contents: jump to a page, reorder, duplicate or
@@ -62,7 +63,7 @@ InkPDF picks a **mode** from how the machine is used: **desktop** (keyboard and 
 
 | | Stylus | Finger | Mouse (desktop mode) |
 |---|---|---|---|
-| **Draws, selects, erases** | tip draws; eraser end erases; side button makes a lasso (on Android, an S Pen's one button erases) | pans and zooms; a tap follows a link (with the Select tool a stylus tap or a mouse click does too); pulling past the last page adds a page | left draws, right erases, middle lassos; the wheel scrolls |
+| **Draws, selects, erases** | tip draws (with the lasso tool it loops, with the eraser tool it erases); eraser end erases and side button makes a lasso, with any tool (on Android, an S Pen's one button erases) | pans and zooms; a tap follows a link (with the Select tool a stylus tap or a mouse click does too); pulling past the last page adds a page | left draws, right erases, middle lassos; the wheel scrolls |
 
 - **Palm rejection is simple:** touch is off while the pen is near the screen (hovering or touching) and comes back the
   moment it leaves.

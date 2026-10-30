@@ -29,6 +29,10 @@ impl Tool {
     pub const Text: Tool = Tool("text");
     /// Selects the text a PDF has: to copy it, and to highlight, underline or strike it out.
     pub const Select: Tool = Tool("select");
+    /// Selects what has been drawn, of any kind, with a loop (or a tap): to move, copy and delete it.
+    pub const Lasso: Tool = Tool("lasso");
+    /// Erases whatever it passes over, of any kind.
+    pub const Eraser: Tool = Tool("eraser");
 
     /// A tool known by `name` (an extension's: the name it registered under).
     pub const fn named(name: &'static str) -> Tool {
@@ -52,12 +56,12 @@ pub struct Registry {
 }
 
 /// The most tools a toolbar can hold.
-pub const MAX_TOOLS: usize = 8;
+pub const MAX_TOOLS: usize = 10;
 
 impl Registry {
     /// The program's own tools.
     pub fn builtin() -> Registry {
-        Registry { tools: [Tool::Select, Tool::Pen, Tool::Geometry, Tool::Text].into_iter().map(|t| (t, None)).collect(), open_button: false }
+        Registry { tools: [Tool::Select, Tool::Pen, Tool::Geometry, Tool::Text, Tool::Lasso, Tool::Eraser].into_iter().map(|t| (t, None)).collect(), open_button: false }
     }
 
     /// Add a tool of an extension, drawn on its button from the SVG `icon` (a name already there, or more tools than fit, is refused).
@@ -161,10 +165,20 @@ impl Tool {
         }
     }
 
-    /// Whether the bar under the tools is shown with the tool: the tools that make items have it (to select, copy and restyle them), and
-    /// the text selection has it for its marks.
+    /// Whether the bar under the tools is shown with the tool: the tools that make items have it (to select, copy and restyle them), the
+    /// text selection has it for its marks and the lasso for what it picked up.
     pub fn has_bar(self) -> bool {
-        self.makes_items() || self == Tool::Select
+        self.selects_items() || self == Tool::Select
+    }
+
+    /// Whether the tool has a selection of items to copy and restyle (the lasso picks any; the others, their own).
+    pub fn selects_items(self) -> bool {
+        self.makes_items() || self == Tool::Lasso
+    }
+
+    /// Whether the tool works on items of every kind (the lasso and the eraser), not just its own.
+    pub fn picks_any(self) -> bool {
+        self == Tool::Lasso || self == Tool::Eraser
     }
 
     /// Whether the tool makes items, so that there is something to select, copy and restyle, and settings to choose.
@@ -247,11 +261,15 @@ mod tests {
             assert_eq!(Tool::from_name(tool.name()), Some(tool));
         }
         // The program's own tools come first, in the toolbar's order, each making its own kind of item (or none).
-        let builtin = [Tool::Select, Tool::Pen, Tool::Geometry, Tool::Text];
-        assert_eq!(&Tool::all()[..4], &builtin);
-        assert_eq!(builtin.map(|t| t.kind()), [None, Some(Kind::Ink), Some(Kind::Shape), Some(Kind::Text)]);
-        assert_eq!(builtin.map(Tool::makes_items), [false, true, true, true]);
-        assert_eq!(builtin.map(Tool::has_bar), [true, true, true, true], "the text selection has its marks in the bar");
+        let builtin = [Tool::Select, Tool::Pen, Tool::Geometry, Tool::Text, Tool::Lasso, Tool::Eraser];
+        assert_eq!(&Tool::all()[..6], &builtin);
+        assert_eq!(builtin.map(|t| t.kind()), [None, Some(Kind::Ink), Some(Kind::Shape), Some(Kind::Text), None, None]);
+        assert_eq!(builtin.map(Tool::makes_items), [false, true, true, true, false, false]);
+        assert_eq!(
+            builtin.map(Tool::has_bar),
+            [true, true, true, true, true, false],
+            "the text selection has its marks in the bar, the lasso its picked-up items, and the eraser nothing"
+        );
         // An extension's tool is only a name: it makes none of the program's items and has no bar.
         let laser = Tool::from_name("laser").expect("the laser extension");
         assert_eq!((laser.kind(), laser.has_bar()), (None, false));
@@ -263,8 +281,8 @@ mod tests {
     #[test]
     fn a_registry_lists_tools_once_in_order_and_holds_no_more_than_a_toolbar_can() {
         let r = Registry::builtin().with(Tool::named("a"), "<path/>").with(Tool::named("a"), "<path/>").with(Tool::named("b"), "<path/>");
-        assert_eq!(r.tools().map(Tool::name).collect::<Vec<_>>(), ["select", "pen", "geometry", "text", "a", "b"]);
-        assert_eq!((r.position(Tool::named("b")), r.position(Tool::named("zzz"))), (Some(5), None));
+        assert_eq!(r.tools().map(Tool::name).collect::<Vec<_>>(), ["select", "pen", "geometry", "text", "lasso", "eraser", "a", "b"]);
+        assert_eq!((r.position(Tool::named("b")), r.position(Tool::named("zzz"))), (Some(7), None));
         assert_eq!(r.position(Tool::Select), Some(0));
         assert_eq!(r.icon(Tool::named("a")), Some("<path/>"));
         assert_eq!(r.icon(Tool::Pen), None, "the toolbar draws the program's own");

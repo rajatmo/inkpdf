@@ -492,7 +492,7 @@
 <!-- toolbar&#45;&gt;input -->
 <g id="edge58" class="edge">
 <title>toolbar&#45;&gt;input</title>
-<g id="a_edge58"><a xlink:title="2 uses">
+<g id="a_edge58"><a xlink:title="1 uses">
 <path fill="none" stroke="#a14a96" stroke-width="1.6" stroke-opacity="0.600000" d="M514.21,-479.08C519.89,-482.15 526,-485 532,-487 619.14,-516.01 656.73,-468.38 737,-513 747.77,-518.99 756.72,-529.25 763.32,-538.75"/>
 <polygon fill="#a14a96" fill-opacity="0.600000" stroke="#a14a96" stroke-width="1.6" stroke-opacity="0.600000" points="761.68,-540.08 766.74,-543.92 765.18,-537.76 761.68,-540.08"/>
 </a>

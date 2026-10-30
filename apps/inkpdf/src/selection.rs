@@ -27,8 +27,9 @@ impl Workspace {
     }
 
     /// Whether the tool in use works on `stroke`.
+    /// (The lasso and the eraser work on all of them.)
     pub fn is_own(&self, stroke: &Stroke) -> bool {
-        self.kind().is_some_and(|k| Kind::of(stroke) == k)
+        self.tool.picks_any() || self.kind().is_some_and(|k| Kind::of(stroke) == k)
     }
 
     /// `ids` without the items the tool in use does not work on.

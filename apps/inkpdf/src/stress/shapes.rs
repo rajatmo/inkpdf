@@ -21,7 +21,6 @@ fn stress_shapes_drawn_by_the_pen_stay_on_their_page_undo_redo_exactly_and_survi
             use_tool(&mut ed, Tool::Geometry);
         }
         // (Nor is the bar under the tools to leave the tip choosing to select or erase.)
-        ed.intent = crate::input::Intent::Draw;
         ed.shape = rng.pick(&crate::geometry::SHAPES);
         ed.shape_style = crate::tool::ToolStyle { colour: rng.below(5), width: rng.range(MIN_WIDTH, MAX_WIDTH) };
         // Anywhere in the window, off the page, or far beyond it.

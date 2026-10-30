@@ -99,7 +99,7 @@ impl Toolbar {
     /// under the tools and centred like it, kept on screen; `editing` makes room for the colour editor. (The card
     /// behind it is the bar's: see [`super::ContextBar::draw`].)
     pub fn tool_panel(&self, tool: Tool, viewport_width: f32, editing: bool) -> Option<ToolPanel> {
-        if !tool.makes_items() {
+        if !tool.selects_items() {
             return None;
         }
         let (u, centre) = (self.unit, viewport_width / 2.0);

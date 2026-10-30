@@ -117,8 +117,8 @@ pub struct PointerEvent {
     pub contact_px: f32,
 }
 
-/// What a stylus press does: the tip draws, the eraser end erases, the barrel button makes a lasso.
-/// (What "draws" means depends on the tool: ink, a shape, or the laser's pointing.)
+/// What a stylus press does: the tip draws, the eraser end erases, the barrel button makes a lasso. (What "draws" means depends on the tool: ink, a
+/// shape, or the laser's pointing. The lasso tool's tip loops and the eraser tool's tip erases; see `Workspace::role`.)
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Role {
     Draw,
@@ -126,37 +126,6 @@ pub enum Role {
     Lasso,
 }
 
-/// What the plain tip of the stylus (or the left mouse button) does, as chosen on screen: the way for a device with
-/// no eraser end, no barrel button and no right button to draw, to select and to erase. The stylus's own buttons
-/// and the mouse's other buttons are shortcuts for the same two things.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Intent {
-    /// Make what the tool makes.
-    #[default]
-    Draw,
-    /// Select what the tool made (a tap on it, or a loop around it), and move it.
-    Select,
-    /// Erase what the tool made.
-    Erase,
-}
-
-impl Intent {
-    pub fn role(self) -> Role {
-        match self {
-            Intent::Draw => Role::Draw,
-            Intent::Select => Role::Lasso,
-            Intent::Erase => Role::Erase,
-        }
-    }
-}
-
-/// What a press does: the pen's own buttons if one is held, else what was chosen on screen.
-pub fn role_with(pen: &PenButtons, intent: Intent) -> Role {
-    match pen.role() {
-        Role::Draw => intent.role(),
-        held => held,
-    }
-}
 #[cfg(test)]
 mod fixtures {
     use super::*;

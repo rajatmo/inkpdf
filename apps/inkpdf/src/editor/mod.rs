@@ -172,7 +172,6 @@ impl Editor {
         self.ws.view = View::new(self.ws.view.viewport);
         self.ws.ink.load(strokes);
         self.ws.selection.clear();
-        self.ws.intent = crate::input::Intent::Draw;
         self.tools = ToolSet::with_extensions(&self.extensions);
         self.ws.erasing.clear();
         self.search.close();

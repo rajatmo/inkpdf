@@ -100,7 +100,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "editor" -> "figure" [color="#6a5acd99", penwidth=1.30, tooltip="1 uses"];
 "editor" -> "geometry" [color="#6a5acd99", penwidth=1.30, tooltip="1 uses"];
 "editor" -> "ink" [color="#6a5acd99", penwidth=2.38, tooltip="8 uses"];
-"editor" -> "input" [color="#6a5acd99", penwidth=2.96, tooltip="19 uses"];
+"editor" -> "input" [color="#6a5acd99", penwidth=2.92, tooltip="18 uses"];
 "editor" -> "links" [color="#6a5acd99", penwidth=1.80, tooltip="3 uses"];
 "editor" -> "motion" [color="#6a5acd99", penwidth=1.96, tooltip="4 uses"];
 "editor" -> "outline" [color="#6a5acd99", penwidth=1.80, tooltip="3 uses"];
@@ -184,7 +184,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "toolbar" -> "figure" [color="#a14a9699", penwidth=1.59, tooltip="2 uses"];
 "toolbar" -> "geometry" [color="#a14a9699", penwidth=1.30, tooltip="1 uses"];
 "toolbar" -> "ink" [color="#a14a9699", penwidth=2.38, tooltip="8 uses"];
-"toolbar" -> "input" [color="#a14a9699", penwidth=1.59, tooltip="2 uses"];
+"toolbar" -> "input" [color="#a14a9699", penwidth=1.30, tooltip="1 uses"];
 "toolbar" -> "outline" [color="#a14a9699", penwidth=1.30, tooltip="1 uses"];
 "toolbar" -> "palette" [color="#a14a9699", penwidth=1.30, tooltip="1 uses"];
 "toolbar" -> "requests" [color="#a14a9699", penwidth=1.30, tooltip="1 uses"];
@@ -196,14 +196,14 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "tools" -> "figure" [color="#d2691e99", penwidth=1.96, tooltip="4 uses"];
 "tools" -> "geometry" [color="#d2691e99", penwidth=1.59, tooltip="2 uses"];
 "tools" -> "ink" [color="#d2691e99", penwidth=2.38, tooltip="8 uses"];
-"tools" -> "input" [color="#d2691e99", penwidth=2.53, tooltip="10 uses"];
+"tools" -> "input" [color="#d2691e99", penwidth=2.59, tooltip="11 uses"];
 "tools" -> "pagetext" [color="#d2691e99", penwidth=1.30, tooltip="1 uses"];
 "tools" -> "plane" [color="#d2691e99", penwidth=1.96, tooltip="4 uses"];
 "tools" -> "selection" [color="#d2691e99", penwidth=1.30, tooltip="1 uses"];
 "tools" -> "smooth" [color="#d2691e99", penwidth=1.30, tooltip="1 uses"];
 "tools" -> "text" [color="#d2691e99", penwidth=1.30, tooltip="1 uses"];
-"tools" -> "tool" [color="#d2691e99", penwidth=1.80, tooltip="3 uses"];
-"tools" -> "workspace" [color="#d2691e99", penwidth=2.53, tooltip="10 uses"];
+"tools" -> "tool" [color="#d2691e99", penwidth=1.96, tooltip="4 uses"];
+"tools" -> "workspace" [color="#d2691e99", penwidth=2.59, tooltip="11 uses"];
 "workspace" -> "clipboard" [color="#b8860b99", penwidth=1.30, tooltip="1 uses"];
 "workspace" -> "doctext" [color="#b8860b99", penwidth=1.59, tooltip="2 uses"];
 "workspace" -> "geometry" [color="#b8860b99", penwidth=1.30, tooltip="1 uses"];

@@ -3,7 +3,7 @@
 //! a finger can select, erase, delete, duplicate, copy, paste and restyle; the keyboard and the stylus's buttons do
 //! the same things as shortcuts.
 
-use crate::input::{Device, Intent};
+use crate::input::Device;
 use crate::tool::{MAX_ACTIONS, Tool, ToolAction};
 use crate::toolbar::{ContextBar, ContextItem, ContextState, PanelState};
 use crate::tools::Key;
@@ -32,7 +32,6 @@ impl Editor {
         }
         let state = ContextState {
             tool: self.ws.tool,
-            intent: self.ws.intent,
             selection: !self.ws.selection.is_empty() || (self.ws.tool == Tool::Select && self.tools.select.has_selection(&self.ws)),
             paste: self.can_paste(),
             actions,
@@ -97,7 +96,6 @@ impl Editor {
 
     fn activate_context(&mut self, item: ContextItem) {
         match item {
-            ContextItem::Intent(intent) => self.choose_intent(intent),
             ContextItem::Style => {
                 self.settle();
                 self.chrome.panel = if self.chrome.panel.is_some() { None } else { Some(PanelState::default()) };
@@ -135,14 +133,6 @@ impl Editor {
                 self.tools.get_mut(self.ws.tool).act(&mut self.ws, action);
             }
         }
-        self.ws.redraw = true;
-    }
-
-    /// Choose what the plain tip of the stylus (or the left mouse button) does: draw, select or erase.
-    pub fn choose_intent(&mut self, intent: Intent) {
-        self.settle();
-        self.tools.end_all(&mut self.ws);
-        self.ws.intent = intent;
         self.ws.redraw = true;
     }
 

@@ -3,7 +3,7 @@
 A fast, pen-first PDF annotator. Open a PDF, write on it with a stylus, save it back. No account, no library, no sync:
 just the page and your pen.
 
-![InkPDF: pen strokes, selecting, colouring, duplicating, deleting and erasing from the bar under the tools, the settings unfolding from it, a shape edited by its anchors, typed text, the desktop/tablet mode button, and the pages overview: every page with the table of contents beside it, a jump to a chapter, pages chosen, duplicated, undone and dragged to a new place, all with the interface's motion: presses spreading, the panels folding, the cards fading in and out](docs/demo.gif)
+![InkPDF: the select tool highlighting, underlining and striking out text, a search with its results listed, the pen in three colours, the lasso picking strokes up, the eraser, the system, light and dark looks with dark pages, and the pages overview](docs/demo.gif)
 
 - **Ink that keeps up with the pen.** The program reads the pen as late as it can, so the stroke follows the tip
   (about 2.5 ms from pen sample to frame on a 60 Hz screen).

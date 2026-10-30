@@ -6,7 +6,7 @@ task** from section 6, do it on a branch, and leave the CI result as the proof.
 
 - **Written:** 2026-10-29, at version **1.0.0** (commits `e734263` "v1.0.0: the interface moves" and `c4e8a6a` "Demo GIF for 1.0.0"); **re-planned the same day** after Linux and Android landed on `main` (unreleased) and the owner chose the order in section 6.
 - **Owner:** Rajat Mandal (`rajatmo`). The owner reviews and pushes; do not push to `main`, open pull requests instead (unless the task says so).
-- **Status (2026-10-30):** **1.1.0 and 1.2.0 are finished on branches** (`pdf-seam`: F3, K1 to K3; `theme`, on top of it: T1 to T7, then X1 to X6, then P1 and part of P2; versions bumped to 1.2.0, changelog written); the owner merges them and tags the releases. Milestone 2.0 (extensions, with A4) is planned in section 6 and is next. Milestone 1.3.0 is half done (P1, most of P2; P3 waits for the owner's call on how a bookmark flag is told from the file's own; P4 is the owner's say-so); it is not released, the version stays 1.2.0. The platform backlog (A3, A4, L2, L3) is untouched: it needs devices. The platform work is on `main` (`docs/PORTING.md`).
+- **Status (2026-10-30):** **1.1.0 and 1.2.0 are finished on branches** (`pdf-seam`: F3, K1 to K3; `theme`, on top of it: T1 to T7, then X1 to X6, then P1 and part of P2; versions bumped, changelog written). **1.3.0 = P1, most of P2 and milestone 2.0 (E0 to E2 and A4)**; what is left of the plan: P3 (waits for the owner's call on how a bookmark flag is told from the file's own), P4 (the owner's say-so), E3 (item kinds) and E4 (sticky notes), and the platform backlog A3, L2, L3. A4 has not been tried on a device. The platform work is on `main` (`docs/PORTING.md`).
 
 ## 1. What InkPDF is, and the rules that do not bend
 

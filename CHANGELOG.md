@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.3.0
 
-Extensions: a tool can be added without touching the program.
+Extensions: a tool can be added without touching the program; Android files; polish.
 
 - The tools are a registry (`tool::Registry`) instead of a fixed list: the toolbar, the mark that slides between tools, the settings and
   the keyboard read it, so a tool is a name and an object, and the toolbar has as many buttons as there are tools (up to eight).
@@ -15,8 +15,6 @@ Extensions: a tool can be added without touching the program.
   no file, network or process.
 - Inside: the tests of the toolbar and the interface are written against a reference set of tools, so that adding an extension changes none.
 - **Android files, clipboard and links** (written, not yet tried on a device): the APK now has a small Java activity (`Host`) beside the Rust library. A folder button on the toolbar (where the system has a picker) opens a PDF through the system's file picker; Save As uses the system's "create document" screen and writes to the address it hands out; "Open with InkPDF" opens a PDF from a file manager; copy and paste use the system clipboard; links open in the browser. Inside: `platform/saf.rs` (the logic behind a `Bridge`, tested with a fake), `platform/android/host.rs` (JNI), `DocId::Uri` now used.
-
-Polish (the first part of milestone 1.3.0).
 
 - The bar under the tools now goes out as it came in (it slides up and fades) when you choose a tool that has none (the pointer), where it
   used to vanish; with animations off it is gone at once, as before.

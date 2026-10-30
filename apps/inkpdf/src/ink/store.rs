@@ -182,7 +182,6 @@ impl InkStore {
         self.add_stroke(page, style, pts, None, None, None)
     }
 
-    #[allow(dead_code, reason = "the select tool's action card makes markups (X4)")]
     /// Add a text markup of `kind` over `quads` (boxes, `[x0, y0, x1, y1]` in document space); `style.rgba` is its colour and opacity.
     pub fn add_markup(&mut self, page: u32, style: Style, kind: MarkupKind, quads: &[[f32; 4]]) -> Option<u64> {
         let pts = box_points(quads.iter().flat_map(|q| [[q[0], q[1]], [q[2], q[3]]]));

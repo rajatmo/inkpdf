@@ -24,6 +24,8 @@ pub enum Tool {
     /// Types text: a tap of the stylus starts a text box (or edits the one tapped), and the keyboard
     /// types into it.
     Text,
+    /// Selects the text a PDF has: to copy it, and to highlight, underline or strike it out.
+    Select,
     /// Points: a dot that follows the pen, with a trail that fades. Draws nothing.
     Laser,
 }
@@ -53,7 +55,7 @@ impl Kind {
 
 impl Tool {
     /// Every tool, in the order the toolbar shows them.
-    pub const ALL: [Tool; 4] = [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Laser];
+    pub const ALL: [Tool; 5] = [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Select, Tool::Laser];
 
     /// The kind of item the tool makes and works on; the pointer makes none.
     pub fn kind(self) -> Option<Kind> {
@@ -61,8 +63,14 @@ impl Tool {
             Tool::Pen => Some(Kind::Ink),
             Tool::Geometry => Some(Kind::Shape),
             Tool::Text => Some(Kind::Text),
-            Tool::Laser => None,
+            Tool::Select | Tool::Laser => None,
         }
+    }
+
+    /// Whether the bar under the tools is shown with the tool: the tools that make items have it (to select, copy and restyle them), and
+    /// the text selection has it for its marks.
+    pub fn has_bar(self) -> bool {
+        self.makes_items() || self == Tool::Select
     }
 
     /// Whether the tool makes items, so that there is something to select, copy and restyle, and settings to choose.
@@ -76,6 +84,7 @@ impl Tool {
             Tool::Pen => "pen",
             Tool::Geometry => "geometry",
             Tool::Text => "text",
+            Tool::Select => "select",
             Tool::Laser => "laser",
         }
     }
@@ -117,6 +126,19 @@ pub const MAX_ACTIONS: usize = 3;
 pub enum ToolAction {
     /// Something done to a point of the shape being edited.
     Node(crate::figure::NodeAction),
+    /// A markup made of the text that is selected.
+    Mark(crate::ink::MarkupKind),
+}
+
+/// The colour (and opacity) a markup of `kind` is made in.
+pub fn markup_colour(kind: crate::ink::MarkupKind) -> [u8; 4] {
+    use crate::ink::MarkupKind;
+    match kind {
+        MarkupKind::Highlight => [255, 222, 0, 120],
+        MarkupKind::Underline => [32, 96, 224, 255],
+        MarkupKind::StrikeOut => [224, 52, 52, 255],
+        MarkupKind::Squiggly => [38, 160, 84, 255],
+    }
 }
 
 #[cfg(test)]
@@ -130,8 +152,9 @@ mod tests {
         }
         // Every tool but the pointer makes one kind of item, and a different one each.
         let kinds: Vec<Option<Kind>> = Tool::ALL.iter().map(|t| t.kind()).collect();
-        assert_eq!(kinds, [Some(Kind::Ink), Some(Kind::Shape), Some(Kind::Text), None]);
-        assert_eq!(Tool::ALL.map(Tool::makes_items), [true, true, true, false]);
+        assert_eq!(kinds, [Some(Kind::Ink), Some(Kind::Shape), Some(Kind::Text), None, None]);
+        assert_eq!(Tool::ALL.map(Tool::makes_items), [true, true, true, false, false]);
+        assert_eq!(Tool::ALL.map(Tool::has_bar), [true, true, true, true, false], "the text selection has its marks in the bar");
         assert_eq!(Tool::from_name("brush"), None);
         assert_eq!(Tool::default(), Tool::Pen);
     }

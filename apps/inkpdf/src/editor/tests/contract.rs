@@ -6,7 +6,7 @@ use crate::tools::{InputPolicy, MouseUse, PageEvent};
 
 use super::*;
 
-const ALL: [Tool; 4] = [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Laser];
+const ALL: [Tool; 5] = [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Select, Tool::Laser];
 
 /// A tool's own pointer entry, with no policy in front of it.
 fn send(ed: &mut Editor, tool: Tool, dev: Device, id: u32, phase: Phase, pts: &[[f32; 2]], pen: PenButtons) {
@@ -37,12 +37,14 @@ fn each_tools_policy_is_the_device_rule_of_the_design_in_each_mode() {
         (Tool::Pen, (true, AsStylus, true)),
         (Tool::Geometry, (true, AsStylus, true)),
         (Tool::Text, (false, Itself, true)),
+        (Tool::Select, (true, AsStylus, true)),
         (Tool::Laser, (true, AsStylus, false)),
     ];
     let tablet = [
         (Tool::Pen, (true, Scrolls, false)),
         (Tool::Geometry, (true, Scrolls, false)),
         (Tool::Text, (true, Scrolls, true)),
+        (Tool::Select, (true, Scrolls, false)),
         (Tool::Laser, (true, Scrolls, false)),
     ];
     for (mode, rules) in [(Mode::Desktop, desktop), (Mode::Tablet, tablet)] {

@@ -7,7 +7,6 @@ use std::sync::Arc;
 
 use crate::pagetext::PageTextView;
 
-#[allow(dead_code, reason = "the select tool and the search card read it (X4, X5)")]
 #[derive(Default)]
 pub struct DocText {
     /// What was read of a page of the file: `None` when it could not be.

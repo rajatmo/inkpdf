@@ -6,7 +6,7 @@ use super::{BUTTONS, Item, State, Toolbar};
 use crate::tool::Tool;
 
 /// The tools in the order of their buttons.
-pub const TOOLS: [Tool; 4] = [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Laser];
+pub const TOOLS: [Tool; 5] = [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Select, Tool::Laser];
 
 /// Where the mark of the tool in use is, as a position along [`TOOLS`] (it slides between buttons).
 fn tool_position(tool: Tool) -> f32 {

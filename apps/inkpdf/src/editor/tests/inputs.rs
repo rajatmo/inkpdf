@@ -4,7 +4,7 @@
 
 use super::*;
 
-const TOOLS: [Tool; 4] = [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Laser];
+const TOOLS: [Tool; 5] = [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Select, Tool::Laser];
 
 fn with(tool: Tool) -> Editor {
     let mut ed = editor();
@@ -112,7 +112,7 @@ fn the_stylus_does_the_work_and_what_it_does_depends_on_the_tool() {
     assert_eq!(ed.ink.len(), 0);
     assert!(ed.laser().is_fading());
     // The eraser end erases with the pen and shape tools (what each made), and does not with the pointer.
-    for (tool, erases) in [(Tool::Pen, true), (Tool::Geometry, true), (Tool::Text, false), (Tool::Laser, false)] {
+    for (tool, erases) in [(Tool::Pen, true), (Tool::Geometry, true), (Tool::Text, false), (Tool::Select, false), (Tool::Laser, false)] {
         let mut ed = with(tool);
         let id = match tool {
             Tool::Geometry => add_shape(&mut ed, [100.0, 300.0], [400.0, 300.0]),
@@ -123,7 +123,7 @@ fn the_stylus_does_the_work_and_what_it_does_depends_on_the_tool() {
         assert_eq!(ed.ink.get(id).is_none(), erases, "{tool:?}");
     }
     // The barrel button lassos with the pen and shape tools.
-    for (tool, selects) in [(Tool::Pen, true), (Tool::Geometry, true), (Tool::Text, false), (Tool::Laser, false)] {
+    for (tool, selects) in [(Tool::Pen, true), (Tool::Geometry, true), (Tool::Text, false), (Tool::Select, false), (Tool::Laser, false)] {
         let mut ed = with(tool);
         let id = match tool {
             Tool::Geometry => add_shape(&mut ed, [200.0, 300.0], [300.0, 300.0]),
@@ -143,7 +143,7 @@ fn the_stylus_does_the_work_and_what_it_does_depends_on_the_tool() {
 
 #[test]
 fn only_the_shape_tool_selects_a_shape_by_tapping_it_with_the_stylus() {
-    for (tool, selects) in [(Tool::Pen, false), (Tool::Geometry, true), (Tool::Text, false), (Tool::Laser, false)] {
+    for (tool, selects) in [(Tool::Pen, false), (Tool::Geometry, true), (Tool::Text, false), (Tool::Select, false), (Tool::Laser, false)] {
         let mut ed = with(tool);
         let id = add_shape(&mut ed, [100.0, 300.0], [400.0, 300.0]);
         let on = on_page(&ed, 250.0, 300.0);

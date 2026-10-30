@@ -299,12 +299,14 @@ impl Tool for ShapeTool {
         match action {
             ToolAction::Node(NodeAction::Add) => true,
             ToolAction::Node(_) => self.selected_anchor(ws).is_some(),
+            ToolAction::Mark(_) => false,
         }
     }
 
     fn act(&mut self, ws: &mut Workspace, action: ToolAction) -> bool {
         match action {
             ToolAction::Node(node) => self.node_action(ws, node),
+            ToolAction::Mark(_) => false,
         }
     }
 

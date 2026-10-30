@@ -174,6 +174,12 @@ impl Editor {
         if self.mode != Mode::Desktop {
             return false;
         }
+        // With the text selection, Ctrl+A takes the page's text and Ctrl+C copies it (the keyboard of that tool, not the items').
+        if self.ws.tool == Tool::Select && matches!(letter.as_str(), "a" | "c") {
+            let used = letter.chars().next().is_some_and(|c| self.key(Key::Chord(c)));
+            self.ws.redraw = true;
+            return used;
+        }
         match (letter.as_str(), shift) {
             ("z", false) => self.undo(),
             ("z", true) | ("y", _) => self.redo(),

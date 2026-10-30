@@ -400,6 +400,9 @@ fn poke(ed: &mut Editor, rng: &mut Rng, hostile: bool) -> String {
                 ContextItem::Action(ToolAction::Node(NodeAction::Remove)),
                 ContextItem::Action(ToolAction::Node(NodeAction::Add)),
                 ContextItem::Action(ToolAction::Node(NodeAction::Smooth)),
+                ContextItem::Action(ToolAction::Mark(crate::ink::MarkupKind::Highlight)),
+                ContextItem::Action(ToolAction::Mark(crate::ink::MarkupKind::Underline)),
+                ContextItem::Action(ToolAction::Mark(crate::ink::MarkupKind::StrikeOut)),
                 ContextItem::Style,
             ];
             if let Some(bar) = ed.context_bar() {
@@ -446,6 +449,7 @@ fn poke(ed: &mut Editor, rng: &mut Rng, hostile: bool) -> String {
                 Item::Tool(Tool::Geometry),
                 Item::Tool(Tool::Text),
                 Item::Tool(Tool::Text),
+                Item::Tool(Tool::Select),
                 Item::Tool(Tool::Laser),
                 Item::Fullscreen,
                 Item::AddPage,
@@ -674,6 +678,11 @@ fn check_editor(ed: &Editor, what: &str) {
     for s in ed.ink.strokes() {
         assert!(!s.pts.is_empty() && s.pts.iter().all(|p| p[0].is_finite() && p[1].is_finite()), "{what}: stroke {} has bad points", s.id);
         assert!(s.style.width.is_finite() && (s.style.width > 0.0 || s.text.is_some()), "{what}: stroke {} width {}", s.id, s.style.width);
+        if let Some(kind) = s.markup {
+            assert!(s.text.is_none() && s.figure.is_none(), "{what}: markup {} is also a text box or a shape", s.id);
+            assert!(s.pts.len() % 2 == 0 && s.quads().count() == s.pts.len() / 2, "{what}: {kind:?} markup {} has odd corners", s.id);
+            assert!(s.quads().all(|q| q.iter().all(|v| v.is_finite()) && q[2] >= q[0] && q[3] >= q[1]), "{what}: markup {} has a bad box", s.id);
+        }
         if let Some(block) = &s.text {
             let [w, h] = crate::text::measure(&block.text, block.size);
             let (first, corner) = (s.pts.first().copied().unwrap_or_default(), s.pts.get(2).copied().unwrap_or_default());
@@ -804,6 +813,12 @@ fn check_editor(ed: &Editor, what: &str) {
 fn editor_with_pages(pages: usize) -> Editor {
     let mut ed = Editor::new([1100.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
     ed.load(Layout::new(&vec![[612.0, 792.0]; pages]), vec![]);
+    // Every page has some text to select (laid out on a grid, from a hundred points down the page).
+    ed.set_text_files((0..pages as u32).map(Some).collect());
+    for page in 0..pages as u32 {
+        let lines = ["", "", "", "", "", "Hello world", "The quick brown fox", "jumps over the lazy dog", "", "Hello again"];
+        ed.add_text(page, Some(std::sync::Arc::new(crate::pagetext::FakeText::new(&lines))));
+    }
     ed
 }
 
@@ -1472,7 +1487,7 @@ fn stress_settings_text_of_any_kind_never_stops_the_app_and_real_settings_come_b
     for _ in 0..(2_000 * scale()) {
         let hundredths = |v: f32| (v * 100.0).round() / 100.0;
         let mut s = crate::settings::Settings {
-            tool: rng.pick(&[Tool::Pen, Tool::Geometry, Tool::Text, Tool::Laser]),
+            tool: rng.pick(&[Tool::Pen, Tool::Geometry, Tool::Text, Tool::Select, Tool::Laser]),
             shape: rng.pick(&crate::geometry::SHAPES),
             pen: crate::tool::ToolStyle { colour: rng.below(5), width: hundredths(rng.range(MIN_WIDTH, MAX_WIDTH)) },
             shape_style: crate::tool::ToolStyle { colour: rng.below(5), width: hundredths(rng.range(MIN_WIDTH, MAX_WIDTH)) },
@@ -1918,7 +1933,7 @@ fn check_motion(ed: &Editor, what: &str) {
     let unit = |v: f32| v.is_finite() && (-1e-3..=1.0 + 1e-3).contains(&v);
     let look = ed.toolbar_look();
     assert!(look.hover.iter().chain(&look.enabled).chain(&look.ripple).all(|&v| unit(v)), "{what}: {look:?}");
-    assert!(look.tool.is_finite() && (-1e-3..=3.0 + 1e-3).contains(&look.tool) && unit(look.unsaved), "{what}: {look:?}");
+    assert!(look.tool.is_finite() && (-1e-3..=4.0 + 1e-3).contains(&look.tool) && unit(look.unsaved), "{what}: {look:?}");
     assert!(unit(ed.overview_appear()) && unit(ed.overview_leaving()) && unit(ed.motions.bar_amount()), "{what}");
     assert!(ed.prompt_look().is_none_or(|(_, a)| unit(a)) && ed.panel_look().is_none_or(|(_, a)| unit(a)), "{what}");
     if ed.overview_open() {

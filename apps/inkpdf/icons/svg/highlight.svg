@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- Highlight: a marker. Written by hand (not from TikZ): absolute M L C Z only, like the others. -->
+<svg version='1.1' xmlns='http://www.w3.org/2000/svg' width='56.6929pt' height='56.6929pt' viewBox='0 0 56 56'>
+<g id='page1'>
+<path d='M8 40H48' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+<path d='M14 12L40 12L44 26L18 26Z' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+<path d='M18 26L16 36H42L44 26' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+<path d='M12 46H44' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+</g>
+</svg>

@@ -4,7 +4,6 @@
 
 use std::ops::Range;
 
-#[allow(dead_code, reason = "the select tool and the search card are its users (X4, X5)")]
 /// One page's text. Glyphs are numbered in reading order; a range of numbers is a run of text.
 pub trait PageTextView: Send + Sync {
     /// How many glyphs the page has.
@@ -31,6 +30,7 @@ pub trait PageTextView: Send + Sync {
     fn glyph_rects(&self, glyphs: &[usize]) -> Vec<[f32; 4]>;
 
     /// The glyphs that lie in a rectangle (`[x0, y0, x1, y1]`).
+    #[allow(dead_code, reason = "a marquee over text is not built; the conformance suite checks it")]
     fn glyphs_in(&self, rect: [f32; 4]) -> Vec<usize>;
 
     /// The text of some glyphs, in reading order, with the spaces and line breaks a reader would put between them.
@@ -40,8 +40,10 @@ pub trait PageTextView: Send + Sync {
     fn text_of(&self, range: Range<usize>) -> String;
 
     /// The whole page's text.
+    #[allow(dead_code, reason = "the search card reads it (X5)")]
     fn plain_text(&self) -> String;
 
+    #[allow(dead_code, reason = "the search card calls it (X5)")]
     /// Where `needle` is, as ranges of glyphs: at most `limit` of them, matched with or without case, and as whole words or not.
     fn find(&self, needle: &str, case_sensitive: bool, whole_words: bool, limit: usize) -> Vec<Range<usize>>;
 }

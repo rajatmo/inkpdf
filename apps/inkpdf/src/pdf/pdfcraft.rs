@@ -149,7 +149,6 @@ impl TextSource for PdfcraftSource {
     }
 }
 
-#[allow(dead_code, reason = "read through the trait by the select tool and the search card (X4, X5)")]
 struct PdfcraftText(PageText);
 
 impl PageTextView for PdfcraftText {

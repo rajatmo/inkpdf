@@ -147,12 +147,17 @@ const LEFT: [Option<Item>; 9] = [
     Some(Item::AddPage),
     Some(Item::Pages),
 ];
-const MIDDLE: [Option<Item>; 4] =
-    [Some(Item::Tool(Tool::Pen)), Some(Item::Tool(Tool::Geometry)), Some(Item::Tool(Tool::Text)), Some(Item::Tool(Tool::Laser))];
+const MIDDLE: [Option<Item>; 5] = [
+    Some(Item::Tool(Tool::Pen)),
+    Some(Item::Tool(Tool::Geometry)),
+    Some(Item::Tool(Tool::Text)),
+    Some(Item::Tool(Tool::Select)),
+    Some(Item::Tool(Tool::Laser)),
+];
 const RIGHT: [Option<Item>; 4] = [Some(Item::Theme), Some(Item::DarkPages), Some(Item::ModeSwitch), Some(Item::Fullscreen)];
 
 /// Buttons in all.
-pub const BUTTONS: usize = 15;
+pub const BUTTONS: usize = 16;
 
 pub struct Toolbar {
     /// The three pills, `[x0, y0, x1, y1]` in pixels: left, middle, right.
@@ -170,7 +175,7 @@ impl Toolbar {
         let (gap, pad, margin) = (10.0 * dpr, 8.0 * dpr, 12.0 * dpr);
         // Shrink to fit narrow windows, never below something still tappable: the left pill (seven
         // buttons and two gaps) and half the middle one must fit in half the window.
-        let unit = (38.0 * dpr).min(((viewport[0] / 2.0 - margin - 3.0 * pad - 3.0 * gap) / 9.0).max(20.0 * dpr));
+        let unit = (38.0 * dpr).min(((viewport[0] / 2.0 - margin - 3.0 * pad - 3.0 * gap) / 9.5).max(17.0 * dpr));
         let height = unit + 2.0 * pad;
         let width_of = |slots: &[Option<Item>]| slots.iter().map(|s| if s.is_some() { unit } else { gap }).sum::<f32>() + 2.0 * pad;
         let (left_w, middle_w, right_w) = (width_of(&LEFT), width_of(&MIDDLE), width_of(&RIGHT));
@@ -329,7 +334,8 @@ impl Toolbar {
                     ui.disc(dot, 0.24 * u, ui.pal.rim);
                     ui.disc(dot, 0.2 * u, colour);
                 }
-                Item::Tool(Tool::Laser) => icons.laser.draw(&mut ui.lines, cx, cy, half * 1.05, line, tool_ink(3)),
+                Item::Tool(Tool::Select) => icons.text_select.draw(&mut ui.lines, cx, cy, half * 1.05, line, tool_ink(3)),
+                Item::Tool(Tool::Laser) => icons.laser.draw(&mut ui.lines, cx, cy, half * 1.05, line, tool_ink(4)),
             }
         }
     }

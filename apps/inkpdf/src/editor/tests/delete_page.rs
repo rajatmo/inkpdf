@@ -54,7 +54,7 @@ fn the_button_deletes_the_page_being_looked_at_with_every_device_and_asks_nobody
 #[test]
 fn the_button_works_in_both_modes_and_with_every_tool() {
     for mode in [Mode::Desktop, Mode::Tablet] {
-        for tool in [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Laser] {
+        for tool in [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Select, Tool::Laser] {
             let mut ed = pages(2);
             ed.set_mode(mode);
             ed.set_tool(tool);

@@ -25,6 +25,7 @@ fn every_item_is_hit_at_its_centre_and_there_are_no_others() {
             Item::Tool(Tool::Pen),
             Item::Tool(Tool::Geometry),
             Item::Tool(Tool::Text),
+            Item::Tool(Tool::Select),
             Item::Tool(Tool::Laser),
             Item::Theme,
             Item::DarkPages,
@@ -39,7 +40,10 @@ fn the_main_toolbar_holds_only_the_tools() {
     let tb = Toolbar::layout([1650.0, 1350.0], 1.5);
     let in_middle: Vec<Item> =
         tb.items.iter().filter(|(_, r)| rect_contains(tb.pills[1], [(r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0])).map(|(i, _)| *i).collect();
-    assert_eq!(in_middle, [Item::Tool(Tool::Pen), Item::Tool(Tool::Geometry), Item::Tool(Tool::Text), Item::Tool(Tool::Laser)]);
+    assert_eq!(
+        in_middle,
+        [Item::Tool(Tool::Pen), Item::Tool(Tool::Geometry), Item::Tool(Tool::Text), Item::Tool(Tool::Select), Item::Tool(Tool::Laser)]
+    );
 }
 
 #[test]

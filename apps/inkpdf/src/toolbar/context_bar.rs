@@ -12,7 +12,7 @@
 //! window too narrow for five colours they are one dot, which opens the panel.
 
 use crate::figure::NodeAction;
-use crate::ink::rect_contains;
+use crate::ink::{MarkupKind, rect_contains};
 use crate::input::Intent;
 use crate::tool::{MAX_ACTIONS, ToolAction};
 
@@ -90,6 +90,17 @@ const GAPS: usize = 4;
 /// own actions come after the selection's, if it offers any, and the colours are one dot if `compact`.
 fn slots(actions: &[ToolAction], compact: bool) -> ([Option<ContextItem>; SLOTS], usize) {
     use ContextItem::{Action, Copy, Delete, Duplicate, Paste, Style, Swatch};
+    // The text selection's bar has no pen to choose, nothing to duplicate or paste, no colours: copy, delete, and its marks.
+    if actions.iter().any(|a| matches!(a, ToolAction::Mark(_))) {
+        let mut out = [None; SLOTS];
+        let all = [Some(Copy), Some(Delete), None].into_iter().chain(actions.iter().take(MAX_ACTIONS).map(|a| Some(Action(*a))));
+        let mut len = 0;
+        for slot in all {
+            out[len] = slot;
+            len += 1;
+        }
+        return (out, len);
+    }
     let tip = [Some(ContextItem::Intent(Intent::Draw)), Some(ContextItem::Intent(Intent::Select)), Some(ContextItem::Intent(Intent::Erase)), None];
     let selection = [Some(Duplicate), Some(Copy), Some(Paste), Some(Delete), None];
     let colours = [Some(Swatch(0)), Some(Swatch(1)), Some(Swatch(2)), Some(Swatch(3)), Some(Swatch(4)), None];
@@ -253,6 +264,7 @@ impl ContextBar {
                 ContextItem::Intent(Intent::Draw) => match state.tool {
                     Tool::Geometry => &all.geometry,
                     Tool::Text => &all.text,
+                    Tool::Select => &all.text_select,
                     Tool::Pen | Tool::Laser => &all.pen,
                 },
                 ContextItem::Intent(Intent::Select) => &all.select,
@@ -264,6 +276,11 @@ impl ContextBar {
                 ContextItem::Action(ToolAction::Node(NodeAction::Remove)) => &all.node_remove,
                 ContextItem::Action(ToolAction::Node(NodeAction::Add)) => &all.node_add,
                 ContextItem::Action(ToolAction::Node(NodeAction::Smooth)) => &all.node_smooth,
+                ContextItem::Action(ToolAction::Mark(kind)) => match kind {
+                    MarkupKind::Highlight => &all.highlight,
+                    MarkupKind::Underline => &all.underline,
+                    MarkupKind::StrikeOut | MarkupKind::Squiggly => &all.strikeout,
+                },
                 ContextItem::Swatch(slot) => {
                     // A colour: the one in use is ringed, as in the panel.
                     let colour = state.palette[slot % state.palette.len()];

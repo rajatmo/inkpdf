@@ -21,6 +21,7 @@ mod pen;
 mod prompt;
 mod replay;
 mod save_as;
+mod select_text;
 mod shapes;
 mod text;
 mod text_editing;

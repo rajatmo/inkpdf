@@ -4,7 +4,7 @@
 //! the same things as shortcuts.
 
 use crate::input::{Device, Intent};
-use crate::tool::{MAX_ACTIONS, ToolAction};
+use crate::tool::{MAX_ACTIONS, Tool, ToolAction};
 use crate::toolbar::{ContextBar, ContextItem, ContextState, PanelState};
 use crate::tools::Key;
 
@@ -12,9 +12,9 @@ use super::{Act, Editor};
 
 impl Editor {
     /// The bar under the tools, if there is one: not without a document, and not with the pointer tool, which
-    /// makes nothing to select.
+    /// makes nothing to select (the text selection's has its marks).
     pub fn context_bar(&self) -> Option<ContextBar> {
-        (self.ws.has_doc && self.ws.tool.makes_items()).then(|| ContextBar::below(&self.toolbar(), self.ws.view.viewport, self.tool_actions()))
+        (self.ws.has_doc && self.ws.tool.has_bar()).then(|| ContextBar::below(&self.toolbar(), self.ws.view.viewport, self.tool_actions()))
     }
 
     /// The actions of its own the tool in use offers now (what it is editing decides which).
@@ -33,7 +33,7 @@ impl Editor {
         let state = ContextState {
             tool: self.ws.tool,
             intent: self.ws.intent,
-            selection: !self.ws.selection.is_empty(),
+            selection: !self.ws.selection.is_empty() || (self.ws.tool == Tool::Select && self.tools.select.has_selection(&self.ws)),
             paste: self.can_paste(),
             actions,
             style_open: self.chrome.panel.is_some(),
@@ -93,7 +93,11 @@ impl Editor {
             }
             ContextItem::Copy => {
                 self.settle();
-                self.ws.copy_selection();
+                if self.ws.tool == Tool::Select {
+                    self.tools.select.copy_text(&mut self.ws);
+                } else {
+                    self.ws.copy_selection();
+                }
             }
             ContextItem::Paste => {
                 self.settle();

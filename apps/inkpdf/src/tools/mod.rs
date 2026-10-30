@@ -10,6 +10,7 @@ pub mod gestures;
 pub mod paint;
 mod pen;
 mod pointer;
+mod select;
 mod shape;
 mod shortcuts;
 mod text;
@@ -21,6 +22,7 @@ use crate::workspace::Workspace;
 pub use paint::Painter;
 pub use pen::PenTool;
 pub use pointer::PointerTool;
+pub use select::SelectTool;
 #[cfg(test)]
 pub use shape::Draft;
 pub use shape::ShapeTool;
@@ -161,12 +163,19 @@ pub struct ToolSet {
     pub pen: PenTool,
     pub shape: ShapeTool,
     pub text: TextTool,
+    pub select: SelectTool,
     pub pointer: PointerTool,
 }
 
 impl ToolSet {
     pub fn new() -> Self {
-        Self { pen: PenTool::default(), shape: ShapeTool::default(), text: TextTool::default(), pointer: PointerTool::default() }
+        Self {
+            pen: PenTool::default(),
+            shape: ShapeTool::default(),
+            text: TextTool::default(),
+            select: SelectTool::default(),
+            pointer: PointerTool::default(),
+        }
     }
 
     pub fn get(&self, id: ToolId) -> &dyn Tool {
@@ -174,6 +183,7 @@ impl ToolSet {
             ToolId::Pen => &self.pen,
             ToolId::Geometry => &self.shape,
             ToolId::Text => &self.text,
+            ToolId::Select => &self.select,
             ToolId::Laser => &self.pointer,
         }
     }
@@ -183,18 +193,19 @@ impl ToolSet {
             ToolId::Pen => &mut self.pen,
             ToolId::Geometry => &mut self.shape,
             ToolId::Text => &mut self.text,
+            ToolId::Select => &mut self.select,
             ToolId::Laser => &mut self.pointer,
         }
     }
 
-    fn each(&mut self) -> [&mut dyn Tool; 4] {
-        [&mut self.pen, &mut self.shape, &mut self.text, &mut self.pointer]
+    fn each(&mut self) -> [&mut dyn Tool; 5] {
+        [&mut self.pen, &mut self.shape, &mut self.text, &mut self.select, &mut self.pointer]
     }
 
     /// Whether any tool has a gesture, or work not yet made part of the document, under way.
     #[cfg(test)]
     pub fn busy(&self) -> bool {
-        [&self.pen as &dyn Tool, &self.shape, &self.text, &self.pointer].iter().any(|t| t.busy())
+        [&self.pen as &dyn Tool, &self.shape, &self.text, &self.select, &self.pointer].iter().any(|t| t.busy())
     }
 
     /// Finish the gesture of every tool (a new press, a new page).

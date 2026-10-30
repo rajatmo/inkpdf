@@ -9,7 +9,7 @@
 <g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(28.8 1060.8)">
 <title>G</title>
 <polygon fill="white" stroke="transparent" points="-28.8,28.8 -28.8,-1060.8 1843.8,-1060.8 1843.8,28.8 -28.8,28.8"/>
-<text text-anchor="start" x="504.5" y="-1011.4" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="22.00">InkPDF essential skeleton (transitive reduction: 71 of 157 edges)</text>
+<text text-anchor="start" x="504.5" y="-1011.4" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="22.00">InkPDF essential skeleton (transitive reduction: 71 of 158 edges)</text>
 <g id="clust1" class="cluster">
 <title>cluster_Base</title>
 <path fill="#e8f1fb" fill-opacity="0.333333" stroke="#4a7fb5" d="M20,-513C20,-513 518,-513 518,-513 524,-513 530,-519 530,-525 530,-525 530,-980 530,-980 530,-986 524,-992 518,-992 518,-992 20,-992 20,-992 14,-992 8,-986 8,-980 8,-980 8,-525 8,-525 8,-519 14,-513 20,-513"/>
@@ -411,7 +411,7 @@
 <!-- tool&#45;&gt;ink -->
 <g id="edge57" class="edge">
 <title>tool&#45;&gt;ink</title>
-<g id="a_edge57"><a xlink:title="1 uses">
+<g id="a_edge57"><a xlink:title="4 uses">
 <path fill="none" stroke="#b8860b" stroke-width="1.6" stroke-opacity="0.600000" d="M1281.38,-677.97C1316.62,-695.96 1377.78,-727.16 1415.38,-746.36"/>
 <polygon fill="#b8860b" fill-opacity="0.600000" stroke="#b8860b" stroke-width="1.6" stroke-opacity="0.600000" points="1414.46,-748.24 1420.76,-749.1 1416.37,-744.5 1414.46,-748.24"/>
 </a>

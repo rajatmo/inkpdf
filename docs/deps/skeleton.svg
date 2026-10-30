@@ -651,7 +651,7 @@
 <!-- app&#45;&gt;platform -->
 <g id="edge5" class="edge">
 <title>app&#45;&gt;platform</title>
-<g id="a_edge5"><a xlink:title="1 uses">
+<g id="a_edge5"><a xlink:title="2 uses">
 <path fill="none" stroke="#555555" stroke-width="1.6" stroke-opacity="0.600000" d="M961.62,-75C962.67,-113.05 963.36,-207.76 948,-285 936.83,-341.15 911.72,-403.78 897.44,-436.76"/>
 <polygon fill="#555555" fill-opacity="0.600000" stroke="#555555" stroke-width="1.6" stroke-opacity="0.600000" points="895.39,-436.23 894.91,-442.57 899.24,-437.91 895.39,-436.23"/>
 </a>
@@ -843,7 +843,7 @@
 <!-- platform&#45;&gt;clipboard -->
 <g id="edge38" class="edge">
 <title>platform&#45;&gt;clipboard</title>
-<g id="a_edge38"><a xlink:title="3 uses">
+<g id="a_edge38"><a xlink:title="4 uses">
 <path fill="none" stroke="#555555" stroke-width="1.6" stroke-opacity="0.600000" d="M857.96,-479.13C851.57,-482.23 844.7,-485.08 838,-487 706.76,-524.49 656.63,-457.35 532,-513 519.02,-518.79 507.27,-529.3 498.32,-539.01"/>
 <polygon fill="#555555" fill-opacity="0.600000" stroke="#555555" stroke-width="1.6" stroke-opacity="0.600000" points="496.58,-537.81 494.16,-543.69 499.72,-540.6 496.58,-537.81"/>
 </a>
@@ -888,7 +888,7 @@
 <!-- platform&#45;&gt;path_store -->
 <g id="edge43" class="edge">
 <title>platform&#45;&gt;path_store</title>
-<g id="a_edge43"><a xlink:title="1 uses">
+<g id="a_edge43"><a xlink:title="2 uses">
 <path fill="none" stroke="#555555" stroke-width="1.6" stroke-opacity="0.600000" d="M895.71,-479.24C903.95,-495.57 916.39,-520.19 925.46,-538.14"/>
 <polygon fill="#555555" fill-opacity="0.600000" stroke="#555555" stroke-width="1.6" stroke-opacity="0.600000" points="923.81,-539.54 928.39,-543.95 927.56,-537.65 923.81,-539.54"/>
 </a>

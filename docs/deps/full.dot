@@ -71,7 +71,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "app" -> "pages" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "app" -> "palette" [color="#55555599", penwidth=1.80, tooltip="3 uses"];
 "app" -> "pdf" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
-"app" -> "platform" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
+"app" -> "platform" [color="#55555599", penwidth=1.59, tooltip="2 uses"];
 "app" -> "requests" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "app" -> "scene" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "app" -> "settings" [color="#55555599", penwidth=1.96, tooltip="4 uses"];
@@ -152,14 +152,14 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "pdf_read" -> "outline" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "pdf_read" -> "pdf" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "pdf_read" -> "view" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
-"platform" -> "browse" [color="#55555599", penwidth=2.09, tooltip="5 uses"];
-"platform" -> "clipboard" [color="#55555599", penwidth=1.80, tooltip="3 uses"];
+"platform" -> "browse" [color="#55555599", penwidth=2.20, tooltip="6 uses"];
+"platform" -> "clipboard" [color="#55555599", penwidth=1.96, tooltip="4 uses"];
 "platform" -> "clock" [color="#55555599", penwidth=1.80, tooltip="3 uses"];
 "platform" -> "input" [color="#55555599", penwidth=2.70, tooltip="13 uses"];
 "platform" -> "motion" [color="#55555599", penwidth=2.38, tooltip="8 uses"];
 "platform" -> "palette" [color="#55555599", penwidth=2.59, tooltip="11 uses"];
-"platform" -> "path_store" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
-"platform" -> "store" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
+"platform" -> "path_store" [color="#55555599", penwidth=1.59, tooltip="2 uses"];
+"platform" -> "store" [color="#55555599", penwidth=2.20, tooltip="6 uses"];
 "requests" -> "pages" [color="#b8860b99", penwidth=1.30, tooltip="1 uses"];
 "requests" -> "store" [color="#b8860b99", penwidth=1.30, tooltip="1 uses"];
 "selection" -> "ink" [color="#b8860b99", penwidth=1.30, tooltip="1 uses"];

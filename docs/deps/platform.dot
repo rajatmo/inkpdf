@@ -11,10 +11,12 @@ subgraph cluster_shared { label="shared code (all OSes)"; style="rounded,filled"
 }
 subgraph cluster_plat { label="platform/  (adapter layer, picks one backend at compile time)"; style="rounded,filled"; fillcolor="#fdf2f0"; color="#c0392b"; fontname="Helvetica";
   "platform_mod" [label="platform/mod.rs\nPointerSource trait\ntrait Platform · PointerSource\nnative() picks the backend", penwidth=2.5, color="#c0392b"];
+  "p_android_host" [label="platform/android/host.rs", color="#8e44ad", penwidth=2];
   "p_android_mod" [label="platform/android/mod.rs", color="#8e44ad", penwidth=2];
   "p_android_reader" [label="platform/android/reader.rs", color="#8e44ad", penwidth=2];
   "p_linux" [label="platform/linux.rs", color="#27ae60", penwidth=2];
   "p_motion_event" [label="platform/motion_event.rs", color="#d68910", penwidth=2];
+  "p_saf" [label="platform/saf.rs", color="#16a085", penwidth=2];
   "p_stubs" [label="platform/stubs.rs", color="#7f8c8d", penwidth=2];
   "p_unix_dirs" [label="platform/unix_dirs.rs", color="#7f8c8d", penwidth=2];
   "p_windows_counter" [label="platform/windows/counter.rs", color="#2e86c1", penwidth=2];

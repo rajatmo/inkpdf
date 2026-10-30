@@ -63,7 +63,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "app" -> "editor" [color="#55555599", penwidth=1.60, tooltip="4 uses"];
 "app" -> "gpu" [color="#55555599", penwidth=1.60, tooltip="5 uses"];
 "app" -> "indexer" [color="#55555599", penwidth=1.60, tooltip="2 uses"];
-"app" -> "platform" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
+"app" -> "platform" [color="#55555599", penwidth=1.60, tooltip="2 uses"];
 "doc" -> "ink_io" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "doc" -> "page_table" [color="#55555599", penwidth=1.60, tooltip="2 uses"];
 "doc" -> "store" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
@@ -96,12 +96,12 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "pdf_read" -> "links" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "pdf_read" -> "outline" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "pdf_read" -> "pdf" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
-"platform" -> "clipboard" [color="#55555599", penwidth=1.60, tooltip="3 uses"];
+"platform" -> "clipboard" [color="#55555599", penwidth=1.60, tooltip="4 uses"];
 "platform" -> "clock" [color="#55555599", penwidth=1.60, tooltip="3 uses"];
 "platform" -> "input" [color="#55555599", penwidth=1.60, tooltip="13 uses"];
 "platform" -> "motion" [color="#55555599", penwidth=1.60, tooltip="8 uses"];
 "platform" -> "palette" [color="#55555599", penwidth=1.60, tooltip="11 uses"];
-"platform" -> "path_store" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
+"platform" -> "path_store" [color="#55555599", penwidth=1.60, tooltip="2 uses"];
 "requests" -> "pages" [color="#b8860b99", penwidth=1.60, tooltip="1 uses"];
 "requests" -> "store" [color="#b8860b99", penwidth=1.60, tooltip="1 uses"];
 "selection" -> "text" [color="#b8860b99", penwidth=1.60, tooltip="1 uses"];

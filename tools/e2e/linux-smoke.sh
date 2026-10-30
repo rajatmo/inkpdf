@@ -30,13 +30,17 @@ gen="${2:-$target/debug/inkpdf-gen}"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-mkdir -p "$work/home/Documents"
+mkdir -p "$work/home/Documents" "$work/home/.config/InkPDF"
+# (The program starts on the selection of text: these scenes draw ink, so they start on the pen.)
+printf 'tool pen\n' >"$work/home/.config/InkPDF/settings.txt"
 "$gen" "$work/t.pdf" 3 >/dev/null
 cp "$work/t.pdf" "$work/original.pdf"
 
 # The parts that run on the virtual display, as files of their own (xvfb-run runs a program, not a shell function).
 cat >"$work/open.sh" <<DRIVE
 set -eu
+export HOME="$work/home"
+unset XDG_CONFIG_HOME
 "$app" "$work/t.pdf" --mode desktop --exit-after 14 2>"$work/log.txt" &
 pid=\$!
 sleep 5

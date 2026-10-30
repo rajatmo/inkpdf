@@ -6,7 +6,7 @@ task** from section 6, do it on a branch, and leave the CI result as the proof.
 
 - **Written:** 2026-10-29, at version **1.0.0** (commits `e734263` "v1.0.0: the interface moves" and `c4e8a6a` "Demo GIF for 1.0.0"); **re-planned the same day** after Linux and Android landed on `main` (unreleased) and the owner chose the order in section 6.
 - **Owner:** Rajat Mandal (`rajatmo`). The owner reviews and pushes; do not push to `main`, open pull requests instead (unless the task says so).
-- **Status (2026-10-30):** **1.1.0 is finished on branches** (`pdf-seam`: F3, K1 to K3; `theme`, on top of it: T1 to T7, version bumped, changelog written); the owner merges them and tags the release. Milestones 1.2.0 and 1.3.0 are plans, not records. The platform work is on `main` (`docs/PORTING.md`).
+- **Status (2026-10-30):** **1.1.0 and 1.2.0 are finished on branches** (`pdf-seam`: F3, K1 to K3; `theme`, on top of it: T1 to T7, then X1 to X6; versions bumped, changelog written); the owner merges them and tags the releases. Milestone 1.3.0 is a plan, not a record. The platform work is on `main` (`docs/PORTING.md`).
 
 ## 1. What InkPDF is, and the rules that do not bend
 
@@ -335,7 +335,7 @@ screenshot (`tools/android/emulator-test.sh`). **Release 1.1.0.**
 
 ### Milestone 1.2.0: text (select, search, markup)
 
-**X1. `pagetext` (model layer): the interface and value types.**
+**X1. `pagetext` (model layer): the interface and value types.** *(Done 2026-10-30: the trait came with K1; X1 added `FakeText` (a page of letters on a grid, for tests) and `snippet`. `Workspace::text` is a `DocText`.)*
 *Work (the text part of K1's trait returns this trait, so the tools never see the `pdf` module):* new `pagetext.rs`: a trait `PageTextView: Send + Sync` with the operations of pdfcraft's `PageText` that we use
 (`nearest`, `word_at`, `line_at`, `line_rects`, `glyph_rects`, `glyphs_in`, `column_text`, `text_of`, `find(needle, case,
 whole_words, limit)`, `glyph_count`) in **page view space**, plus plain value types: `TextSelection { page, range }`, `Hit { page,
@@ -343,7 +343,7 @@ range }`, a `snippet(view, hit, context_chars)` helper. Add a small in-test fake
 Register in `LAYERS` (model).
 *Done when:* unit tests of the helpers against the fake.
 
-**X2. Text through the seam, and the indexer.**
+**X2. Text through the seam, and the indexer.** *(Done 2026-10-30: `pdf::TextSource`, `indexer.rs`, `doctext.rs`, the shell's `stream_text`. Deviation: no flag was added to `inkpdf-gen`; the conformance corpus has known text, and the indexer is tested on the sample PDFs and on a file that is not a PDF. A rotated page is checked through the markup round trip; a rotated page's text is checked by the existing `check_find`.)*
 *Work:* in `pdf` (K1) implement `PageTextView` over `pdfcraft_render::PageText` and a function that extracts one page from the file
 bytes (`PageRenderer::new(bytes, config).filtered_text(page, TextFilter::default())`; the renderer is **not** shared with the
 render pool, give the indexer its own). New adapter module `indexer`: one low-priority background thread, a priority queue
@@ -355,7 +355,7 @@ position and rotation (see `coords.rs`; **verify with a rotated page**).
 priority order; invalidation; page edits keep the index valid; a corrupted PDF yields no text and no panic (there is a storm for
 hostile PDFs, `hostile_pdf` in `stress.rs`).
 
-**X3. Markup items in the ink store and in the file.**
+**X3. Markup items in the ink store and in the file.** *(Done 2026-10-30: `Stroke::markup`, `ink_io`, `NewShape::Markup`. Decided without asking, the default the task named: markups made by other programs stay foreign annotations, drawn by the renderer. Squiggly is in the model and the file but has no button.)*
 *Work:* `ink` gets a markup item (kind: Highlight, Underline, StrikeOut, Squiggly; quads in document space; colour and opacity)
 with undo/redo, selection, move-with-page (`PageEdit` follow like strokes), bounds, erase and delete. `ink_io.rs`/`pdf::annot`
 writes it with `Shape::TextMarkup` and reads our own back (NM prefix `inkpdf-`). **Decide with the owner** whether markups made
@@ -364,7 +364,7 @@ unless told otherwise). Draw markup ourselves as overlays (page renders exclude 
 filled rectangles per quad, underline/strikeout = lines, squiggly = a zig-zag; colours with `opacity`.
 *Tests:* save and reopen round trip in `ink_io` tests; page edits carry markups (storm `follow_pages` style); history.
 
-**X4. The select tool.**
+**X4. The select tool.** *(Done 2026-10-30 with these differences: the "action card" is the bar under the tools (copy, delete and three marks: the bar can hold three tool actions, so squiggly is left out; it has no Search button, the toolbar has one); a drag that begins on empty space does not draw a marquee (a press on a markup selects it); shift+click is replaced by the two handles; the text is copied to the in-memory clipboard on Linux and Android until A4 and L3 give them the system's.)*
 *Work:* `Tool::Select` (see `tool.rs`: `Tool::ALL`, `name`/`from_name`, `makes_items`, the toolbar `MIDDLE` array, `Look`'s
 `TOOLS`, settings tool names, `editor/tests/capability.rs`), `tools/select.rs` (one file per tool, copy the layout of an existing
 one such as `tools/shape/`). Behaviour: drag from a glyph (`nearest`) to another selects the range in reading order and draws
@@ -380,7 +380,7 @@ left mouse button and keyboard, or the stylus tip alone; fingers still pan.
 *Tests:* editor tests per device, the capability matrix rows, a storm that selects/extends/copies/marks while pages are
 edited and undone, selection survives scrolling and zooming (selection is in document space).
 
-**X5. The search card.**
+**X5. The search card.** *(Done 2026-10-30. Differences: Shift+Enter is not in the key vocabulary, so the previous place is the arrow button or the Up key; no debounce (the work is done on each key; it is cheap: a `find` per page); the list shows six rows and follows the current place, with no wheel scrolling of its own; the places on the page are palette roles `search_hit` and `search_current`.)*
 *Work:* `editor/search.rs` and `toolbar` card drawing: Ctrl+F or a magnifier button opens it (a toolbar button in the left
 pill; every device), not modal. Field with caret (typing goes through the existing text-input path, and on Android `Platform::set_text_input` raises the soft keyboard; study
 `tools/text.rs` (the text tool, `is_typing`), `editor/routing.rs` (`text_edit`, `is_typing`, where keys are routed) and
@@ -394,7 +394,7 @@ hit (`View::scroll_to...`), the current marker moves with a `Tween`.
 hostile Unicode); editor tests per device; page edits and undo keep hits correct; a storm of hostile queries and page edits;
 a performance check (indexing a generated 200-page PDF, time and memory) owner-run with `--stats`.
 
-**X6. Docs, e2e, release.** README, CHANGELOG, `ARCHITECTURE.md` (Text section), `tools/e2e/text.ps1` (select a known word, copy,
+**X6. Docs, e2e, release.** *(Done 2026-10-30 except what only the owner can do: `tools/e2e/text.ps1` for Windows and the emulator check were not written or run; `tools/e2e/linux-smoke.sh` has real-window checks of the select tool and of search. Version 1.2.0.)* README, CHANGELOG, `ARCHITECTURE.md` (Text section), `tools/e2e/text.ps1` (select a known word, copy,
 search a known word, count highlight pixels, step through hits) and the same on Linux (`tools/e2e/linux-smoke.sh`, xdotool) and in the
 emulator test, owner runs the checks. **Release 1.2.0.**
 

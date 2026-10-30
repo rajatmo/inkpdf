@@ -10,6 +10,8 @@ just the page and your pen.
 - **Your notes are real PDF annotations.** Ink and shapes are saved as standard Ink annotations and typed text as
   Free Text annotations, so any PDF reader shows them. Nothing else is kept, and nothing is uploaded.
 - **Light on the machine.** Pages are drawn on the GPU, and an idle window costs no CPU.
+- **Select, mark and search the text.** Select a PDF's text and copy it; highlight, underline or strike it out (saved as standard
+  annotations); find any word with Ctrl+F.
 - **Light or dark.** The interface follows the system's look or your choice, and the pages can go dark too (dark paper, light text;
   your file is never changed).
 - **Pen, finger, mouse or keyboard.** Every feature works with just the left mouse button and keyboard at a desk,
@@ -46,7 +48,9 @@ driver (`mesa-vulkan-drivers` on most distributions) and, on X11, `libxkbcommon-
    a PDF you opened is updated in place.
 4. The pages button opens an overview of every page and the table of contents: jump to a page, reorder, duplicate or
    delete pages. Every step can be undone.
-5. The two buttons at the top right, left of the mode button, are the look: the first goes from the system's to light to dark; the
+5. The I-beam tool selects the page's text: drag over it, press twice for a word, three times for a line, then copy it or mark it from
+   the bar under the tools. The magnifier (or Ctrl+F) searches: every place is lit on the page and listed.
+6. The two buttons at the top right, left of the mode button, are the look: the first goes from the system's to light to dark; the
    second (a page half in shade) makes the pages dark when the look is dark. Both are remembered.
 
 The full guide is [apps/inkpdf/installer/readme.txt](apps/inkpdf/installer/readme.txt).

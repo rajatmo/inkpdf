@@ -64,7 +64,7 @@ vector drawing): a floor, because it has no images and no embedded fonts, so rea
 * A render is premultiplied RGBA with the page painted opaque white where nothing is drawn.
 * A request's `tag` comes back as it was, **except that bit 60 is pdfcraft's** (a print preview, which ignores the reading colours): the
   seam asserts it is clear. (The dark-pages task must use another bit.)
-* `render_now` and `page_text` parse the file on every call; the pool and (later) the text indexer keep a renderer per file.
+* `render_now` and `page_text` parse the file on every call; the pool and the text indexer (`pdf::TextSource`, one parse for all the pages it reads) keep a renderer per file.
 * A link's target is handed over raw (a launch or a script is listed as an address); refusing it is the program's `links::safe_url`.
 
 ## 5. What we depend on, and the risks

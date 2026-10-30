@@ -100,6 +100,18 @@ near the top or bottom scrolls. A finger scrolls; use the arrows of the bar to m
 opens its menu: add a page before, add a page after, duplicate, delete. Every one of these is a step of the history. At a
 desk: Ctrl+A chooses every page, Ctrl+D duplicates the chosen ones, Delete deletes them, Ctrl+Z and Ctrl+Y undo and redo,
 and Esc steps out one level at a time (a drag, the chosen pages, edit mode, the overview).
+SELECTING AND MARKING TEXT. The I-beam tool (between the text tool and the pointer) selects the text a PDF has. Press on a letter and
+drag to the one you want; press twice for a word, three times for a line; a round handle sits at each end of what is selected and
+moves it (with a stylus tip, that is how you stretch a selection). Ctrl+A takes the page's text, Ctrl+C copies it, Esc lets go. The
+bar under the tools has copy, delete and three marks: highlight, underline and strike-out, which mark the lines selected. A mark is
+selected by pressing on it (then Delete takes it away, or the bin), moved like ink, erased and undone. Marks are saved in the PDF as
+ordinary annotations that any reader shows. Pages that are only pictures (scans) have no text to select.
+
+SEARCHING. The magnifier at the left of the toolbar (or Ctrl+F) opens the search card: type, and every place is lit on the page, the
+current one stronger. The card says "3 of 17", has arrows for the previous and next place (Enter and the Up and Down keys too), the
+options Aa (match the case) and W (whole words only), and a list of the places with the words round each: press one to go to it. It
+searches the text of the pages as they are read (the card says how many are done) and the text boxes you typed.
+
 Your tools, their settings and the look are kept in %APPDATA%\InkPDF\settings.txt. (INKPDF_THEME=light or dark
 chooses the look for one run.)
 

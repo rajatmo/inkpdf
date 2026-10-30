@@ -15,6 +15,9 @@
 #  3. dark look and dark pages (settings made up for the run): a pixel of the toolbar's panel and one of the page's paper are dark, where
 #     in the light look they are white.
 #
+#  4. text: the text of a page is read behind the frame, and Ctrl+F finds a word in it (its places are lit on the page: yellow pixels, which a
+#     page of black text on white has none of), and the select tool marks a drag over the text (blue pixels).
+#
 # Needs: xvfb (xvfb-run), xdotool, imagemagick (import, convert), mesa-vulkan-drivers (lavapipe), libxkbcommon-x11-0, a system font
 # (fonts-liberation).
 set -euo pipefail
@@ -98,6 +101,37 @@ import -window root "$work/dark.png"
 wait "\$pid"
 DRIVE
 
+# Search and select: the page's text is read by the indexer, found by Ctrl+F and selected by a drag.
+mkdir -p "$work/text/.config/InkPDF"
+printf 'tool select\n' >"$work/text/.config/InkPDF/settings.txt"
+cat >"$work/text.sh" <<DRIVE
+set -eu
+export HOME="$work/text"
+unset XDG_CONFIG_HOME
+"$app" "$work/t.pdf" --mode desktop --exit-after 16 2>"$work/log4.txt" &
+pid=\$!
+sleep 6
+win="\$(xdotool search --name 'page 1' | head -1)"
+xdotool windowfocus "\$win"
+sleep 0.3
+xdotool mousemove 150 262
+sleep 0.2
+xdotool mousedown 1
+for i in \$(seq 1 20); do
+    xdotool mousemove \$((150 + i * 20)) \$((262 + i * 2))
+    sleep 0.03
+done
+xdotool mouseup 1
+sleep 1
+import -window root "$work/select.png"
+xdotool key ctrl+f
+sleep 0.5
+xdotool type --delay 80 'latency'
+sleep 1.5
+import -window root "$work/search.png"
+wait "\$pid"
+DRIVE
+
 # Record a short session, then play it back: the recording has the mouse's events, and the playback runs and ends by itself.
 cat >"$work/record.sh" <<DRIVE
 set -eu
@@ -121,6 +155,7 @@ xvfb-run -a -s "-screen 0 1280x960x24" bash "$work/play.sh"
 xvfb-run -a -s "-screen 0 1280x960x24" bash "$work/open.sh"
 xvfb-run -a -s "-screen 0 1280x960x24" bash "$work/new.sh"
 xvfb-run -a -s "-screen 0 1280x960x24" bash "$work/dark.sh"
+xvfb-run -a -s "-screen 0 1280x960x24" bash "$work/text.sh"
 
 fail=0
 check() { if eval "$2"; then echo "ok:   $1"; else echo "FAIL: $1"; fail=1; fi; }
@@ -138,4 +173,8 @@ check "and played back to the end" "grep -q '^opened r.pdf' '$work/play.err' && 
 sum_at() { convert "$work/dark.png" -crop "1x1+$1+$2" txt:- | tail -1 | grep -o 'srgb([0-9,]*)' | tr -dc '0-9,' | awk -F, '{print $1+$2+$3}'; }
 check "the dark look draws the toolbar's panel dark" "test \"\$(sum_at 155 64)\" -lt 240"
 check "and, with dark pages, the page's paper dark" "test \"\$(sum_at 60 300)\" -lt 240"
+# Pixels of a colour in a screenshot (ImageMagick prints one line a pixel).
+count_pixels() { convert "$work/$1" txt:- | grep -c "$2" || true; }
+check "Ctrl+F lit the places a word was found, over the page (yellow pixels)" "test \"\$(count_pixels search.png 'srgb(255,23[0-9],1[3-6][0-9])')\" -gt 300"
+check "a drag with the select tool lit the text it went over (blue pixels)" "test \"\$(count_pixels select.png 'srgb(2[0-1][0-9],2[2-3][0-9],255)')\" -gt 300"
 exit "$fail"

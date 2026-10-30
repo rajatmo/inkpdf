@@ -209,6 +209,29 @@ number, the PDF's table of contents on the left when there is one, and an edit m
 * `outline.rs` — the table of contents, read with `pdfcraft_organize::bookmarks`, flat, with `visible` (folding) and
   `section_of` (the entry that holds a page).
 
+## Text: read behind the frame, kept by file page, selected and searched
+
+* **Reading.** `pdf::TextSource` (one per thread: the file stays parsed between pages) gives a page's text as a `PageTextView`
+  (`pagetext.rs`: glyphs in reading order, boxes, words, lines, find; `FakeText` is its grid-of-letters stand-in for tests). `indexer.rs`
+  (adapter) runs one on a thread of its own, takes wishes ("these pages, most urgent first": the shell asks for those nearest the page in
+  view) and hands pages back, which `app/frame.rs::stream_text` gives to the editor. It reads the file as the renderer has it, without the
+  ink and the text boxes the program keeps itself (those are searched from the ink store, so nothing is found twice).
+* **Keeping.** `doctext.rs` (model) holds what was read by *page of the file*, and which page of the file draws each page of the document
+  (the shell updates the second when pages are edited), as the pictures are kept: a page edit reads nothing again, a copy shares its
+  original's, an added page has none. `Workspace::text` is that; a selection holds the page's text it was made from and lets go if the page
+  has another by then.
+* **Markup.** A text markup is a `Stroke` with `markup: Some(kind)` whose points are the opposite corners of the boxes it marks, so the
+  store's undo, selection, move, copy, erase and page-edit code is the same as for any stroke. `ink_io` writes it as a Highlight,
+  Underline, StrikeOut or Squiggly annotation (boxes of one kind and colour that follow one another are one annotation, with the corners
+  as a reader writes them) and reads back those that carry our name; the renderer does not draw them (the ink layer does, as capsules).
+* **Select** (`tools/select.rs`) is one tool like the others: a press on a letter, a drag, double and triple presses, handles at the ends
+  (the only way for a stylus tip to stretch a selection), the keys; its bar is the bar under the tools (copy, delete, and its marks as the
+  tool's own actions, `ToolAction::Mark`). **Search** (`editor/search.rs`, drawn by `toolbar/search_card.rs`) is not modal: the card floats
+  at the right, the keyboard is its while it is open, and the places are worked out again whenever the query, the options, the text read so
+  far or the ink changes; they are lit over the page by `app/ink_layer.rs::search_overlay`.
+* The interface had no text of its own before the search card: its labels now go the way the overview's do (bitmaps drawn between the
+  panels and the lines), kept while the interface is not rebuilt.
+
 ## Colour: roles, two looks, and the page's own colours
 
 * `palette.rs` (base) is every colour of the interface by the job it does (`Palette`: panel, ink, accent, the washes, danger, selection,

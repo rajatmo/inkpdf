@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.2.0
+
+Text: select it, copy it, mark it, find it.
+
+- **Select text.** A new tool (the I-beam, between the text tool and the pointer) selects the text a PDF has: drag over it, press twice
+  for a word, three times for a line, move a selection by the round handle at each end (the only way to stretch it with a stylus tip on a
+  tablet), Ctrl+A for the page, Ctrl+C or the copy button to copy (Esc lets go). The bar under the tools then has copy, delete and three
+  marks: **highlight, underline and strike-out** make a markup of the lines selected. A markup is selected by pressing on it, can be moved,
+  deleted, erased and undone like ink, and is saved as a standard Highlight, Underline or StrikeOut annotation, so any reader shows it.
+  Annotations other programs made are still left alone. (The squiggly kind is in the model and the file but has no button yet.)
+- **Search.** The magnifier at the left of the toolbar, or Ctrl+F, opens a card at the right: type, and every place the words are found
+  is lit on the page (the current one stronger), with a list of them (a line of text round each, press one to go to it), "3 of 17", next
+  and previous (the arrows; Enter and the Up and Down keys too), and the options case and whole words (remembered). It searches the text
+  of the pages as they are read (the card says how many are done) and the text boxes you typed. Works with the left mouse button and
+  keyboard, or the stylus tip alone.
+- The text of the pages is read on a thread of its own (`indexer.rs`), nearest pages first, so a long document is searchable as it opens
+  without holding up a frame.
+- Inside: `TextSource` joins the PDF seam (the file stays parsed between pages); `doctext.rs` keeps the text by page of the file, as the
+  pictures are kept, so page edits never read a page again; text markups are strokes of boxes in the ink store (`Stroke::markup`), through
+  the same undo, selection, page-edit and save code as every other stroke; `tools/select.rs`, `editor/search.rs`, `toolbar/search_card.rs`;
+  `View::scroll_to_show`; the interface can now have text (the search card's), drawn from bitmaps as the overview's is. New tests: a fake
+  page of text on a grid, the indexer, the markup in the store and in the file (also on a turned page), the select tool and the search card
+  with every device, the storms with text on every page, and real-window checks of both in `tools/e2e/linux-smoke.sh`.
+- The toolbar's room: five tools and a magnifier made it a little wider; the buttons shrink earlier on a narrow window.
+
 ## 1.1.0
 
 A dark look, and the PDF engine behind a seam of its own.

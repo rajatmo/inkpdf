@@ -114,6 +114,8 @@ fn line(r: &Recorded) -> String {
         InputEvent::MouseLeft => format!("{at} mouse-left"),
         InputEvent::Wheel(Wheel::Lines(x, y)) => format!("{at} wheel lines {x} {y}"),
         InputEvent::Wheel(Wheel::Pixels(x, y)) => format!("{at} wheel pixels {x} {y}"),
+        InputEvent::Zoom(steps) => format!("{at} zoom {steps}"),
+        InputEvent::Shift(down) => format!("{at} shift {}", u8::from(*down)),
         InputEvent::Key(key) => match key {
             KeyInput::Text(t) => format!("{at} key text {}", hex(t)),
             KeyInput::Backspace => format!("{at} key backspace"),
@@ -123,6 +125,7 @@ fn line(r: &Recorded) -> String {
             KeyInput::Home(shift) => format!("{at} key home {}", u8::from(*shift)),
             KeyInput::End(shift) => format!("{at} key end {}", u8::from(*shift)),
             KeyInput::Chord(c) => format!("{at} key chord {}", hex(&c.to_string())),
+            KeyInput::Page(down) => format!("{at} key page {}", u8::from(*down)),
         },
         InputEvent::Shortcut { letter, shift } => format!("{at} shortcut {} {}", hex(letter), u8::from(*shift)),
         InputEvent::FocusLost => format!("{at} focus-lost"),
@@ -155,6 +158,8 @@ fn parse_line(line: &str) -> Option<Recorded> {
         "focus-lost" => InputEvent::FocusLost,
         "resized" => InputEvent::Resized([num()?, num()?]),
         "scale" => InputEvent::ScaleChanged(num()?),
+        "zoom" => InputEvent::Zoom(num()?),
+        "shift" => InputEvent::Shift(t.next()? == "1"),
         "wheel" => {
             let pixels = t.next()? == "pixels";
             let (x, y) = (t.next()?.parse().ok()?, t.next()?.parse().ok()?);
@@ -190,6 +195,7 @@ fn parse_line(line: &str) -> Option<Recorded> {
             "home" => KeyInput::Home(t.next()? == "1"),
             "end" => KeyInput::End(t.next()? == "1"),
             "chord" => KeyInput::Chord(unhex(t.next()?)?.chars().next()?),
+            "page" => KeyInput::Page(t.next()? == "1"),
             _ => return None,
         }),
         "ptr" => {
@@ -249,6 +255,10 @@ mod tests {
             InputEvent::MouseLeft,
             InputEvent::Wheel(Wheel::Lines(0.0, -3.0)),
             InputEvent::Wheel(Wheel::Pixels(4.5, 1.0)),
+            InputEvent::Zoom(-2.0),
+            InputEvent::Shift(true),
+            InputEvent::Key(KeyInput::Page(true)),
+            InputEvent::Key(KeyInput::Page(false)),
             InputEvent::Key(KeyInput::Text("héllo\nwörld".into())),
             InputEvent::Key(KeyInput::Backspace),
             InputEvent::Key(KeyInput::Delete),

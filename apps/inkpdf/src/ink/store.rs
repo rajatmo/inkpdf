@@ -141,8 +141,7 @@ impl InkStore {
         !self.dirty.is_empty()
     }
 
-    /// Flag a page as changed without touching its ink (a page that was added).
-    #[cfg(test)]
+    /// Flag a page as changed without touching its ink (a page that was added, or flagged).
     pub fn mark_dirty(&mut self, page: u32) {
         self.dirty.insert(page);
     }

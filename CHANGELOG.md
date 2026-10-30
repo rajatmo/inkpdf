@@ -1,7 +1,49 @@
 # Changelog
 
-## Unreleased
+## 1.4.0
 
+- **Input behaves like a reader (milestone 1.4.0, `docs/INPUT.md`).**
+  - **The Select tool is a reader:** a drag on empty page pans with the mouse and the stylus (a tap only lets go of the selection), and the
+    middle button of a mouse pans (in the drawing tools it is still the barrel button, a loop).
+  - **Zoom and scroll keys at a desk:** Ctrl and the wheel zoom about the pointer; Ctrl+`+` and Ctrl+`-` zoom, Ctrl+0 fits the width, Ctrl+1
+    shows the page at its size; Page Up and Page Down (and the space bar) scroll a screen, Home and End go to the top and the bottom, and the arrows scroll when
+    nothing is selected for them to nudge. A mouse-only person could not zoom at all before. All of them are recorded and replayed.
+  - **The cursor says what a press will do** (Windows and Linux; Android's pointer icons for a mouse or a hovering stylus): a hand over a link
+    in the reader, an I-beam over text, an open hand over empty page and a closed one while it is dragged, a crosshair, a move cursor over what the
+    lasso can take, a resize cursor on a selection's handle. It is one table, `input::decide`, that the cursor reads (and a test holds to
+    the rules: a finger never draws, the mouse of a tablet only scrolls, a drawing tool never loses a press to a link or to text). It is asked after
+    the mouse moves, never on the pen's path (a source test says so).
+  - **One definition of a click** (`input/click.rs`): a finger's tap, a link followed by a click, a word or a line selected by two or three
+    presses and the new double tap all read their slop and times from it, in logical pixels.
+  - **A double tap fits the page to the width,** and a second double tap goes back to the zoom and place it came from. A single tap on a link
+    still follows it at once, and a single tap on empty page still only lets go of the selection.
+- **Fill in forms.** A PDF's form fields are lit faintly on the page and can be filled: a text field takes typed text (Enter or Esc ends it; a
+  field of several lines takes new lines), a check box turns on and off, a radio button is chosen, and a choice goes to its next option. A finger
+  does it with every tool; the stylus's tip and the left mouse button with the Select tool (the click that follows a link). What is put in is saved
+  with the file (as real form values, with their appearances, so any reader shows them) and counts as a change. Read-only fields, push buttons,
+  signatures and passwords are left alone; the form's JavaScript is not run. New: `pdfcraft-forms` (same pinned revision), `form.rs`, `inkpdf-gen --form`.
+- **Flag a page.** The menu of a page in the overview has a fifth round button, a bookmark. A flagged page wears a bookmark in the
+  overview; on save the file gets an outline entry "Flag: page N" for it, so any reader shows a bookmark. The program keeps its flags apart from the
+  contents it shows, flags follow their pages through every page edit, and a flag counts as a change to save.
+- **In a narrow window the pills fold into round buttons.** Where the document's, the tools' and the look's pills no longer fit side by side
+  (a phone upright, a small window) the document's folds into a round button (a page), then the look's (sliders), then, in a very small
+  window, the tools' (the tool in use). Pressing one unfolds its pill over the others, growing out of the button; the pill folds again when a
+  button in it is pressed (not undo, redo and the look's), when a press is elsewhere, or on Esc. Buttons are 30 points or more before anything
+  folds (they shrank to 17 before, and overlapped on a phone, so that a press could reach a hidden button). Every device does it with a press.
+  The pages overview's title is dropped where it would run into the header's buttons.
+- **Every icon is drawn in TeX**, the ones that were written by hand (the look, the search, the folder, the text marks, the dark page) and the
+  ones that were drawn by code (the four pages, the tick, the arrows) too; `icons/build.ps1` makes all of them.
+- **Text on buttons is now a picture.** The search card's "Aa" and "W" (match the case, whole words), the overview's "Select all / none" and
+  the four words of a page's menu (now a row of round buttons), and the look's card ("Pages follow the theme", now a page half in shade and
+  its switch).
+- **A better icon for the system's look:** a sun and a moon, where it was a half-hatched circle.
+- **Pulling up past the last page is smooth.** The document follows the finger off its end, more and more stiffly, with the plus in the room
+  that opens (its ring fills as the pull nears the length that adds a page); let go early and it comes back down softly; long enough, and the
+  page is added and the view glides on to it, slower than a scroll, while the document settles. The pull ends there: the finger can keep
+  moving without stopping the glide.
+- **The Android icon is the desktop one:** the same pen, on white; the adaptive icon is the pen alone, which Android 13 can also draw in one colour
+  (the themed icon). `make-icon.ps1` makes the Windows and Android icons from one drawing (`pen-art.tex`); the old blue page and its
+  Node script are gone.
 - **The real-input checks press buttons by name.** `--layout FILE` makes the app keep a file saying where every toolbar button, bar
   action, overview page and contents entry is (`app/layout.rs`); `tools/e2e` reads it instead of remembering positions in a maximised
   4K window, which had gone stale (26 of 71 checks failed against 1.3.7 because the buttons had moved, not because anything was

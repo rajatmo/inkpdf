@@ -5,6 +5,7 @@ use std::collections::HashSet;
 use std::ops::Range;
 
 use crate::editor::Editor;
+use crate::form::Kind;
 use crate::ink::{InkStore, MarkupKind, P, Stroke};
 use crate::palette::Palette;
 use crate::scene::Capsule;
@@ -230,6 +231,7 @@ pub(super) fn overlays(ed: &Editor, now_ms: f64, mut out: Overlays) -> Overlays 
     out.now_ms = now_ms;
     selection_overlay(ed, &mut out);
     search_overlay(ed, &mut out);
+    form_overlay(ed, &mut out);
     ed.tools.get(ed.tool).paint(ed, &mut out);
     pull_overlay(ed, &mut out);
     out
@@ -261,6 +263,44 @@ fn search_overlay(ed: &Editor, out: &mut Overlays) {
             let height = q[3] - q[1];
             let ends = (height / 2.0).min((q[2] - q[0]) / 2.0);
             out.doc.push(Capsule::new([q[0] + ends, q[1] + height / 2.0], [q[2] - ends, q[1] + height / 2.0], height, colour));
+        }
+    }
+}
+
+/// The form: the frame and mark of a check box or radio button the person changed (drawn over the paper that covers the file's own look of it),
+/// and the frame and caret of the text being typed into.
+fn form_overlay(ed: &Editor, out: &mut Overlays) {
+    let (top, bottom) = ed.view.visible_y();
+    let px = pixel_in_points(ed);
+    let ink = ed.on_page([24, 26, 34, 255]);
+    let paper = if ed.dark_pages_active() { crate::palette::DARK_PAPER } else { [255; 3] };
+    let paper = [paper[0], paper[1], paper[2], 255];
+    for b in ed.form_boxes(&ed.layout.pages_in(top, bottom)) {
+        let [x0, y0, x1, y1] = b.rect;
+        if let Some(c) = b.caret {
+            push_rect(&mut out.doc, b.rect, 1.5 * px, ed.theme.selection);
+            out.doc.push(Capsule::new([c[0], c[1]], [c[2], c[3]], 1.2 * px, ink));
+            continue;
+        }
+        if !b.changed || !matches!(b.kind, Kind::Check | Kind::Radio) {
+            continue;
+        }
+        let (w, h) = (x1 - x0, y1 - y0);
+        let side = w.min(h);
+        let (cx, cy) = ((x0 + x1) / 2.0, (y0 + y1) / 2.0);
+        let line = (0.08 * side).max(px);
+        if b.kind == Kind::Radio {
+            out.doc.push(Capsule::new([cx, cy], [cx, cy], side, ink));
+            out.doc.push(Capsule::new([cx, cy], [cx, cy], side - 2.0 * line, paper));
+            if b.on {
+                out.doc.push(Capsule::new([cx, cy], [cx, cy], side * 0.45, ink));
+            }
+        } else {
+            push_rect(&mut out.doc, [cx - side / 2.0, cy - side / 2.0, cx + side / 2.0, cy + side / 2.0], line, ink);
+            if b.on {
+                let p = |fx: f32, fy: f32| [cx + (fx - 0.5) * side, cy + (fy - 0.5) * side];
+                push_polyline(&mut out.doc, &[p(0.22, 0.52), p(0.42, 0.74), p(0.80, 0.26)], 1.6 * line, ink);
+            }
         }
     }
 }
@@ -297,18 +337,18 @@ fn selection_overlay(ed: &Editor, out: &mut Overlays) {
     }
 }
 
-/// A badge at the bottom of the window while a finger pulls past the end of the document: a plus
-/// in a circle whose rim fills as the pull nears the length that adds a page.
+/// A badge at the bottom of the window while a finger pulls past the end of the document (and while the document comes back down after
+/// it): a plus in a circle, in the room the pull makes under the document, whose rim fills as the pull nears the length that adds a page.
 fn pull_overlay(ed: &Editor, out: &mut Overlays) {
-    let progress = ed.pull_progress();
-    if progress <= 0.0 {
+    let lift = ed.view.lift();
+    if lift <= 0.0 {
         return;
     }
-    let dpr = ed.dpr;
+    let (dpr, progress) = (ed.dpr, ed.view.lift_ring());
     let radius = 26.0 * dpr;
-    // It rises into view as the pull grows.
-    let rise = (progress * 3.0).min(1.0);
-    let centre = [ed.view.viewport[0] / 2.0, ed.view.viewport[1] - (30.0 + 46.0 * rise) * dpr];
+    // It comes into view with the room the pull makes, and goes with it.
+    let rise = (lift / (2.0 * radius)).min(1.0);
+    let centre = [ed.view.viewport[0] / 2.0, ed.view.viewport[1] - lift / 2.0];
     let alpha = (rise * 255.0) as u8;
     out.screen.push(Capsule::new(centre, centre, radius * 2.0 + 3.0 * dpr, [20, 24, 40, alpha / 6]));
     out.screen.push(Capsule::new(centre, centre, radius * 2.0, [255, 255, 255, alpha]));

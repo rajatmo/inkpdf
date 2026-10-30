@@ -18,16 +18,18 @@
 //!   works on the selection (Delete, Esc, arrows) and has shortcuts (see `routing`).
 //!
 //! The rest is shared: `dispatch` (who owns the interaction under way), `select` (moving ink and
-//! finishing what the pen was doing), `toolbar_ui` (buttons and the tool panel), `context` (the bar
-//! under the tools: draw / select / erase and what is done to the selection), `commands` (undo and
-//! redo).
+//! finishing what the pen was doing), `toolbar_ui` (buttons and the tool panel), `pills` (the pills
+//! that fold into round buttons in a narrow window), `context` (the bar under the tools: draw /
+//! select / erase and what is done to the selection), `commands` (undo and redo).
 
 mod act;
 mod appearance;
 mod chrome;
 mod commands;
 mod context;
+mod cursor;
 mod dispatch;
+mod forms;
 mod modal;
 mod motions;
 mod mouse;
@@ -35,7 +37,9 @@ mod navigation;
 mod overview;
 mod pages;
 mod pen;
+mod pills;
 mod prompt;
+mod reader;
 mod routing;
 mod search;
 mod select;
@@ -81,13 +85,22 @@ pub struct Editor {
     pub cursor: [f32; 2],
     /// The document's links, in document space; only a finger's tap follows one.
     pub links: Vec<crate::links::Link>,
+    /// The fields of the document's form (their boxes are among the links), and the one being typed into (see [`forms`]).
+    pub form: crate::form::Form,
+    form_typing: Option<forms::Typing>,
     /// The document's table of contents (see [`crate::outline`]); empty if it has none.
     pub outline: Vec<crate::outline::OutlineItem>,
+    /// The pages the person flagged (the program's own outline entries: see [`crate::outline::FLAG`]), which follow the pages as they are edited.
+    pub flags: std::collections::BTreeSet<usize>,
     /// How far a finger has pulled up past the end of the document, in pixels: a long enough pull
     /// adds a blank page.
     pub pull: f32,
     /// A page was already asked for in this pull.
     pull_fired: bool,
+    /// The last tap of a finger on the page (when and where), for a double tap, and the zoom and place the page was at when a double tap fitted it
+    /// to the width (see [`navigation`]).
+    last_tap: Option<(f64, [f32; 2])>,
+    fit_before: Option<(f32, [f32; 2])>,
     /// The last name given to a place where deleted pages are kept (see [`crate::pages::PageEdit::Delete`]).
     grave: u64,
     /// What was kept by page and went with the pages of each deletion, until it is undone or the file is written.
@@ -144,9 +157,14 @@ impl Editor {
             ws: Workspace::new(viewport, dpr),
             cursor: [0.0; 2],
             links: Vec::new(),
+            form: crate::form::Form::default(),
+            form_typing: None,
             outline: Vec::new(),
+            flags: std::collections::BTreeSet::new(),
             pull: 0.0,
             pull_fired: false,
+            last_tap: None,
+            fit_before: None,
             grave: 0,
             graves: HashMap::new(),
             held_bar: None,
@@ -178,9 +196,14 @@ impl Editor {
         self.mouse_press = None;
         self.ws.requests.clear_answer();
         self.links.clear();
+        self.form = crate::form::Form::default();
+        self.form_typing = None;
         self.outline.clear();
+        self.flags.clear();
         self.graves.clear();
         self.pull = 0.0;
+        self.last_tap = None;
+        self.fit_before = None;
         self.fingers = TouchGestures::default();
         self.ws.fit_mode = true;
         self.ws.fit_width();
@@ -191,10 +214,11 @@ impl Editor {
     /// changes, the file is saved, a page is added).
     pub fn settle(&mut self) {
         self.tools.settle_all(&mut self.ws);
+        self.end_form_typing();
     }
 
     pub fn toolbar(&self) -> Toolbar {
-        Toolbar::layout_for(&self.registry, self.ws.view.viewport, self.ws.dpr)
+        Toolbar::layout_for(&self.registry, self.ws.view.viewport, self.ws.dpr, self.chrome.pill)
     }
 
     /// Everything the toolbars' look depends on.
@@ -347,6 +371,7 @@ impl Editor {
     /// The window changed size: the view follows it.
     pub fn set_viewport(&mut self, size: [f32; 2]) {
         self.ws.set_viewport(size);
+        self.refold_pills();
         // (The pages overview is laid out by the window: what it keeps is brought back into range.)
         self.overview_settled();
     }
@@ -359,6 +384,7 @@ impl Editor {
     /// The window's scale changed.
     pub fn set_dpr(&mut self, dpr: f32) {
         self.ws.dpr = dpr;
+        self.refold_pills();
         self.overview_settled();
     }
 

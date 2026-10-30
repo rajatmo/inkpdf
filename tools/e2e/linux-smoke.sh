@@ -20,6 +20,9 @@
 # Needs: xvfb (xvfb-run), xdotool, imagemagick (import, convert), mesa-vulkan-drivers (lavapipe), libxkbcommon-x11-0, a system font
 # (fonts-liberation).
 set -euo pipefail
+# The app must open on xvfb's virtual X display: on a desktop (or WSL, whose WSLg is a Wayland compositor) WAYLAND_DISPLAY would send
+# its window there, where xdotool and the screenshots cannot reach it.
+unset WAYLAND_DISPLAY
 
 here="$(cd "$(dirname "$0")" && pwd)"
 target_dir="$(cargo metadata --format-version 1 --no-deps --manifest-path "$here/../../Cargo.toml" | python3 -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')"

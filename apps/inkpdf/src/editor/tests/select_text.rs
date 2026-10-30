@@ -228,3 +228,24 @@ fn the_desktops_ctrl_a_and_ctrl_c_are_the_texts_with_this_tool() {
     ed.set_tool(Tool::Pen);
     assert_eq!(selected(&ed), None, "putting the tool away lets go of the text");
 }
+
+#[test]
+fn shift_and_a_press_on_a_letter_stretches_the_selection_to_there_and_a_press_without_shift_begins_a_new_one() {
+    let mut ed = reading();
+    drag_g(&mut ed, (0, 0), (0, 4));
+    assert_eq!(selected(&ed).as_deref(), Some("Hello"));
+    ed.handle(crate::input::InputEvent::Shift(true));
+    let to = glyph(&ed, 1, 8);
+    pen_stroke(&mut ed, TIP, &[to, to]);
+    assert_eq!(selected(&ed).as_deref(), Some("Hello world\nThe quick"), "from where it began to the letter pressed");
+    // A drag that begins with Shift on goes on stretching.
+    let from = glyph(&ed, 1, 12);
+    let end = glyph(&ed, 2, 4);
+    drag(&mut ed, from, end);
+    assert_eq!(selected(&ed).as_deref(), Some("Hello world\nThe quick brown fox\nHello"));
+    ed.handle(crate::input::InputEvent::Shift(false));
+    let other = glyph(&ed, 1, 6);
+    let end = glyph(&ed, 1, 8);
+    drag(&mut ed, other, end);
+    assert_eq!(selected(&ed).as_deref(), Some("ick"), "without Shift it begins again");
+}

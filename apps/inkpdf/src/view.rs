@@ -19,6 +19,10 @@ const MAX_PAGE_SIDE: f32 = 14_400.0;
 /// Time constants of the glide towards a scroll or zoom target, in seconds.
 const SCROLL_TAU: f32 = 0.055;
 const ZOOM_TAU: f32 = 0.06;
+/// The same for the glide to a page that a pull past the end has just added (slower, so that the page is seen coming), and for the
+/// document coming back down when the pull is let go.
+const PAGE_TAU: f32 = 0.12;
+const LIFT_TAU: f32 = 0.09;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rect {
@@ -111,24 +115,78 @@ pub struct View {
     zoom_target: f32,
     /// Screen point that stays fixed while the zoom glides.
     zoom_anchor: [f32; 2],
+    /// How far a finger pulling past the end of the document has lifted it, in pixels (see [`View::pull`]), how far that is on its way
+    /// to what the pull is for (0 to 1), and whether the finger still holds it there (else it comes back down).
+    lift: f32,
+    lift_ring: f32,
+    lift_held: bool,
+    /// The time constant the scroll glides with now.
+    scroll_tau: f32,
 }
 
 impl View {
     pub fn new(viewport: [f32; 2]) -> Self {
-        Self { zoom: 1.0, scroll: [0.0; 2], viewport, scroll_target: [0.0; 2], zoom_target: 1.0, zoom_anchor: [viewport[0] / 2.0, viewport[1] / 2.0] }
+        Self {
+            zoom: 1.0,
+            scroll: [0.0; 2],
+            viewport,
+            scroll_target: [0.0; 2],
+            zoom_target: 1.0,
+            zoom_anchor: [viewport[0] / 2.0, viewport[1] / 2.0],
+            lift: 0.0,
+            lift_ring: 0.0,
+            lift_held: false,
+            scroll_tau: SCROLL_TAU,
+        }
+    }
+
+    /// Where the document is seen from: the scroll, and further down by how far it is lifted. (What is drawn is placed by this, so
+    /// that a pull past the end moves all of it, the pages and the ink, together.)
+    pub fn eye(&self) -> [f32; 2] {
+        [self.scroll[0], self.scroll[1] + self.lift / self.zoom]
     }
 
     pub fn doc_to_screen(&self, p: [f32; 2]) -> [f32; 2] {
-        [(p[0] - self.scroll[0]) * self.zoom, (p[1] - self.scroll[1]) * self.zoom]
+        let eye = self.eye();
+        [(p[0] - eye[0]) * self.zoom, (p[1] - eye[1]) * self.zoom]
     }
 
     pub fn screen_to_doc(&self, p: [f32; 2]) -> [f32; 2] {
-        [self.scroll[0] + p[0] / self.zoom, self.scroll[1] + p[1] / self.zoom]
+        let eye = self.eye();
+        [eye[0] + p[0] / self.zoom, eye[1] + p[1] / self.zoom]
     }
 
     /// The document-space band of the viewport, `(top, bottom)`.
     pub fn visible_y(&self) -> (f32, f32) {
-        (self.scroll[1], self.scroll[1] + self.viewport[1] / self.zoom)
+        let top = self.eye()[1];
+        (top, top + self.viewport[1] / self.zoom)
+    }
+
+    /// A finger pulling up past the end of the document holds it `lift` pixels up (what is under the end shows), with `ring` (0 to 1)
+    /// of the way to what the pull is for.
+    pub fn pull(&mut self, lift: f32, ring: f32) {
+        self.lift = if lift.is_finite() { lift.max(0.0) } else { 0.0 };
+        self.lift_ring = if ring.is_finite() { ring.clamp(0.0, 1.0) } else { 0.0 };
+        self.lift_held = self.lift > 0.0;
+    }
+
+    /// The pull is let go (or given up): the document comes back down over a moment.
+    pub fn let_go(&mut self) {
+        self.lift_held = false;
+    }
+
+    /// How far the document is lifted, in pixels, and how far that is on its way to what the pull is for.
+    pub fn lift(&self) -> f32 {
+        self.lift
+    }
+
+    pub fn lift_ring(&self) -> f32 {
+        self.lift_ring
+    }
+
+    /// Let the glide that is under way (or about to be) take its time: the scroll to a page that was just added at the end.
+    pub fn glide_slowly(&mut self) {
+        self.scroll_tau = PAGE_TAU;
     }
 
     pub fn set_viewport(&mut self, layout: &Layout, size: [f32; 2]) {
@@ -173,6 +231,10 @@ impl View {
     /// Set the zoom immediately, keeping the document point under `anchor` (screen pixels) fixed.
     pub fn zoom_about(&mut self, layout: &Layout, zoom: f32, anchor: [f32; 2]) {
         let zoom = if zoom.is_finite() { zoom.clamp(MIN_ZOOM, MAX_ZOOM) } else { self.zoom };
+        // (A zoom is of the document at rest: whatever a pull had lifted it is put down first.)
+        self.lift = 0.0;
+        self.lift_ring = 0.0;
+        self.lift_held = false;
         let p = self.screen_to_doc(anchor);
         let before = self.scroll;
         self.zoom = zoom;
@@ -186,12 +248,14 @@ impl View {
     pub fn pan_px(&mut self, layout: &Layout, dx: f32, dy: f32) {
         self.scroll = [self.scroll[0] - dx / self.zoom, self.scroll[1] - dy / self.zoom];
         self.scroll_target = self.scroll;
+        self.scroll_tau = SCROLL_TAU;
         self.zoom_target = self.zoom;
         self.clamp(layout);
     }
 
     /// Mouse wheel: glide towards a target `dx`, `dy` pixels further along.
     pub fn scroll_by_px(&mut self, layout: &Layout, dx: f32, dy: f32) {
+        self.scroll_tau = SCROLL_TAU;
         self.scroll_target = [self.scroll_target[0] - dx / self.zoom, self.scroll_target[1] - dy / self.zoom];
         self.clamp(layout);
     }
@@ -232,12 +296,13 @@ impl View {
     /// Cancel gliding where it stands (a finger or pen went down).
     pub fn stop(&mut self) {
         self.scroll_target = self.scroll;
+        self.scroll_tau = SCROLL_TAU;
         self.zoom_target = self.zoom;
     }
 
-    /// Whether a glide is under way.
+    /// Whether a glide is under way (the zoom's, the scroll's, or the document coming back down after a pull).
     pub fn animating(&self) -> bool {
-        self.zoom_animating() || self.scroll_animating(&self.scroll_target)
+        self.zoom_animating() || self.scroll_animating(&self.scroll_target) || (self.lift > 0.0 && !self.lift_held)
     }
 
     pub fn zoom_animating(&self) -> bool {
@@ -264,10 +329,19 @@ impl View {
         }
         let target = self.scroll_target;
         if self.scroll_animating(&target) {
-            let f = 1.0 - (-dt / SCROLL_TAU).exp();
+            let f = 1.0 - (-dt / self.scroll_tau).exp();
             self.scroll = [self.scroll[0] + (target[0] - self.scroll[0]) * f, self.scroll[1] + (target[1] - self.scroll[1]) * f];
             if !self.scroll_animating(&target) {
                 self.scroll = target;
+                self.scroll_tau = SCROLL_TAU;
+            }
+        }
+        // A pull that is let go comes back down, quickly at first and then softly.
+        if self.lift > 0.0 && !self.lift_held {
+            self.lift *= (-dt / LIFT_TAU).exp();
+            if self.lift < 0.25 {
+                self.lift = 0.0;
+                self.lift_ring = 0.0;
             }
         }
         self.clamp(layout);
@@ -475,5 +549,68 @@ mod tests {
         assert_eq!(v.current_page(&l), 0);
         v.pan_px(&l, 0.0, -(DOC_MARGIN + 800.0 + PAGE_GAP + 100.0));
         assert_eq!(v.current_page(&l), 1);
+    }
+
+    #[test]
+    fn a_lifted_document_is_drawn_and_pressed_where_it_is_and_comes_back_down_when_let_go() {
+        let l = three_pages();
+        let mut v = View::new([800.0, 600.0]);
+        let (before, band) = (v.doc_to_screen([100.0, 500.0]), v.visible_y());
+        v.pull(80.0, 0.5);
+        let after = v.doc_to_screen([100.0, 500.0]);
+        assert!((before[1] - after[1] - 80.0).abs() < 1e-3 && before[0] == after[0], "up by the lift: {before:?} {after:?}");
+        assert!((v.screen_to_doc(after)[1] - 500.0).abs() < 1e-3);
+        assert!((v.visible_y().0 - band.0 - 80.0 / v.zoom).abs() < 1e-3 && v.eye()[1] == v.scroll[1] + 80.0 / v.zoom);
+        assert!(!v.animating(), "held by the finger, it stays");
+        v.let_go();
+        assert!(v.animating());
+        let mut last = v.lift();
+        while v.step(&l, 1.0 / 60.0) {
+            assert!(v.lift() < last, "it comes down, a bit each frame");
+            last = v.lift();
+        }
+        assert_eq!((v.lift(), v.lift_ring()), (0.0, 0.0));
+        assert_eq!(
+            v.doc_to_screen([100.0, 500.0])[1],
+            before[1],
+            "down where it was (the glide's clamp centres it sideways, which is not the lift's)"
+        );
+        // Nonsense does not lift it, and zooming puts it down.
+        v.pull(f32::NAN, f32::NAN);
+        assert_eq!((v.lift(), v.lift_ring()), (0.0, 0.0));
+        v.pull(50.0, 2.0);
+        assert_eq!(v.lift_ring(), 1.0);
+        v.zoom_about(&l, 2.0, [400.0, 300.0]);
+        assert_eq!(v.lift(), 0.0);
+    }
+
+    #[test]
+    fn the_glide_to_a_page_that_was_just_added_is_slower_than_a_scroll_and_a_scroll_after_it_is_quick_again() {
+        let l = three_pages();
+        let travelled = |slowly: bool| {
+            let mut v = View::new([800.0, 600.0]);
+            v.scroll_to_page(&l, 2);
+            if slowly {
+                v.glide_slowly();
+            }
+            for _ in 0..6 {
+                v.step(&l, 1.0 / 60.0);
+            }
+            v.scroll[1]
+        };
+        assert!(travelled(true) < travelled(false), "{} {}", travelled(true), travelled(false));
+        let mut v = View::new([800.0, 600.0]);
+        v.scroll_to_page(&l, 1);
+        v.glide_slowly();
+        while v.step(&l, 1.0 / 60.0) {}
+        v.scroll_to_page(&l, 2);
+        let mut quick = View::new([800.0, 600.0]);
+        quick.scroll[1] = v.scroll[1];
+        quick.scroll_target = v.scroll_target;
+        for _ in 0..4 {
+            v.step(&l, 1.0 / 60.0);
+            quick.step(&l, 1.0 / 60.0);
+        }
+        assert_eq!(v.scroll, quick.scroll, "after it arrived the glide is as quick as ever");
     }
 }

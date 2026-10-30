@@ -392,7 +392,8 @@ impl Editor {
                 }
                 true
             }
-            Key::Chord(_) => false,
+            // (A page key goes on to scroll the document, as the search card has no use for it.)
+            Key::Chord(_) | Key::Page(_) => false,
         };
         self.refresh_search();
         self.ws.redraw = true;

@@ -18,7 +18,7 @@ const TOOLBAR_STRIP_PX: f32 = 90.0;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct MousePress {
     button: MouseButton,
-    pen: PenButtons,
+    pub(super) pen: PenButtons,
 }
 
 impl Editor {
@@ -128,6 +128,7 @@ impl Editor {
         }
         self.tools.end_all(&mut self.ws);
         self.dismiss_theme_menu(self.cursor);
+        self.dismiss_pill(self.cursor);
         let bar = self.toolbar();
         if button == MouseButton::Left && self.press_panel(Device::Mouse, 0, self.cursor) {
             // The tool panel took the press.

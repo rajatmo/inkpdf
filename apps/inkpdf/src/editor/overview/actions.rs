@@ -89,6 +89,9 @@ impl Editor {
                     self.overview_show_page(page + 1);
                 }
             }
+            MenuItem::Flag => {
+                self.toggle_flag(page);
+            }
             MenuItem::Delete => {
                 self.edit_pages(PageEdit::delete(page));
             }

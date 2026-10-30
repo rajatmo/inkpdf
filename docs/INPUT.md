@@ -1,7 +1,7 @@
 # How input works (and how it will)
 
 The plan for **Milestone 1.4.0** (`ROADMAP.md`, tasks I1 to I6). Part A says what the program does today, with the files; part B is the
-design to build. Written 2026-10-30 with the owner; nothing in part B exists yet unless it says so.
+design to build. Written 2026-10-30 with the owner; **status (2026-10-30): I1 to I6 are built** (`input/rules.rs` the table, `input/click.rs` the click limits, `editor/cursor.rs` and `editor/reader.rs`, the shell's `sync_cursor`, Android's pointer icons through `Host.setPointer`), except the custom hardware cursor images for the pen's dot and the eraser's ring (a crosshair stands in for both) and the Shift+click extend; B1 to B9 otherwise describe what the program does.
 
 **Goals, in order:** (1) drawing latency does not move; (2) a pen, a mouse and a finger each do what a person expects of a PDF reader;
 (3) the cursor always says what the next press will do; (4) one table is the truth, so the cursor, the press and the tests cannot disagree;
@@ -18,7 +18,7 @@ design to build. Written 2026-10-30 with the owner; nothing in part B exists yet
  winit mouse, keys, wheel ──► InputEvent ┴─► Editor::handle / pointer_event / mouse_* / wheel / key / shortcut   (editor/dispatch.rs)
      1. modal gate        editor/modal.rs      the prompt, or the pages overview, takes everything (left button only for the mouse)
      2. palm guard        input/palm.rs        a touch is dropped while a pen is near, or if its contact is bigger than 106 logical px
-     3. chrome            editor/toolbar_ui, context, tool_panel, search, theme_menu     a press on a button/card/slider is the window's, not the page's
+     3. chrome            editor/toolbar_ui, pills, context, tool_panel, search, theme_menu     a press on a button/card/slider is the window's, not the page's
      4. page              touch -> TouchGestures (pan, pinch, fling, tap)   editor/touch.rs
                           pen / mouse -> route_to_tool -> the tool's policy -> Tool::pointer    editor/routing.rs
 ```
@@ -167,6 +167,7 @@ A finger never draws; it moves the view.
 | one finger drag | pan, with a fling on release (speed threshold in logical px/s) |
 | two fingers | pinch-zoom and pan about their centre |
 | tap on a link | follows it. **Instantly**: no wait for a second tap |
+| tap on a box of a form field | fills it (a form box is a link of `Target::Field`: same click, same devices): a check box turns, a radio button is chosen, a choice goes to its next option, a text field takes the keyboard |
 | tap on a toolbar or card button | presses it |
 | tap on empty page | clears the selection. Instant, no other effect |
 | **double tap on the page (not on a link)** | **fit the page to the width**; a second double tap returns to the zoom and scroll it came from. Any other zoom or pan forgets the remembered view |

@@ -31,6 +31,7 @@ impl Editor {
         let Some(first) = ev.samples.first() else { return };
         let pos = first.pos;
         self.dismiss_theme_menu(pos);
+        self.dismiss_pill(pos);
         self.ws.view.stop();
         if self.press_panel(Device::Pen, ev.id, pos) {
             return;

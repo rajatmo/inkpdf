@@ -95,6 +95,9 @@ pub trait Platform {
     }
     /// Hide the system's bars, or show them again (see [`Platform::controls_system_bars`]).
     fn set_system_bars_hidden(&self, _hidden: bool) {}
+    /// Show the pointer the rules ask for, where the platform has a pointer of its own to set (Android's, for a mouse or a hovering stylus;
+    /// a desktop's is the window's, set by the shell).
+    fn set_pointer_icon(&self, _kind: crate::input::CursorKind) {}
     /// Whether the system has a picker of its own for files (Android's: the app cannot see the folders, it is handed the file): then it
     /// opens and saves where the program's own dialog would.
     fn has_picker(&self) -> bool {
@@ -151,7 +154,7 @@ use linux as os;
 use windows as os;
 
 #[cfg(target_os = "android")]
-pub use os::android_app_started;
+pub use os::{android_app_started, layout_request};
 
 /// The bridge to the Java side of the app, on the platform that has one (Android): files the system hands out, the clipboard, links.
 #[cfg(target_os = "android")]
@@ -237,6 +240,24 @@ impl Platform for Native {
     fn set_system_bars_hidden(&self, hidden: bool) {
         if let Some(bridge) = bridge() {
             bridge.set_bars_hidden(hidden);
+        }
+    }
+
+    fn set_pointer_icon(&self, kind: crate::input::CursorKind) {
+        use crate::input::CursorKind;
+        // (Android's PointerIcon types: arrow, hand, text, crosshair, all-scroll, horizontal double arrow, grab, grabbing.)
+        let code = match kind {
+            CursorKind::Arrow => 1000,
+            CursorKind::Hand => 1002,
+            CursorKind::Text => 1008,
+            CursorKind::Crosshair | CursorKind::Dot | CursorKind::Eraser => 1007,
+            CursorKind::Move => 1013,
+            CursorKind::Resize => 1014,
+            CursorKind::Grab => 1020,
+            CursorKind::Grabbing => 1021,
+        };
+        if let Some(bridge) = bridge() {
+            bridge.set_pointer_icon(code);
         }
     }
 

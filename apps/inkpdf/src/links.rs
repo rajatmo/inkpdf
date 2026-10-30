@@ -14,6 +14,9 @@ pub enum Target {
     Page(usize),
     /// A web address that [`safe_url`] allows.
     Url(String),
+    /// A box of a form field (see [`crate::form`]): the field's place among the form's, and which of its boxes this is. It is filled, not
+    /// followed.
+    Field { field: usize, widget: usize },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -41,7 +44,7 @@ pub fn remap(links: &mut Vec<Link>, before: &Layout, remap: &Remap) -> Vec<(usiz
     for (i, mut link) in std::mem::take(links).into_iter().enumerate() {
         let carried = remap.moved(before.page_at((link.rect[1] + link.rect[3]) / 2.0)).filter(|_| match &link.target {
             Target::Page(p) => remap.page(*p).is_some(),
-            Target::Url(_) => true,
+            Target::Url(_) | Target::Field { .. } => true,
         });
         let Some(moved) = carried else {
             gone.push((i, link));

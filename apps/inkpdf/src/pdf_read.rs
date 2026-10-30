@@ -4,29 +4,84 @@
 //! edits and know nothing of the file; `ink_io` does the same for the ink.)
 
 use crate::coords::PageGeom;
+use crate::form::{Field, Form, Kind, Spec, Value};
 use crate::links::{Link, Target, safe_url};
 use crate::outline::OutlineItem;
-use crate::pdf::{PdfDocument, RawTarget};
+use crate::pdf::{PdfDocument, RawFieldKind, RawTarget, RawValue};
 use crate::view::Layout;
 
 /// Longest outline title kept, in characters.
 const MAX_TITLE_CHARS: usize = 200;
+
+/// A box of a page's user space `raw` placed on the layout: both corners to view space, then the box around them, then onto the page's place in
+/// the document. `None` for a page the document does not show, and for a box that is not a place.
+fn place(raw: [f32; 4], page: usize, geoms: &[PageGeom], layout: &Layout) -> Option<[f32; 4]> {
+    let (geom, placed) = (geoms.get(page)?, layout.page(page)?);
+    let [x0, y0, x1, y1] = raw;
+    let (a, b) = (geom.user_to_view([x0, y0]), geom.user_to_view([x1, y1]));
+    let rect = [placed.x + a[0].min(b[0]), placed.y + a[1].min(b[1]), placed.x + a[0].max(b[0]), placed.y + a[1].max(b[1])];
+    rect.iter().all(|c| c.is_finite()).then_some(rect)
+}
 
 /// Every link in the document that goes somewhere this app can follow, placed on the layout.
 pub fn links(doc: &dyn PdfDocument, geoms: &[PageGeom], layout: &Layout) -> Vec<Link> {
     doc.links()
         .into_iter()
         .filter_map(|raw| {
-            let (geom, placed) = (geoms.get(raw.page)?, layout.page(raw.page)?);
             let target = match raw.target {
                 RawTarget::Page(page) => Target::Page(page),
                 RawTarget::Url(url) => Target::Url(safe_url(&url)?),
             };
-            // Both corners to view space, then the box around them, then onto the page's place in the document.
-            let [x0, y0, x1, y1] = raw.rect;
-            let (a, b) = (geom.user_to_view([x0, y0]), geom.user_to_view([x1, y1]));
-            let rect = [placed.x + a[0].min(b[0]), placed.y + a[1].min(b[1]), placed.x + a[0].max(b[0]), placed.y + a[1].max(b[1])];
-            rect.iter().all(|c| c.is_finite()).then_some(Link { rect, target })
+            Some(Link { rect: place(raw.rect, raw.page, geoms, layout)?, target })
+        })
+        .collect()
+}
+
+/// The form of the document: its fields that can be filled, and a link for each box of each that is on a page the document shows.
+pub fn form(doc: &dyn PdfDocument, geoms: &[PageGeom], layout: &Layout) -> (Form, Vec<Link>) {
+    let mut form = Form::default();
+    let mut links = Vec::new();
+    for raw in doc.fields() {
+        let boxes: Vec<(usize, [f32; 4])> =
+            raw.widgets.iter().enumerate().filter_map(|(widget, w)| Some((widget, place(w.rect, w.page, geoms, layout)?))).collect();
+        if boxes.is_empty() {
+            continue;
+        }
+        let kind = match raw.kind {
+            RawFieldKind::Text => Kind::Text,
+            RawFieldKind::Check => Kind::Check,
+            RawFieldKind::Radio => Kind::Radio,
+            RawFieldKind::Choice => Kind::Choice,
+        };
+        let field = form.fields.len();
+        links.extend(boxes.into_iter().map(|(widget, rect)| Link { rect, target: Target::Field { field, widget } }));
+        form.fields.push(Field::new(
+            kind,
+            Spec {
+                name: raw.name,
+                multiline: raw.multiline,
+                max_len: raw.max_len,
+                on_states: raw.widgets.into_iter().map(|w| w.on_state).collect(),
+                options: raw.options,
+                value: raw.value,
+            },
+        ));
+    }
+    (form, links)
+}
+
+/// What the person put in the fields, as the engine takes it.
+pub fn raw_values(values: Vec<(String, Value)>) -> Vec<(String, RawValue)> {
+    values
+        .into_iter()
+        .map(|(name, value)| {
+            let value = match value {
+                Value::Text(t) => RawValue::Text(t),
+                Value::Check(on) => RawValue::Check(on),
+                Value::Radio(state) => RawValue::Radio(state),
+                Value::Choice(chosen) => RawValue::Choice(chosen),
+            };
+            (name, value)
         })
         .collect()
 }

@@ -99,14 +99,15 @@ fn phase_in(p: Phase) -> api::Phase {
     }
 }
 
-fn key_in(k: Key<'_>) -> api::Key<'_> {
+/// A key as the extension API has it. (The page keys are not in it: the API changes by adding, and they are the reader's, not a tool's.)
+fn key_in(k: Key<'_>) -> Option<api::Key<'_>> {
     let dir = |d: Dir| match d {
         Dir::Left => api::Dir::Left,
         Dir::Right => api::Dir::Right,
         Dir::Up => api::Dir::Up,
         Dir::Down => api::Dir::Down,
     };
-    match k {
+    Some(match k {
         Key::Text(t) => api::Key::Text(t),
         Key::Backspace => api::Key::Backspace,
         Key::Delete => api::Key::Delete,
@@ -115,7 +116,8 @@ fn key_in(k: Key<'_>) -> api::Key<'_> {
         Key::Home(shift) => api::Key::Home(shift),
         Key::End(shift) => api::Key::End(shift),
         Key::Chord(c) => api::Key::Chord(c),
-    }
+        Key::Page(_) => return None,
+    })
 }
 
 /// One extension's tool, held by the [`ToolSet`](super::ToolSet).
@@ -186,7 +188,7 @@ impl Tool for ExtTool {
     }
 
     fn key(&mut self, ws: &mut Workspace, key: Key<'_>) -> bool {
-        self.inner.key(&mut Cx(ws), key_in(key))
+        key_in(key).is_some_and(|key| self.inner.key(&mut Cx(ws), key))
     }
 
     fn paint(&self, ws: &Workspace, out: &mut dyn Painter) {

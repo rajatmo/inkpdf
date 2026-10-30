@@ -113,6 +113,52 @@ pub enum RawTarget {
     Url(String),
 }
 
+/// What a form field holds, and what to put in one.
+#[derive(Clone, Debug, PartialEq)]
+pub enum RawValue {
+    Text(String),
+    /// A check box: checked or not.
+    Check(bool),
+    /// A radio group: the on state of the button chosen (none: none chosen).
+    Radio(Option<String>),
+    /// A combo or list box: the export values chosen.
+    Choice(Vec<String>),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RawFieldKind {
+    Text,
+    Check,
+    Radio,
+    /// A combo box or a list box.
+    Choice,
+}
+
+/// One place a form field is drawn: a box on a page.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RawWidget {
+    pub page: usize,
+    /// `[x0, y0, x1, y1]` in the page's user space, as for [`RawLink`].
+    pub rect: [f32; 4],
+    /// A check box or radio button: the name of its "on" appearance (what [`RawValue::Radio`] names).
+    pub on_state: Option<String>,
+}
+
+/// A form field the program can fill, as the file has it. Fields that are read only, hidden, buttons, signatures or passwords are not offered.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RawField {
+    /// The field's full name, which is what [`PdfDocument::set_fields`] finds it by.
+    pub name: String,
+    pub kind: RawFieldKind,
+    /// What it holds now: the text; the on state of a check box or radio group (empty when off); the export values chosen.
+    pub value: Vec<String>,
+    /// A choice's options: (export value, shown text).
+    pub options: Vec<(String, String)>,
+    pub multiline: bool,
+    pub max_len: Option<usize>,
+    pub widgets: Vec<RawWidget>,
+}
+
 /// One entry of the table of contents, in reading order.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RawOutlineItem {
@@ -211,6 +257,14 @@ pub trait PdfDocument {
     /// Every link that goes somewhere the program can follow.
     fn links(&self) -> Vec<RawLink>;
     fn outline(&self) -> Vec<RawOutlineItem>;
+    /// Make the top-level outline entries whose title begins with `prefix` (the program's own flags: see [`crate::outline::FLAG`]) be exactly
+    /// one for each of `pages` (0-based), at the end of the outline, each titled `prefix` and the page's number; every other entry is left as it was.
+    fn set_flags(&mut self, prefix: &str, pages: &[usize]) -> Result<(), String>;
+    /// The form fields that can be filled (an empty list for a file with no form).
+    fn fields(&self) -> Vec<RawField>;
+    /// Fill the fields named, each with its value, and redraw them (and whatever the form calculates from them). A name the file does not
+    /// have, a field that is read only and a value that does not fit are skipped: the rest are written.
+    fn set_fields(&mut self, values: &[(String, RawValue)]) -> Result<(), String>;
     /// The annotations that have a name and are ink or typed text, page by page, in the order the file has them.
     fn annotations(&self) -> Vec<Annotation>;
     fn delete_annotation(&mut self, page: usize, index: usize) -> Result<(), String>;

@@ -203,6 +203,11 @@ impl Editor {
         if item != Item::Theme {
             self.close_theme_menu();
         }
+        if let Item::Fold(pill) = item {
+            // (A round button only unfolds or folds its pill: the panel and what is being typed are left as they are.)
+            self.toggle_pill(pill);
+            return;
+        }
         if let Item::Tool(tool) = item {
             // (The panel with the settings is the bar's: the tool's button only chooses the tool.)
             self.set_tool(tool);
@@ -237,9 +242,10 @@ impl Editor {
                 Item::DeletePage => {
                     self.delete_current_page();
                 }
-                Item::Tool(_) => {}
+                Item::Tool(_) | Item::Fold(_) => {}
             }
         }
+        self.pill_after(item);
         self.ws.redraw = true;
     }
 }

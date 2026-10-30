@@ -1,10 +1,10 @@
-﻿# Runs the real-input checks against the release build (`cargo build --release -p inkpdf`) and says what passed.
+# Runs the real-input checks against the release build (`cargo build --release -p inkpdf`) and says what passed.
 # They drive the REAL app with a synthetic stylus and finger, the real mouse and keyboard, so they take over both for about a
 # minute and need an unlocked desktop: do not touch the machine while they run.
-#   .\tools\e2e\run.ps1               both scripts
-#   .\tools\e2e\run.ps1 -Only pages   just that one (devices, pages)
+#   .\tools\e2e\run.ps1               all the scripts
+#   .\tools\e2e\run.ps1 -Only pages   just that one (devices, pages, reader, forms)
 param([string[]]$Only)
-$scripts = if ($Only) { $Only } else { "devices", "pages" }
+$scripts = if ($Only) { $Only } else { "devices", "pages", "reader", "forms" }
 $clock = [Diagnostics.Stopwatch]::StartNew()
 $passed = 0; $failed = 0
 foreach ($s in $scripts) {

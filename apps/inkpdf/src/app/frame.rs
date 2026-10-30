@@ -43,13 +43,19 @@ impl State {
             pointer.drain_into(&mut pointers);
             pointer.drain_other_into(&mut others);
             let events = pointers.drain(..).map(InputEvent::Pointer).chain(others.drain(..));
+            let mut mouse = false;
             for ev in events {
+                mouse |= matches!(ev, InputEvent::MouseMoved(_) | InputEvent::MouseButton { .. } | InputEvent::MouseLeft);
                 if let Some(recorder) = &mut self.recorder {
                     recorder.push(&ev);
                 }
                 self.ed.handle(ev);
             }
             (self.timing.pointer_buf, self.timing.other_buf) = (pointers, others);
+            // (A mouse the platform's own reader heard, on Android: the pointer follows it as the window's does on a desktop.)
+            if mouse {
+                self.sync_cursor();
+            }
         }
         self.play_recording();
     }
@@ -119,7 +125,7 @@ impl State {
         let buf = std::mem::take(&mut self.layers.overlay_buf);
         let overlays = ink_layer::overlays(&self.ed, pen_clock, buf);
         let ink_scene = InkScene {
-            scroll: self.ed.view.scroll,
+            scroll: self.ed.view.eye(),
             zoom: self.ed.view.zoom,
             committed: &ranges,
             overlay_doc: &overlays.doc,

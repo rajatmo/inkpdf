@@ -2,7 +2,7 @@
 //! and where the mark of the tool in use is. Whoever owns the time makes them (see `editor::motions`) and the drawing only
 //! reads them, so the toolbar knows nothing of time. [`Look::resting`] is the look the state would settle to.
 
-use super::{BUTTONS, Item, State, Toolbar};
+use super::{BUTTONS, Item, Pill, State, Toolbar};
 
 /// Whether the button can be pressed (the others are always enabled).
 pub fn enabled(item: Item, state: &State) -> bool {
@@ -26,6 +26,8 @@ pub struct Look {
     pub tool: f32,
     /// 1 when the document has changes that are not saved (the save button is in the accent colour).
     pub unsaved: f32,
+    /// How far each pill is unfolded: 0 for one that is its round button, 1 for one that is whole (those that do not fold always).
+    pub unfold: [f32; 3],
 }
 
 impl Look {
@@ -37,6 +39,7 @@ impl Look {
             enabled: [1.0; BUTTONS],
             tool: bar.tool_index(state.tool).unwrap_or(0) as f32,
             unsaved: f32::from(state.unsaved),
+            unfold: Pill::ALL.map(|pill| f32::from(!bar.folds(pill) || bar.open() == Some(pill))),
         };
         for (slot, (item, _)) in bar.items().iter().enumerate() {
             let on = enabled(*item, state);

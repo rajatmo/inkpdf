@@ -183,11 +183,12 @@ impl SearchLayout {
         let [cx, cy] = mid(self.close);
         all.close.draw(&mut ui.lines, cx, cy, 0.3 * u, line, ui.pal.ink);
         // What to match.
-        for (rect, text, on) in [(self.case, "Aa", view.case), (self.words, "W", view.words)] {
+        for (rect, icon, on) in [(self.case, &all.match_case, view.case), (self.words, &all.whole_word, view.words)] {
             if on {
                 ui.panel(rect, 0.3 * u, ui.pal.accent_wash);
             }
-            say(ui, text, 0.5 * u, if on { ui.pal.accent } else { ui.pal.ink }, mid(rect), Align::Centre);
+            let [cx, cy] = mid(rect);
+            icon.draw(&mut ui.lines, cx, cy, 0.34 * u, line, if on { ui.pal.accent } else { ui.pal.ink });
         }
         // How many, and the arrows.
         let found = if view.query.is_empty() {
@@ -331,7 +332,12 @@ mod tests {
         let mut ui = Ui::default();
         l.draw(&view(3), &mut ui);
         let words: Vec<&str> = ui.labels.iter().map(|t| t.text.as_str()).collect();
-        assert!(words.contains(&"hello") && words.contains(&"Aa") && words.contains(&"W"), "{words:?}");
+        assert!(words.contains(&"hello"), "{words:?}");
+        // What to match is shown by icons, not words: the options' buttons draw lines, and lit ones differ from dim ones.
+        assert!(!words.iter().any(|t| matches!(*t, "Aa" | "W")), "{words:?}");
+        let mut lit = Ui::default();
+        l.draw(&SearchView { case: true, words: false, ..view(3) }, &mut lit);
+        assert_ne!(format!("{:?}", lit.panels), format!("{:?}", ui.panels), "the option that is on is washed");
         assert!(words.iter().any(|t| t.starts_with("3 of 17") && t.contains("reading 3 of 10")), "{words:?}");
         assert_eq!(words.iter().filter(|t| **t == "say hello to the world").count(), 3);
         assert!(ui.labels.iter().all(|t| t.at.iter().all(|v| v.is_finite())));

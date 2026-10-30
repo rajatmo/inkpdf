@@ -38,9 +38,8 @@ pub struct TouchGestures {
     scale: f32,
 }
 
-/// How far a finger may wander and still be tapping, in logical pixels (Android's own touch slop is 8, and a finger on a tablet wanders more).
-const TAP_SLOP_PX: f32 = 12.0;
-const TAP_MAX_MS: f64 = 350.0;
+use super::click::FINGER;
+
 const FLING_WINDOW_MS: f64 = 90.0;
 const FLING_MIN_SPEED: f32 = 250.0;
 
@@ -95,7 +94,7 @@ impl TouchGestures {
         let (before_centre, before_spread) = (self.centre()?, self.spread());
         let track = self.touches.get_mut(&id)?;
         track.pos = pos;
-        if ((pos[0] - track.start[0]).powi(2) + (pos[1] - track.start[1]).powi(2)).sqrt() > TAP_SLOP_PX * self.scale() {
+        if ((pos[0] - track.start[0]).powi(2) + (pos[1] - track.start[1]).powi(2)).sqrt() > FINGER.slop_px * self.scale() {
             self.moved_far = true;
         }
         let (centre, spread) = (self.centre()?, self.spread());
@@ -108,7 +107,7 @@ impl TouchGestures {
     pub fn up(&mut self, id: u32, pos: [f32; 2], t_ms: f64) -> Released {
         let Some(track) = self.touches.remove(&id) else { return Released { tap: None, fling: None } };
         let last = self.touches.is_empty();
-        let tap = (last && self.peak_fingers == 1 && !self.moved_far && t_ms - track.start_ms <= TAP_MAX_MS).then_some(pos);
+        let tap = (last && self.peak_fingers == 1 && !self.moved_far && t_ms - track.start_ms <= FINGER.max_ms).then_some(pos);
         let fling = if last && self.moved_far && self.peak_fingers == 1 { self.velocity(t_ms) } else { None };
         // The remaining fingers' centre has jumped; restart the trail from it.
         self.trail.clear();

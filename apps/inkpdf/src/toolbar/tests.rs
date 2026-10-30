@@ -1,6 +1,28 @@
 use super::*;
 
-const WINDOWS: [(f32, f32); 5] = [(560.0, 1.0), (800.0, 1.0), (1100.0, 1.5), (1650.0, 1.5), (3840.0, 2.0)];
+/// Windows wide enough for the three pills whole (in pixels, at their scale): a desktop's and a tablet's.
+const WINDOWS: [(f32, f32); 4] = [(900.0, 1.0), (1650.0, 1.5), (1800.0, 1.5), (3840.0, 2.0)];
+
+/// Windows from a small phone held upright to a wide screen, narrow ones included, at the scales they come in.
+const SWEEP: [(f32, f32); 12] = [
+    (320.0, 1.0),
+    (360.0, 1.0),
+    (480.0, 1.0),
+    (800.0, 1.0),
+    (900.0, 1.0),
+    (1000.0, 2.0),
+    (1080.0, 2.625),
+    (1200.0, 2.0),
+    (1600.0, 2.0),
+    (1650.0, 1.5),
+    (2560.0, 2.0),
+    (3840.0, 2.0),
+];
+
+/// The middle of a rectangle.
+fn middle(r: [f32; 4]) -> [f32; 2] {
+    [(r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0]
+}
 
 #[test]
 fn every_item_is_hit_at_its_centre_and_there_are_no_others() {
@@ -258,9 +280,9 @@ fn the_mode_button_shows_which_mode_it_is_by_its_icon_and_the_tablet_in_the_acce
 #[test]
 fn with_a_picker_the_left_pill_has_a_button_to_open_a_pdf_and_everything_still_fits() {
     let reg = crate::tool::reference_registry().with_open_button(true);
-    // (A phone held upright, under about 600 points wide, has no room for it: the pills would meet. A tablet has.)
-    for (w, dpr) in [(1650.0, 1.5), (1100.0, 1.0), (800.0, 1.0), (620.0, 1.0)] {
-        let tb = Toolbar::layout_for(&reg, [w, 900.0], dpr);
+    // (Narrower than that the left pill folds into its round button, and has the button inside it when it is open: see the sweep below.)
+    for (w, dpr) in [(1650.0, 1.5), (1100.0, 1.0), (900.0, 1.0)] {
+        let tb = Toolbar::layout_for(&reg, [w, 900.0], dpr, None);
         let open = tb.button(Item::Open).expect("an open button");
         assert!(rect_contains(tb.pills[0], [(open[0] + open[2]) / 2.0, (open[1] + open[3]) / 2.0]), "in the left pill at {w}");
         assert!(tb.pills[0][2] < tb.pills[1][0] && tb.pills[1][2] < tb.pills[2][0], "three separate pills at {w}: {:?}", tb.pills);
@@ -270,4 +292,103 @@ fn with_a_picker_the_left_pill_has_a_button_to_open_a_pdf_and_everything_still_f
         assert!(redo[2] <= open[0] + 0.5 && (open[2] - save[0]).abs() < 0.5, "{w}");
     }
     assert!(Toolbar::layout([1100.0, 900.0], 1.0).button(Item::Open).is_none(), "and without one there is none");
+}
+
+#[test]
+fn a_window_too_narrow_for_three_pills_folds_them_into_round_buttons_the_left_one_first_and_the_tools_last() {
+    let folded = |w: f32, dpr: f32| {
+        let tb = Toolbar::layout([w, 900.0], dpr);
+        Pill::ALL.map(|p| tb.folds(p))
+    };
+    assert_eq!(folded(1650.0, 1.5), [false; 3], "a tablet's width: all whole");
+    assert_eq!(folded(800.0, 1.0), [true, false, false], "a little narrower: the document's pill folds first");
+    assert_eq!(folded(1080.0, 2.625), [true, false, true], "a phone upright (411 points): the tools stay whole");
+    assert_eq!(folded(320.0, 1.0), [true; 3], "a very small one: all three");
+}
+
+#[test]
+fn every_pill_is_inside_the_window_none_overlap_and_every_button_can_be_pressed_at_every_width() {
+    let reg = crate::tool::reference_registry().with_open_button(true);
+    for (w, dpr) in SWEEP {
+        for open in [None, Some(Pill::Document), Some(Pill::Tools), Some(Pill::View)] {
+            let tb = Toolbar::layout_for(&reg, [w, 900.0], dpr, open);
+            let shown: Vec<[f32; 4]> = tb.pills.iter().copied().filter(|p| p[2] > p[0]).collect();
+            assert!(!shown.is_empty(), "something to press at {w}");
+            for (i, pill) in shown.iter().enumerate() {
+                assert!(pill[0] >= -0.5 && pill[2] <= w + 0.5, "{pill:?} off screen at {w} with {open:?}");
+                for other in &shown[i + 1..] {
+                    assert!(pill[2] <= other[0] + 0.5 || other[2] <= pill[0] + 0.5, "{pill:?} meets {other:?} at {w} with {open:?}");
+                }
+            }
+            for &(item, r) in tb.items() {
+                assert!(r[2] - r[0] >= 19.0 * dpr && r[3] - r[1] >= 19.0 * dpr, "{item:?} is too small to press at {w}");
+                assert!(shown.iter().any(|p| rect_contains(*p, middle(r))), "{item:?} is on a pill at {w} with {open:?}");
+                assert_eq!(tb.hit(middle(r)), Some(item), "{item:?} at {w} with {open:?}");
+            }
+            // With nothing open, the three are there, as three pills or as round buttons: the tools are always one of them.
+            if open.is_none() {
+                assert_eq!(shown.len(), 3, "all three at {w}");
+                assert!(tb.items().iter().any(|(i, _)| matches!(i, Item::Tool(_) | Item::Fold(Pill::Tools))), "the tools at {w}");
+            }
+        }
+    }
+}
+
+#[test]
+fn a_folded_pill_is_a_round_button_and_the_button_of_the_pill_is_a_fold() {
+    let tb = Toolbar::layout([1080.0, 2400.0], 2.625);
+    for pill in [Pill::Document, Pill::View] {
+        let round = tb.pills[pill.index()];
+        assert!((round[2] - round[0] - (round[3] - round[1])).abs() < 0.5, "{pill:?} is round: {round:?}");
+        assert_eq!(tb.hit(middle(round)), Some(Item::Fold(pill)));
+        assert_eq!(tb.round_of(pill), round);
+    }
+    assert!(tb.button(Item::Close).is_none() && tb.button(Item::Fullscreen).is_none(), "what is in a folded pill is not there to press");
+    assert!(tb.button(Item::Tool(Tool::Pen)).is_some(), "the tools are whole");
+    assert_eq!(tb.open(), None);
+}
+
+#[test]
+fn an_open_pill_is_whole_over_the_others_which_step_aside_where_it_reaches_them() {
+    let reg = crate::tool::reference_registry().with_open_button(true);
+    let tb = Toolbar::layout_for(&reg, [1080.0, 2400.0], 2.625, Some(Pill::Document));
+    assert_eq!(tb.open(), Some(Pill::Document));
+    let whole = tb.pills[0];
+    assert!(whole[2] - whole[0] > 5.0 * (whole[3] - whole[1]), "the document's pill is whole: {whole:?}");
+    for item in [Item::Close, Item::Undo, Item::Save, Item::Open, Item::Pages, Item::Search] {
+        assert!(tb.button(item).is_some(), "{item:?} is there to press");
+    }
+    assert!(tb.button(Item::Fold(Pill::Document)).is_none(), "the round button is the pill now");
+    // The tools' pill is under it (it is in the middle of the window): it is not there to press, and nothing hits it.
+    assert_eq!(tb.pills[1], [0.0; 4]);
+    assert!(tb.button(Item::Tool(Tool::Pen)).is_none());
+    assert!(!matches!(tb.hit(middle(tb.round_of(Pill::Tools))), Some(Item::Tool(_))), "no tool under the open pill");
+    // An open pill that does not fold (the window is wide) is no different from a closed one.
+    let wide = Toolbar::layout_for(&reg, [1650.0, 900.0], 1.5, Some(Pill::View));
+    assert_eq!(wide.open(), None);
+    assert!(wide.button(Item::Fullscreen).is_some() && wide.button(Item::Close).is_some());
+}
+
+#[test]
+fn a_pill_grows_from_its_round_button_as_it_unfolds_and_what_is_in_it_comes_out_of_the_button() {
+    let reg = crate::tool::reference_registry();
+    let state = State::default();
+    let draw = |open: Option<Pill>, amount: f32| {
+        let tb = Toolbar::layout_for(&reg, [1080.0, 2400.0], 2.625, open);
+        let mut look = Look::resting(&state, &tb);
+        look.unfold[Pill::Document.index()] = amount;
+        let mut ui = Ui::default();
+        tb.draw_with(&state, &look, &mut ui);
+        (tb, ui)
+    };
+    let (_, closed) = draw(None, 0.0);
+    let (tb, opening) = draw(Some(Pill::Document), 0.5);
+    let (_, open) = draw(Some(Pill::Document), 1.0);
+    assert_ne!(format!("{:?}", closed.panels), format!("{:?}", opening.panels));
+    assert_ne!(format!("{:?}", opening.panels), format!("{:?}", open.panels), "half way is neither");
+    assert!(opening.lines.iter().chain(&open.lines).all(|c| c.a.iter().chain(&c.b).all(|v| v.is_finite())));
+    // Half way, the buttons that are coming out are nearer the round button than they will be.
+    let round = middle(tb.round_of(Pill::Document));
+    let reach = |ui: &Ui| ui.lines.iter().filter(|c| c.a[0] < tb.pills[0][2]).map(|c| (c.a[0] - round[0]).abs()).fold(0.0, f32::max);
+    assert!(reach(&opening) < reach(&open), "{} {}", reach(&opening), reach(&open));
 }

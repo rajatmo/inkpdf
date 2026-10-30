@@ -2,7 +2,26 @@
 //! Kept flat, in reading order, as it is shown; which entries are folded away is for whoever shows them. The pages of
 //! its entries follow the page edits like everything else that is kept by page (see [`crate::pages`]).
 
+use std::collections::BTreeSet;
+
 use crate::pages::Remap;
+
+/// What the title of one of the program's own flags begins with: a flag is an outline entry for a page the person flagged (`Flag: page 3`),
+/// at the top level at the end of the outline, which the program writes, finds again and keeps out of the table of contents it shows.
+pub const FLAG: &str = "Flag: page ";
+
+/// The pages that are flagged in items (the program's own entries: see [`FLAG`]), which are taken out of it: they are not part of the contents.
+pub fn take_flags(items: &mut Vec<OutlineItem>) -> BTreeSet<usize> {
+    let mut flags = BTreeSet::new();
+    items.retain(|item| match item.page {
+        Some(page) if item.depth == 0 && item.title.starts_with(FLAG) => {
+            flags.insert(page);
+            false
+        }
+        _ => true,
+    });
+    flags
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct OutlineItem {

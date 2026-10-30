@@ -115,6 +115,25 @@ impl Bridge for Host {
         }
     }
 
+    fn display_name(&self, uri: &str) -> Option<String> {
+        let mut env = self.env().ok()?;
+        let uri = env.new_string(uri).ok()?;
+        let object = self.call(&mut env, "displayName", "(Ljava/lang/String;)Ljava/lang/String;", &[JValue::Object(&uri)]).ok()?.l().ok()?;
+        if object.is_null() {
+            return None;
+        }
+        let name: String = env.get_string(&JString::from(object)).ok()?.into();
+        Some(name)
+    }
+
+    fn set_pointer_icon(&self, type_code: i32) {
+        if let Ok(mut env) = self.env()
+            && let Err(why) = self.call(&mut env, "setPointer", "(I)V", &[JValue::Int(type_code)])
+        {
+            eprintln!("could not set the pointer icon: {why}");
+        }
+    }
+
     fn pick(&self, kind: Pick, name: &str) {
         if let Ok(mut env) = self.env()
             && let Ok(name) = env.new_string(name)

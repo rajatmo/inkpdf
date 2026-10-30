@@ -420,7 +420,7 @@ fn hovering_lights_what_is_under_the_pointer_and_a_press_that_slides_off_does_no
     assert_eq!(ed.view.current_page(&ed.layout), 0);
 }
 
-// â”€â”€ edit mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── edit mode ────────────────────────────────────────────────────────────────────────────────
 
 /// A document of `n` pages with a stroke on each, whose ids say which page is which.
 fn with_ink(n: usize) -> (Editor, Vec<u64>) {
@@ -777,10 +777,22 @@ fn the_title_says_how_many_are_chosen_and_the_bar_takes_room_from_the_pages_only
     let mut ui = crate::toolbar::Ui::default();
     ed.draw_overview(&mut ui);
     assert!(ui.labels.iter().any(|l| l.text == "1 selected"), "{:?}", ui.labels.iter().map(|l| &l.text).collect::<Vec<_>>());
-    assert!(ui.labels.iter().any(|l| l.text == "Select all"));
+    // The button that chooses every page, or none, says so with a picture: lines in it, and not the same ones once all are chosen.
+    let all = ed.overview_layout().action(crate::toolbar::OverviewAction::SelectAll);
+    let inside = |ui: &crate::toolbar::Ui| -> Vec<String> {
+        ui.lines.iter().filter(|c| crate::ink::rect_contains(all, c.a)).map(|c| format!("{c:?}")).collect()
+    };
+    assert!(ui.labels.iter().all(|l| !l.text.starts_with("Select")), "no words on it");
+    let some = inside(&ui);
+    assert!(!some.is_empty(), "a picture on the button");
+    tap(&mut ed, Press::Mouse, [(all[0] + all[2]) / 2.0, (all[1] + all[3]) / 2.0]);
+    let mut chosen = crate::toolbar::Ui::default();
+    ed.draw_overview(&mut chosen);
+    assert_eq!(ed.chrome.overview.as_ref().map(|o| o.selected.len()), Some(ed.layout.len()), "every page is chosen");
+    assert!(!inside(&chosen).is_empty() && inside(&chosen) != some, "and the button is now the one that lets them all go");
 }
 
-// â”€â”€ the menu of a page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── the menu of a page ───────────────────────────────────────────────────────────────────────â”€â”€â”€â”€
 
 fn number_centre(ed: &Editor, page: usize) -> [f32; 2] {
     let r = ed.overview_layout().number_row(page, scroll_of(ed));
@@ -868,6 +880,41 @@ fn the_items_of_the_menu_add_pages_before_and_after_duplicate_and_delete_the_pag
 }
 
 #[test]
+fn the_flag_item_of_the_menu_flags_and_unflags_a_page_marks_it_in_the_overview_and_counts_as_a_change() {
+    use crate::toolbar::OverviewMenuItem as M;
+    for how in ALL {
+        let (mut ed, _) = with_ink(5);
+        open(&mut ed, how);
+        ed.document_saved();
+        assert!(!ed.ink.is_dirty(), "{how:?}: nothing to save yet");
+        let flag = |ed: &mut Editor, page: usize| {
+            let at = number_centre(ed, page);
+            tap(ed, how, at);
+            let at = menu_item_centre(ed, page, M::Flag);
+            tap(ed, how, at);
+            assert!(menu_open_for(ed).is_none(), "{how:?}: the menu goes when the item is done");
+        };
+        flag(&mut ed, 3);
+        assert_eq!(ed.flags.iter().copied().collect::<Vec<_>>(), [3], "{how:?}: page 4 is flagged");
+        assert!(ed.ink.is_dirty(), "{how:?}: a flag is something to save");
+        let mut flagged = crate::toolbar::Ui::default();
+        ed.draw_overview(&mut flagged);
+        let mut plain = crate::toolbar::Ui::default();
+        flag(&mut ed, 3);
+        assert!(ed.flags.is_empty(), "{how:?}: the item again takes it away");
+        ed.draw_overview(&mut plain);
+        assert!(flagged.lines.len() > plain.lines.len(), "{how:?}: a flagged page wears a mark");
+        // Flags go where their pages go.
+        flag(&mut ed, 3);
+        ed.toggle_flag(1);
+        assert!(ed.edit_pages(crate::pages::PageEdit::Insert { at: 0, size: [100.0, 100.0] }));
+        assert_eq!(ed.flags.iter().copied().collect::<Vec<_>>(), [2, 4], "{how:?}: a page added before them moves them on");
+        assert!(ed.edit_pages(crate::pages::PageEdit::delete(2)));
+        assert_eq!(ed.flags.iter().copied().collect::<Vec<_>>(), [3], "{how:?}: a page deleted takes its flag with it");
+    }
+}
+
+#[test]
 fn a_page_with_ink_is_duplicated_with_it_from_the_menu_and_the_last_page_cannot_be_deleted_there() {
     use crate::toolbar::OverviewMenuItem as M;
     let (mut ed, _) = with_ink(1);
@@ -886,8 +933,15 @@ fn a_page_with_ink_is_duplicated_with_it_from_the_menu_and_the_last_page_cannot_
     let at = number_centre(&ed, 1);
     tap(&mut ed, Press::Mouse, at);
     ed.draw_overview(&mut ui);
+    // The four things the menu offers are a row of round buttons with a picture each, not words.
+    let (_, items) = ed.overview_layout().menu(1, scroll_of(&ed));
+    for (item, r) in items {
+        assert!(ui.lines.iter().any(|c| crate::ink::rect_contains(r, c.a)), "{item:?} is shown, as a picture");
+        assert!((r[2] - r[0] - (r[3] - r[1])).abs() < 0.5, "{item:?} is round");
+        assert_eq!(r[1], items[0].1[1], "in one row");
+    }
     for text in ["Add page before", "Add page after", "Duplicate", "Delete"] {
-        assert!(ui.labels.iter().any(|l| l.text == text), "{text} is shown");
+        assert!(ui.labels.iter().all(|l| l.text != text), "{text} is not in words");
     }
 }
 

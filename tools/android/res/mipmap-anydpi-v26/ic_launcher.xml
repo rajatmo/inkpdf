@@ -2,4 +2,6 @@
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/ic_launcher_background" />
     <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+    <!-- Android 13's themed icon: the same pen, which the system draws in one colour. -->
+    <monochrome android:drawable="@mipmap/ic_launcher_foreground" />
 </adaptive-icon>

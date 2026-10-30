@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::coords::PageGeom;
+use crate::form::Form;
 use crate::ink::{InkStore, PageStroke};
 use crate::ink_io;
 use crate::links::Link;
@@ -14,7 +15,7 @@ use crate::page_table::PageTable;
 use crate::pages::PageEdit;
 #[cfg(test)]
 use crate::path_store::PathStore;
-use crate::pdf::{self, PageLook, RenderPool, RenderRequest, Rendered};
+use crate::pdf::{self, PageLook, RawValue, RenderPool, RenderRequest, Rendered};
 use crate::store::{DocId, FileStore};
 use crate::tiles::{self, Key};
 use crate::view::Layout;
@@ -30,6 +31,12 @@ pub struct Doc {
     pub name: String,
     /// Links on the pages as the file had them, in document space, for the editor to take (see [`Doc::take_links`]).
     links: Vec<Link>,
+    /// The fields of the form as the file had them, for the editor to take (see [`Doc::take_form`]), and what the person put in them, once the editor
+    /// has said (see [`Doc::set_fields`]).
+    form: Form,
+    fields: Vec<(String, RawValue)>,
+    /// The pages flagged, once the editor has said (see [`Doc::set_flags`]).
+    flags: Option<Vec<usize>>,
     /// The table of contents as the file had it, for the editor to take (see [`Doc::take_outline`]).
     outline: Vec<OutlineItem>,
     pub open_millis: u128,
@@ -57,7 +64,7 @@ impl Doc {
     /// Open the PDF `id` names in `files`. Also returns the ink this app saved in it earlier.
     pub fn open_from(files: &dyn FileStore, id: &DocId) -> Result<(Doc, Vec<PageStroke>), String> {
         let bytes = files.read(id)?;
-        Self::from_bytes(Arc::new(bytes), Some(id.clone()), id.name())
+        Self::from_bytes(Arc::new(bytes), Some(id.clone()), files.display_name(id))
     }
 
     /// The file's path, if it is kept by path and has been saved.
@@ -83,11 +90,11 @@ impl Doc {
         let sizes: Vec<[f32; 2]> = geoms.iter().map(|p| [p.width, p.height]).collect();
         let layout = Layout::new(&sizes);
         // A file this app inked earlier shows that ink from the ink layer, not the page raster.
-        let (strokes, mut links, mut outline, render_bytes) = match ink_io::load(&bytes, &geoms, &layout) {
-            Ok(l) => (l.strokes, l.links, l.outline, l.render_bytes),
+        let (strokes, mut links, form, mut outline, render_bytes) = match ink_io::load(&bytes, &geoms, &layout) {
+            Ok(l) => (l.strokes, l.links, l.form, l.outline, l.render_bytes),
             Err(e) => {
                 eprintln!("could not read earlier ink: {e}");
-                (Vec::new(), Vec::new(), Vec::new(), bytes.clone())
+                (Vec::new(), Vec::new(), Form::default(), Vec::new(), bytes.clone())
             }
         };
         // (In a damaged file the outline and the links can name pages the renderer does not show.)
@@ -100,7 +107,10 @@ impl Doc {
             name,
             pages: PageTable::of_file(sizes, geoms),
             links,
+            form,
+            fields: Vec::new(),
             outline,
+            flags: None,
             open_millis: started.elapsed().as_millis(),
             base: bytes,
             render_sizes: sizes_of_file,
@@ -129,6 +139,11 @@ impl Doc {
     /// The links the file had, for the editor, which keeps them from then on.
     pub fn take_links(&mut self) -> Vec<Link> {
         std::mem::take(&mut self.links)
+    }
+
+    /// The form the file had, for the editor, which keeps it from then on (the boxes of its fields are among the links).
+    pub fn take_form(&mut self) -> Form {
+        std::mem::take(&mut self.form)
     }
 
     /// The table of contents the file had, for the editor, which keeps it from then on.
@@ -217,6 +232,16 @@ impl Doc {
         self.pool.try_recv()
     }
 
+    /// The pages that are flagged (as the document numbers them), to be written with the next save; until this is said the file's flags are left as they are.
+    pub fn set_flags(&mut self, pages: Vec<usize>) {
+        self.flags = Some(pages);
+    }
+
+    /// What the person put in the fields of the form, to be written with the next save.
+    pub fn set_fields(&mut self, values: Vec<(String, crate::form::Value)>) {
+        self.fields = crate::pdf_read::raw_values(values);
+    }
+
     /// Write the ink (and any added pages) into the file, in `files`. `Err` for a document with no file yet: use
     /// [`Doc::save_as_to`].
     pub fn save_to(&mut self, files: &dyn FileStore, store: &InkStore) -> Result<(), String> {
@@ -239,7 +264,7 @@ impl Doc {
     /// Save as the file `id` names in `files`, which becomes where the document lives.
     pub fn save_as_to(&mut self, files: &dyn FileStore, id: &DocId, store: &InkStore) -> Result<(), String> {
         self.write_to(files, id, store)?;
-        self.name = id.name();
+        self.name = files.display_name(id);
         self.id = Some(id.clone());
         Ok(())
     }
@@ -247,7 +272,7 @@ impl Doc {
     /// The new file is written whole or not at all (see [`FileStore::write_atomic`]), so a failure part-way leaves the original as
     /// it was.
     fn write_to(&mut self, files: &dyn FileStore, id: &DocId, store: &InkStore) -> Result<(), String> {
-        let bytes = ink_io::save(
+        let bytes = ink_io::save_with(
             &self.base,
             store,
             self.pages.geoms(),
@@ -255,6 +280,7 @@ impl Doc {
             store.dirty_pages(),
             &self.pages.doc_of_file(),
             &self.pages.copies(),
+            &ink_io::Extras { flags: self.flags.as_deref(), fields: &self.fields },
         )?;
         files.write_atomic(id, &bytes)?;
         self.base = Arc::new(bytes);
@@ -319,6 +345,81 @@ mod tests {
         doc.save(&store).expect("second save");
         let (_, after) = Doc::open(&path).expect("reopen again");
         assert!(after.is_empty(), "erased ink stays erased");
+        let _ = fs::remove_dir_all(path.parent().expect("dir"));
+    }
+
+    #[test]
+    fn a_form_is_read_with_a_box_for_each_widget_and_what_is_put_in_it_is_saved_with_the_file_and_read_back() {
+        let dir = temp_dir("form");
+        let path = dir.join("form.pdf");
+        fs::write(&path, crate::testutil::pdf_with_form()).expect("write");
+        let (mut doc, _) = Doc::open(&path).expect("open");
+        let (mut form, boxes) = (doc.take_form(), doc.take_links());
+        let names: Vec<&str> = form.fields.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(names, ["name", "agree", "size", "colour"]);
+        let places: Vec<_> = boxes
+            .iter()
+            .filter_map(|l| match l.target {
+                crate::links::Target::Field { field, widget } => Some((field, widget, l.rect)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            places.iter().map(|&(f, w, _)| (f, w)).collect::<Vec<_>>(),
+            [(0, 0), (1, 0), (2, 0), (2, 1), (3, 0)],
+            "one box for each widget, in order"
+        );
+        // The page is 612 x 792 and lies 12 points in; the PDF's y axis points up (the first box is 700 to 720).
+        let expected = [12.0 + 100.0, 12.0 + 792.0 - 720.0, 12.0 + 300.0, 12.0 + 792.0 - 700.0];
+        assert!(places[0].2.iter().zip(expected).all(|(a, b)| (a - b).abs() < 1e-3), "{:?}", places[0].2);
+
+        form.fields[0].type_text("Ada Lovelace");
+        form.fields[1].press(0);
+        form.fields[2].press(1);
+        form.fields[3].press(0);
+        let mut store = InkStore::new();
+        store.mark_dirty(0);
+        doc.set_fields(form.changes());
+        doc.save(&store).expect("save");
+
+        let (mut again, _) = Doc::open(&path).expect("reopen");
+        let back = again.take_form();
+        assert_eq!(back.fields[0].shown(), "Ada Lovelace");
+        assert!(back.fields[1].is_on(0), "the box is checked");
+        assert!(!back.fields[2].is_on(0) && back.fields[2].is_on(1), "the second radio button is on");
+        assert_eq!(back.fields[3].shown(), "Red");
+        assert!(back.changes().is_empty(), "and what the file has is not a change");
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn flags_are_written_with_a_save_and_come_back_apart_from_the_contents_and_a_save_that_names_none_clears_them() {
+        let path = temp_pdf("flags");
+        let (mut doc, _) = Doc::open(&path).expect("open");
+        let mut store = InkStore::new();
+        let second = doc.add_blank_page().expect("a second page");
+        store.mark_dirty(second as u32);
+        doc.set_flags(vec![0, second]);
+        doc.save(&store).expect("save");
+        store.mark_clean();
+
+        let (mut again, _) = Doc::open(&path).expect("reopen");
+        let mut items = again.take_outline();
+        assert!(!items.is_empty(), "the flags are outline entries in the file, so any reader shows them");
+        let flags = crate::outline::take_flags(&mut items);
+        assert_eq!(flags.into_iter().collect::<Vec<_>>(), [0, second]);
+        assert!(items.is_empty(), "and what is left is the contents the file had, which here is none");
+
+        // A save that says nothing about flags leaves them; one that says there are none takes them away.
+        store.mark_dirty(0);
+        again.save(&store).expect("save without saying");
+        let (mut kept, _) = Doc::open(&path).expect("reopen");
+        assert_eq!(crate::outline::take_flags(&mut kept.take_outline()).len(), 2);
+        again.set_flags(Vec::new());
+        again.save(&store).expect("save with none");
+        let (mut cleared, _) = Doc::open(&path).expect("reopen");
+        let mut left = cleared.take_outline();
+        assert!(crate::outline::take_flags(&mut left).is_empty() && left.is_empty());
         let _ = fs::remove_dir_all(path.parent().expect("dir"));
     }
 

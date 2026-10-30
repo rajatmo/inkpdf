@@ -57,7 +57,7 @@ javac --release 8 -Xlint:-options -cp "$ANDROID_JAR" -d "$work/classes" "$here/j
 [ -f "$work/classes.dex" ] || { echo "no classes.dex"; exit 1; }
 
 # The package: manifest and resource table by aapt2, the library and the dex added to it, aligned, signed.
-# (The launcher icons in res/ are made from icon/*.svg by make-icons.js, and committed.)
+# (The launcher icons in res/ are made from the desktop icon's pen by apps/inkpdf/installer/make-icon.ps1, and committed.)
 "$ANDROID_BUILD_TOOLS/aapt2" compile --dir "$here/res" -o "$work/res.zip"
 "$ANDROID_BUILD_TOOLS/aapt2" link --manifest "$here/AndroidManifest.xml" -I "$ANDROID_JAR" -o "$work/base.apk" \
     --min-sdk-version "$api" --target-sdk-version 34 --version-code 1 --version-name "$version-$profile" "$work/res.zip"

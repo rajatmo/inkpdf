@@ -6,9 +6,12 @@
 #
 #   tools/android/emulator-test.sh path/to/inkpdf.apk [out-folder]
 #
-# The toolbar's buttons are where they are at 100% scale times the screen's density (the left pill: close, undo, redo, save, delete
-# page, add page, pages overview at x = 39, 86, 125, 163, 211, 249, 287; y = 39), until the app can dump its own layout (roadmap F2).
+# The toolbar's buttons are found by name: the app writes where each one is (the file --layout makes on a desktop) into its own folder when a file
+# layout.on is there (db shell touch), and this reads it. On a narrow screen the left pill is folded into a round button (old-doc): it is
+# pressed first, as a person would.
 set -uo pipefail
+# (Git Bash on Windows would turn an address such as /sdcard/... in an argument into a Windows path.)
+export MSYS_NO_PATHCONV=1
 
 apk="${1:?the APK to install}"
 out="${2:-emulator-out}"
@@ -18,8 +21,12 @@ check() { if eval "$2"; then echo "ok:   $1"; else echo "FAIL: $1"; fail=1; fi; 
 
 adb wait-for-device
 adb install -r "$apk" | tail -1
+adb shell am force-stop app.inkpdf.test
 adb logcat -c
-adb shell am start -n app.inkpdf.test/android.app.NativeActivity >/dev/null
+data=/sdcard/Android/data/app.inkpdf.test/files
+adb shell "mkdir -p $data; rm -f $data/layout.json; touch $data/layout.on" >/dev/null 2>&1
+# (The launcher is the Java `Host` activity since the file picker and clipboard came in: a NativeActivity of its own.)
+adb shell am start -n app.inkpdf.test/.Host >/dev/null
 sleep 20
 
 shot() { adb exec-out screencap -p >"$out/$1.png"; }
@@ -27,14 +34,25 @@ alive() { [ -n "$(adb shell pidof app.inkpdf.test | tr -d '\r')" ]; }
 dpi="$(adb shell wm density | grep -o '[0-9]\+' | tail -1)"
 size="$(adb shell wm size | grep -o '[0-9]\+x[0-9]\+' | tail -1)"
 w="${size%x*}"; h="${size#*x}"
-at() { awk -v v="$1" -v d="$dpi" 'BEGIN { printf "%d", v * d / 160 }'; }   # a place at 100% scale, in pixels
+# Where a button is, in pixels (x y), from the layout the app wrote; empty if there is no such button now.
+spot() { adb shell cat "$data/layout.json" 2>/dev/null | tr -d '\r' | grep -o "\"$1\":\[[0-9.]*,[0-9.]*\]" | head -1 | sed 's/.*\[\([0-9.]*\),\([0-9.]*\)\]/\1 \2/'; }
+tap_at() { adb shell input tap $(echo "$1" | awk '{printf "%d %d", $1, $2}'); }
+# Press a toolbar button by name, unfolding the left pill first if the button is inside a folded one.
+press() {
+    local p; p="$(spot "$1")"
+    if [ -z "$p" ]; then
+        local f; f="$(spot fold-doc)"
+        [ -n "$f" ] && { tap_at "$f"; for _ in 1 2 3 4 5; do sleep 1; p="$(spot "$1")"; [ -n "$p" ] && break; done; }
+    fi
+    [ -n "$p" ] && tap_at "$p"
+}
 echo "screen ${w}x${h} at ${dpi} dpi"
 
 shot 1-start
 check "the app is running after it started" alive
 
 # A finger taps the pages overview button: it opens, so the screen changes.
-adb shell input tap "$(at 287)" "$(at 39)"; sleep 3; shot 2-overview
+press pages; sleep 3; shot 2-overview
 check "a finger's tap on a toolbar button did something (the overview opened)" "! cmp -s '$out/1-start.png' '$out/2-overview.png'"
 # Back puts the card away (Back is Escape).
 adb shell input keyevent KEYCODE_BACK; sleep 2; shot 3-back
@@ -47,7 +65,7 @@ adb shell input stylus swipe "$((cx - 250))" "$cy" "$((cx + 250))" "$((cy + 60))
 check "a stylus swipe changed the screen (ink)" "! cmp -s '$out/4-finger.png' '$out/5-stylus.png'"
 
 # The save button opens the Save As card.
-adb shell input tap "$(at 163)" "$(at 39)"; sleep 3; shot 6-save-as
+press save; sleep 3; shot 6-save-as
 check "the save button changed the screen (the Save As card)" "! cmp -s '$out/5-stylus.png' '$out/6-save-as.png'"
 check "the app is still running at the end" alive
 

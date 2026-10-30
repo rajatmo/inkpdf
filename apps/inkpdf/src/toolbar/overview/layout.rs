@@ -48,12 +48,14 @@ pub enum MenuItem {
     Before,
     After,
     Duplicate,
+    /// Mark the page with a flag, or take its flag away.
+    Flag,
     Delete,
 }
 
 impl MenuItem {
-    /// From the top of the menu to the bottom.
-    pub const ALL: [MenuItem; 4] = [MenuItem::Before, MenuItem::After, MenuItem::Duplicate, MenuItem::Delete];
+    /// From the left of the menu to the right.
+    pub const ALL: [MenuItem; 5] = [MenuItem::Before, MenuItem::After, MenuItem::Duplicate, MenuItem::Flag, MenuItem::Delete];
 }
 
 /// A row of the table of contents as it is shown.
@@ -140,13 +142,13 @@ impl OverviewLayout {
         let mut actions = [(Action::SelectAll, [0.0; 4]); 5];
         let bar = edit.then(|| {
             let bar = [grid[0], (grid[3] - 2.4 * u).max(grid[1]), grid[2], grid[3]];
-            let widths = Action::ALL.map(|a| if a == Action::SelectAll { 4.4 * u } else { 1.5 * u });
-            let total = widths.iter().sum::<f32>() + 0.3 * u * (widths.len() - 1) as f32;
+            let (button, gap) = (1.5 * u, 0.3 * u);
+            let total = button * Action::ALL.len() as f32 + gap * (Action::ALL.len() - 1) as f32;
             let mut x = (bar[0] + bar[2] - total) / 2.0;
-            let (top, height) = (bar[1] + (bar[3] - bar[1] - 1.5 * u) / 2.0, 1.5 * u);
+            let top = bar[1] + (bar[3] - bar[1] - button) / 2.0;
             for (i, action) in Action::ALL.into_iter().enumerate() {
-                actions[i] = (action, [x, top, x + widths[i], top + height]);
-                x += widths[i] + 0.3 * u;
+                actions[i] = (action, [x, top, x + button, top + button]);
+                x += button + gap;
             }
             grid[3] = bar[1];
             bar
@@ -231,7 +233,8 @@ impl OverviewLayout {
         [x, y, x + self.thumb[0], y + self.thumb[1] + LABEL_H * self.unit]
     }
 
-    /// Where page `i`'s picture goes: its shape, as big as the box allows, in the middle of it.
+    /// Where page `i`'s picture goes: its shape, as big as the box allows, in the middle of it across and resting on the bottom of it, so that
+    /// its number is right under it whatever the shape (a wide page is not left floating above a gap).
     pub fn thumb(&self, i: usize, scroll: f32, page: [f32; 2]) -> [f32; 4] {
         let cell = self.cell(i, scroll);
         let aspect = if page[0] > 0.0 && page[1] > 0.0 { page[0] / page[1] } else { 0.77 };
@@ -239,8 +242,8 @@ impl OverviewLayout {
         if h > self.thumb[1] {
             (w, h) = (self.thumb[1] * aspect, self.thumb[1]);
         }
-        let (cx, cy) = ((cell[0] + cell[2]) / 2.0, cell[1] + self.thumb[1] / 2.0);
-        [cx - w / 2.0, cy - h / 2.0, cx + w / 2.0, cy + h / 2.0]
+        let (cx, bottom) = ((cell[0] + cell[2]) / 2.0, cell[1] + self.thumb[1]);
+        [cx - w / 2.0, bottom - h, cx + w / 2.0, bottom]
     }
 
     /// The row of the cell under page `i`'s picture where its number goes: `[x0, y0, x1, y1]`.
@@ -274,12 +277,14 @@ impl OverviewLayout {
         (row * self.columns + col).min(count)
     }
 
-    /// The menu of page `page` and where each of its items is: under the page's number, or over it if there is no room
-    /// under, and always inside the card.
-    pub fn menu(&self, page: usize, scroll: f32) -> ([f32; 4], [(MenuItem, [f32; 4]); 4]) {
+    /// The menu of page `page` and where each of its items is: a row of round buttons under the page's number, or over it if there
+    /// is no room under, and always inside the card.
+    pub fn menu(&self, page: usize, scroll: f32) -> ([f32; 4], [(MenuItem, [f32; 4]); 5]) {
         let u = self.unit;
-        let (width, item) = (8.2 * u, 1.35 * u);
-        let height = item * 4.0 + 0.6 * u;
+        let (item, gap, pad) = (1.5 * u, 0.2 * u, 0.3 * u);
+        let n = MenuItem::ALL.len() as f32;
+        let width = n * item + (n - 1.0) * gap + 2.0 * pad;
+        let height = item + 2.0 * pad;
         let row = self.number_row(page, scroll);
         let centre = (row[0] + row[2]) / 2.0;
         let x0 = (centre - width / 2.0).clamp(self.card[0] + 0.4 * u, (self.card[2] - 0.4 * u - width).max(self.card[0] + 0.4 * u));
@@ -287,10 +292,10 @@ impl OverviewLayout {
         let wanted = if below + height <= self.card[3] - 0.4 * u { below } else { row[1] - 0.1 * u - height };
         let y0 = wanted.min(self.card[3] - 0.4 * u - height).max(self.card[1] + 0.4 * u);
         let rect = [x0, y0, x0 + width, y0 + height];
-        let mut items = [(MenuItem::Before, [0.0; 4]); 4];
+        let mut items = [(MenuItem::Before, [0.0; 4]); 5];
         for (k, which) in MenuItem::ALL.into_iter().enumerate() {
-            let top = y0 + 0.3 * u + k as f32 * item;
-            items[k] = (which, [x0 + 0.3 * u, top, x0 + width - 0.3 * u, top + item]);
+            let left = x0 + pad + k as f32 * (item + gap);
+            items[k] = (which, [left, y0 + pad, left + item, y0 + pad + item]);
         }
         (rect, items)
     }

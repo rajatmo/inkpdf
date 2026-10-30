@@ -58,6 +58,13 @@ fn own_folder() -> Option<PathBuf> {
     app.external_data_path().or_else(|| app.internal_data_path())
 }
 
+/// Where the app is asked to write where its buttons are (the file --layout makes on a desktop), for the emulator test: only when a file
+/// named layout.on has been put in the app's own folder (db shell touch), so that nothing is written in ordinary use.
+pub fn layout_request() -> Option<PathBuf> {
+    let own = own_folder()?;
+    own.join("layout.on").exists().then(|| own.join("layout.json"))
+}
+
 /// Show or hide the soft keyboard, as the app starts or stops wanting typed text (a text box, the name of a file).
 pub fn set_text_input(active: bool) {
     if let Some(app) = APP.get() {

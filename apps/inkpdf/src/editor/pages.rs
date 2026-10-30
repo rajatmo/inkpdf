@@ -82,8 +82,31 @@ impl Editor {
         }
     }
 
+    /// The table of contents the file came with: its flags are the ones the person made (see [`outline::FLAG`]) and are kept apart from it.
+    pub fn set_outline(&mut self, mut items: Vec<crate::outline::OutlineItem>) {
+        self.flags = outline::take_flags(&mut items);
+        self.outline = items;
+    }
+
+    /// Flag page `page`, or take its flag away: the page shows a flag in the overview and the file gets an outline entry for it when it is saved
+    /// (so it is a bookmark in any reader). It is a mark, not a step of the history: pressing it again is how it is undone.
+    pub fn toggle_flag(&mut self, page: usize) -> bool {
+        if page >= self.ws.layout.len() {
+            return false;
+        }
+        if !self.flags.remove(&page) {
+            self.flags.insert(page);
+        }
+        // (The file has to be written for it: the page counts as changed.)
+        self.ws.ink.mark_dirty(page as u32);
+        self.ws.redraw = true;
+        true
+    }
+
     /// The links and the outline take `edit`; what a deletion takes is kept, and an undone deletion gives it back.
     fn carry_by_page(&mut self, edit: &PageEdit, before: &Layout, map: &Remap) {
+        // The flags go where their pages go (a page that is gone takes its flag with it).
+        self.flags = self.flags.iter().filter_map(|&page| map.page(page)).collect();
         match edit {
             PageEdit::Delete { grave, .. } => {
                 let links = links::remap(&mut self.links, before, map);

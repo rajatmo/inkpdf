@@ -33,7 +33,9 @@ impl UiLayers {
         } else {
             [1.0; 4]
         };
-        for page in cx.ed.layout.pages_in(top, bottom) {
+        let visible_pages = cx.ed.layout.pages_in(top, bottom);
+        let form = cx.ed.form_boxes(&visible_pages);
+        for page in visible_pages {
             let Some(r) = cx.ed.layout.page(page) else { continue };
             // Snap the page to whole pixels: its edges stay sharp, and a tile rendered at the
             // current zoom lands exactly on the pixel grid.
@@ -87,6 +89,18 @@ impl UiLayers {
             }
             if !showing {
                 scene.blank_pages += 1;
+            }
+            // The form: what the person put in a field covers what the file's page shows there, and every box is faintly washed (a box being typed
+            // into more), so that what can be filled in is seen.
+            for b in form.iter().filter(|b| b.page == page) {
+                let (a, c) = (view.doc_to_screen([b.rect[0], b.rect[1]]), view.doc_to_screen([b.rect[2], b.rect[3]]));
+                let screen = [a[0], a[1], c[0], c[1]];
+                if b.changed {
+                    scene.quads.push(Quad::solid(screen, paper));
+                }
+                let alpha = if b.caret.is_some() { 0.18 } else { 0.08 };
+                // (A blue, premultiplied.)
+                scene.quads.push(Quad::solid(screen, [0.2 * alpha, 0.45 * alpha, alpha, alpha]));
             }
             self.text_quads(cx, page, &mut scene.quads);
         }

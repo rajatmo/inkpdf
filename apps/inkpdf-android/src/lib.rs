@@ -46,6 +46,6 @@ fn forward_stderr_to_logcat() {
 fn android_main(app: AndroidApp) {
     forward_stderr_to_logcat();
     std::panic::set_hook(Box::new(|info| eprintln!("InkPDF panicked: {info}")));
-    eprintln!("InkPDF {} starting", env!("CARGO_PKG_VERSION"));
+    eprintln!("InkPDF {} starting", inkpdf::VERSION);
     inkpdf::run_android(app);
 }

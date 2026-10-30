@@ -275,6 +275,7 @@ impl Editor {
         let current = self.ws.view.current_page(&self.ws.layout);
         let folded = |i: usize| state.folded.contains(&i);
         let selected: Vec<usize> = state.selected.iter().copied().collect();
+        let flagged: Vec<usize> = self.flags.iter().copied().collect();
         let view = OverviewView {
             layout: &self.ws.layout,
             scroll: state.scroll,
@@ -293,7 +294,8 @@ impl Editor {
             drag: state.drag.as_ref().map(|d| DragView { pages: &d.pages, pos: d.pos, slot: d.slot }),
             enabled: self.overview_enabled(),
             menu: state.menu,
-            menu_enabled: [true, true, self.ws.layout.len() < MAX_PAGES, self.ws.layout.len() > 1],
+            menu_enabled: [true, true, self.ws.layout.len() < MAX_PAGES, true, self.ws.layout.len() > 1],
+            flagged: &flagged,
             motion: &|page| toolbar::PageMotion {
                 shift: state.slides.offset(page),
                 grow: state.grows.offset(page)[0],

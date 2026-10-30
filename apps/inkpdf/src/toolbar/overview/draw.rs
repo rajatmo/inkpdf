@@ -76,7 +76,9 @@ pub struct OverviewView<'a> {
     pub enabled: [bool; 5],
     /// The page whose menu is open, and which of its items can be used, in the order of [`MenuItem::ALL`].
     pub menu: Option<usize>,
-    pub menu_enabled: [bool; 4],
+    pub menu_enabled: [bool; 5],
+    /// The pages that carry a flag, in order.
+    pub flagged: &'a [usize],
     /// How each page's picture is moving.
     pub motion: &'a dyn Fn(usize) -> PageMotion,
 }
@@ -169,30 +171,33 @@ fn menu(view: &OverviewView<'_>, l: &OverviewLayout, page: usize, ui: &mut Ui) {
     ui.floating(rect, 0.5 * u, px);
     for (k, (item, r)) in items.into_iter().enumerate() {
         let enabled = view.menu_enabled[k];
-        if view.hover == Some(Hover::Menu(item)) && enabled {
-            ui.panels.push(crate::scene::Panel::solid(r, 0.3 * u, ui.pal.hover_wash));
-        }
-        let text = match item {
-            MenuItem::Before => "Add page before",
-            MenuItem::After => "Add page after",
-            MenuItem::Duplicate => "Duplicate",
-            MenuItem::Delete => "Delete",
+        let wash = if view.pressed == Some(Hover::Menu(item)) && enabled {
+            Some(ui.pal.pressed_wash)
+        } else if view.hover == Some(Hover::Menu(item)) && enabled {
+            Some(ui.pal.hover_wash)
+        } else {
+            None
         };
+        if let Some(color) = wash {
+            ui.panels.push(crate::scene::Panel::solid(r, (r[2] - r[0]) / 2.0, color));
+        }
         let color = if !enabled {
             ui.pal.ink_dim
         } else if item == MenuItem::Delete {
             ui.pal.danger
+        } else if item == MenuItem::Flag && view.flagged.binary_search(&page).is_ok() {
+            ui.pal.accent
         } else {
             ui.pal.ink
         };
-        ui.labels.push(Label {
-            text: text.to_string(),
-            size: 0.5 * u,
-            color,
-            at: [r[0] + 0.5 * u, (r[1] + r[3]) / 2.0],
-            align: Align::Left,
-            alpha: 1.0,
-        });
+        let icon = match item {
+            MenuItem::Before => &icons().add_before,
+            MenuItem::After => &icons().add_after,
+            MenuItem::Duplicate => &icons().duplicate,
+            MenuItem::Flag => &icons().flag,
+            MenuItem::Delete => &icons().trash,
+        };
+        icon.draw(&mut ui.lines, (r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0, 0.42 * u, 1.7 * px, color);
     }
 }
 
@@ -200,21 +205,20 @@ fn header(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
     let (u, px) = (l.unit(), l.px());
     let centre_y = (l.header[1] + l.header[3]) / 2.0;
     icons().pages.draw(&mut ui.lines, l.card[0] + 1.0 * u, centre_y, 0.5 * u, 1.6 * px, ui.pal.ink);
+    // The title is as long as the room between the picture and the buttons allows (a narrow window, a phone upright, has little): the
+    // whole of it, then only the number, and where there is no room for that, none.
     let count = view.layout.len();
-    ui.labels.push(Label {
-        text: if view.edit && !view.selected.is_empty() {
-            format!("{} selected", view.selected.len())
-        } else if count == 1 {
-            "All pages (1)".to_string()
-        } else {
-            format!("All pages ({count})")
-        },
-        size: 0.62 * u,
-        color: ui.pal.ink,
-        at: [l.card[0] + 1.8 * u, centre_y],
-        align: Align::Left,
-        alpha: 1.0,
-    });
+    let (size, x) = (0.62 * u, l.card[0] + 1.8 * u);
+    let room = l.controls.iter().map(|(_, r)| r[0]).fold(f32::MAX, f32::min) - 0.3 * u - x;
+    let chosen = view.selected.len();
+    let titles = if view.edit && chosen > 0 {
+        [format!("{chosen} selected"), chosen.to_string()]
+    } else {
+        [format!("All pages ({count})"), count.to_string()]
+    };
+    if let Some(title) = titles.into_iter().find(|t| text::measure(t, size)[0] <= room) {
+        ui.labels.push(Label { text: title, size, color: ui.pal.ink, at: [x, centre_y], align: Align::Left, alpha: 1.0 });
+    }
     for (control, r) in l.controls {
         let centre = [(r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0];
         let enabled = match control {
@@ -337,6 +341,12 @@ fn pages(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
             } else if current {
                 outline_rect(ui, [thumb[0] - 3.0 * px, thumb[1] - 3.0 * px, thumb[2] + 3.0 * px, thumb[3] + 3.0 * px], 2.5 * px, ui.pal.accent);
             }
+            if view.flagged.binary_search(&i).is_ok() {
+                // A flagged page wears a bookmark in the top left corner, on a disc of the accent colour.
+                let centre = [thumb[0] + 0.55 * u, thumb[1] + 0.55 * u];
+                ui.disc(centre, 0.8 * u, ui.pal.accent);
+                icons().flag.draw(&mut ui.lines, centre[0], centre[1], 0.3 * u, 1.6 * px, ui.pal.white);
+            }
             if view.edit {
                 // A circle to tick in the top right corner (where a page has the least on it): filled once the page is chosen.
                 let centre = [thumb[2] - 0.55 * u, thumb[1] + 0.55 * u];
@@ -405,24 +415,15 @@ fn bar(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
         } else {
             None
         };
-        let radius = (r[3] - r[1]) / 2.0;
-        // The pill that chooses everything has a hairline round it, the round buttons only a wash.
-        if action == Action::SelectAll {
-            ui.panels.push(crate::scene::Panel::solid(r, radius, ui.pal.separator));
-            ui.panels.push(crate::scene::Panel::solid([r[0] + px, r[1] + px, r[2] - px, r[3] - px], radius, ui.pal.panel));
-        }
         if let Some(color) = wash {
-            ui.panels.push(crate::scene::Panel::solid(r, radius, color));
+            ui.panels.push(crate::scene::Panel::solid(r, (r[3] - r[1]) / 2.0, color));
         }
         let color = if enabled || action == Action::SelectAll { ui.pal.ink } else { ui.pal.ink_dim };
         let centre = [(r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0];
         let icon = match action {
-            Action::SelectAll => {
-                let all = !view.layout.is_empty() && view.selected.len() == view.layout.len();
-                let text = if all { "Select none" } else { "Select all" };
-                ui.labels.push(Label { text: text.to_string(), size: 0.5 * u, color, at: centre, align: Align::Centre, alpha: 1.0 });
-                continue;
-            }
+            // Every page is chosen: the button lets them all go; otherwise it chooses them all.
+            Action::SelectAll if !view.layout.is_empty() && view.selected.len() == view.layout.len() => &icons().select_none,
+            Action::SelectAll => &icons().select_all,
             Action::Duplicate => &icons().duplicate,
             Action::Earlier => &icons().earlier,
             Action::Later => &icons().later,
@@ -490,7 +491,8 @@ mod tests {
             drag: None,
             enabled: [true; 5],
             menu: None,
-            menu_enabled: [true; 4],
+            menu_enabled: [true; 5],
+            flagged: &[],
             motion: &|_| PageMotion::default(),
         }
     }
@@ -508,6 +510,25 @@ mod tests {
         let mut ui = Ui::default();
         draw(v, &l, &mut ui);
         (ui, l)
+    }
+
+    #[test]
+    fn the_title_never_runs_into_the_buttons_and_is_left_out_where_there_is_no_room_for_it() {
+        let pages = layout(12);
+        let mut shown = Vec::new();
+        for (viewport, dpr) in
+            [([1280.0, 720.0], 1.0), ([800.0, 600.0], 1.0), ([411.0, 800.0], 1.0), ([320.0, 600.0], 1.0), ([1080.0, 2400.0], 2.625)]
+        {
+            let (ui, l) = drawn(&view(&pages, &[], &[], &[]), viewport, dpr);
+            let buttons = l.controls.iter().map(|(_, r)| r[0]).fold(f32::MAX, f32::min);
+            let title = ui.labels.iter().find(|x| x.at[0] < l.card[0] + 2.0 * l.unit());
+            if let Some(title) = title {
+                assert!(title.at[0] + text::measure(&title.text, title.size)[0] <= buttons, "{} runs into the buttons at {viewport:?}", title.text);
+                shown.push(title.text.clone());
+            }
+        }
+        assert_eq!(shown[0], "All pages (12)", "a wide window has the whole of it");
+        assert!(shown.len() < 5, "a window with no room for it has none: {shown:?}");
     }
 
     #[test]

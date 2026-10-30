@@ -8,7 +8,7 @@
 use std::sync::Arc;
 
 use crate::ink::{MarkupKind, P, Style};
-use crate::input::{Device, Mode, Phase};
+use crate::input::{Device, Mode, POINTER, Phase};
 use crate::pagetext::PageTextView;
 use crate::tool::{ToolAction, markup_colour};
 use crate::workspace::Workspace;
@@ -21,9 +21,6 @@ use super::{InputPolicy, Key, PageEvent, Tool};
 const LETTER_SLACK_PX: f32 = 5.0;
 /// How near, in logical pixels, a press must be to a handle to take it.
 const HANDLE_REACH_PX: f32 = 16.0;
-/// A second or third press within this many milliseconds and logical pixels of the one before makes a word or a line.
-const MULTI_MS: f64 = 450.0;
-const MULTI_PX: f32 = 12.0;
 /// A press that moves less than this many logical pixels is a tap.
 const TAP_PX: f32 = 4.0;
 /// The marks on the three buttons of the bar.
@@ -57,6 +54,10 @@ struct Press {
     stretches: bool,
     /// A markup that was under it, to select if it turns out to be a tap.
     markup: Option<u64>,
+    /// Whether the drag moves the page instead (it began on nothing to read, or with the middle button of a mouse): the reader's own way,
+    /// and where it last was, on the screen.
+    pans: bool,
+    at: [f32; 2],
 }
 
 #[derive(Default)]
@@ -182,35 +183,67 @@ impl SelectTool {
         }
     }
 
+    /// Whether a point of the screen is on one of the two handles of the selection (for the cursor, which only looks).
+    pub fn over_handle(&self, ws: &Workspace, screen: [f32; 2]) -> bool {
+        let Some(handles) = self.live(ws).and_then(|c| Self::handles(ws, c)) else { return false };
+        let reach = HANDLE_REACH_PX * ws.dpr;
+        handles.iter().any(|&h| {
+            let s = ws.view.doc_to_screen(h);
+            (s[0] - screen[0]).hypot(s[1] - screen[1]) <= reach
+        })
+    }
+
     fn begin(&mut self, ws: &mut Workspace, ev: &PageEvent<'_>) {
         let Some(first) = ev.samples.first() else { return };
         let at = first.pos;
+        let press = |moved, stretches, markup, pans| Press { dev: ev.dev, id: ev.id, from: at, moved, stretches, markup, pans, at };
+        // The middle button of a mouse pans, as in any reader (a stylus's barrel button loops, as it does with every tool).
+        if ev.pen.barrel && ev.id == crate::input::MOUSE_STYLUS_ID {
+            self.press = Some(press(true, false, None, true));
+            self.last = None;
+            return;
+        }
+        // With Shift held, a press on a letter of the page the selection is on stretches it to there (as in every reader), and a drag goes on stretching.
+        if ws.shift
+            && let Some((page, _, glyph)) = Self::letter_at(ws, at)
+            && let Some(c) = self.valid(ws)
+            && c.page == page
+        {
+            if let Some(c) = &mut self.chosen {
+                c.head = glyph;
+            }
+            self.press = Some(press(true, true, None, false));
+            self.last = None;
+            ws.redraw = true;
+            return;
+        }
         // A handle takes the end it is on and leaves the other where it is.
         if let Some(end) = self.handle_at(ws, at) {
             if let Some(c) = &mut self.chosen {
                 let (lo, hi) = (c.anchor.min(c.head), c.anchor.max(c.head));
                 (c.anchor, c.head) = if end == 0 { (hi, lo) } else { (lo, hi) };
             }
-            self.press = Some(Press { dev: ev.dev, id: ev.id, from: at, moved: true, stretches: true, markup: None });
+            self.press = Some(press(true, true, None, false));
             self.last = None;
             return;
         }
         let markup = Self::markup_at(ws, at);
         let Some((page, text, glyph)) = Self::letter_at(ws, at) else {
-            // Nothing to read here: a markup is selected, or what was selected is let go.
+            // Nothing to read here: a markup is selected, or what was selected is let go; and a drag from empty page pans it.
             self.chosen = None;
             ws.selection.clear();
             if let Some(id) = markup {
                 ws.selection.push(id);
             }
-            self.press = Some(Press { dev: ev.dev, id: ev.id, from: at, moved: false, stretches: false, markup: None });
+            self.press = Some(press(false, false, None, markup.is_none()));
             self.last = None;
             ws.redraw = true;
             return;
         };
         ws.selection.clear();
         let count = match self.last {
-            Some((t, p, n)) if first.t_ms - t <= MULTI_MS && (p[0] - at[0]).hypot(p[1] - at[1]) <= MULTI_PX * ws.dpr => (n + 1).min(3),
+            // (A second or third press, as near and as soon as a double click is, makes a word or a line.)
+            Some((t, p, n)) if POINTER.is_double(first.t_ms - t, (p[0] - at[0]).hypot(p[1] - at[1]) / ws.dpr) => (n + 1).min(3),
             _ => 1,
         };
         self.last = Some((first.t_ms, at, count));
@@ -221,7 +254,7 @@ impl SelectTool {
         };
         self.chosen = Some(Chosen { page, text, anchor, head });
         // A press that is a word or a line is not stretched by a drag (it would only be unsettling); a first one is.
-        self.press = Some(Press { dev: ev.dev, id: ev.id, from: at, moved: count > 1, stretches: count == 1, markup });
+        self.press = Some(press(count > 1, count == 1, markup, false));
         ws.redraw = true;
     }
 
@@ -229,6 +262,14 @@ impl SelectTool {
         let (Some(press), Some(last)) = (&mut self.press, ev.samples.last()) else { return };
         if !press.moved && (last.pos[0] - press.from[0]).hypot(last.pos[1] - press.from[1]) > TAP_PX * ws.dpr {
             press.moved = true;
+        }
+        if press.pans {
+            // (Only once it is a drag: a tap on empty page lets go of the selection, which is all it does.)
+            if press.moved {
+                ws.pan_px(last.pos[0] - press.at[0], last.pos[1] - press.at[1]);
+            }
+            press.at = last.pos;
+            return;
         }
         if !(press.stretches && press.moved) {
             return;

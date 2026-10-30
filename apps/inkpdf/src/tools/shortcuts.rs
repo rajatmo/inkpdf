@@ -27,6 +27,6 @@ pub fn selection_key(ws: &mut Workspace, key: Key<'_>) -> bool {
             };
             ws.nudge_selection(dx, dy)
         }
-        Key::Text(_) | Key::Home(_) | Key::End(_) | Key::Chord(_) => false,
+        Key::Text(_) | Key::Home(_) | Key::End(_) | Key::Chord(_) | Key::Page(_) => false,
     }
 }

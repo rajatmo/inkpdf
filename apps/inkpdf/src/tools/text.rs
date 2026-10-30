@@ -463,6 +463,8 @@ impl Tool for TextTool {
             Key::Escape => self.finish_text(ws),
             Key::Arrow(..) | Key::Home(_) | Key::End(_) => self.move_caret(ws, key),
             Key::Chord(letter) => self.chord(ws, letter),
+            // (A box being typed into has no use for the page keys; the document scrolls.)
+            Key::Page(_) => return false,
         }
         true
     }

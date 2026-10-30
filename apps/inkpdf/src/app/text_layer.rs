@@ -26,6 +26,8 @@ pub(super) struct TextDraw {
     top_left: P,
     /// The box's size in points.
     size: [f32; 2],
+    /// What shows of it, in document space: the box of a form field, which its text does not run out of.
+    clip: Option<[f32; 4]>,
 }
 
 /// The text boxes of the ink, found again only when the ink has changed.
@@ -70,7 +72,7 @@ impl UiLayers {
         self.text_draws.clear();
         let ed = &cx.ed;
         self.text_index.refresh(ed);
-        if self.text_index.at.is_empty() && ed.text_edit().is_none() {
+        if self.text_index.at.is_empty() && ed.text_edit().is_none() && ed.form.fields.is_empty() {
             // No text boxes, but the pages overview's text is bitmaps too (a page number each): kept only as long as it is shown.
             cx.gpu.trim_texts(&self.overview.keys, KEEP_BITMAPS);
             return;
@@ -97,6 +99,7 @@ impl UiLayers {
                 key,
                 top_left: [corner[0] + moved[0], corner[1] + moved[1]],
                 size: text::measure(&block.text, block.size),
+                clip: None,
             });
         }
         if let Some(edit) = ed.text_edit()
@@ -104,7 +107,19 @@ impl UiLayers {
         {
             let key = ensure(cx.gpu, &edit.text, edit.size, ed.on_page(edit.rgba), level);
             used.insert(key);
-            self.text_draws.push(TextDraw { page: edit.page, key, top_left: edit.top_left, size: text::measure(&edit.text, edit.size) });
+            self.text_draws.push(TextDraw { page: edit.page, key, top_left: edit.top_left, size: text::measure(&edit.text, edit.size), clip: None });
+        }
+        // What the person put in a field of a form.
+        for b in ed.form_boxes(&visible).into_iter().filter(|b| b.changed && !b.text.is_empty()) {
+            let key = ensure(cx.gpu, &b.text, b.size, ed.on_page([24, 26, 34, 255]), level);
+            used.insert(key);
+            self.text_draws.push(TextDraw {
+                page: b.page as u32,
+                key,
+                top_left: b.top_left,
+                size: text::measure(&b.text, b.size),
+                clip: Some(b.rect),
+            });
         }
         used.extend(self.overview.keys.iter().copied());
         cx.gpu.trim_texts(&used, KEEP_BITMAPS);
@@ -113,8 +128,13 @@ impl UiLayers {
     /// The quads of the text boxes on `page`.
     pub(super) fn text_quads(&self, cx: &Paint, page: usize, out: &mut Vec<Quad>) {
         for d in self.text_draws.iter().filter(|d| d.page as usize == page) {
-            if let Some(rect) = self.text_rect(cx, d) {
-                out.push(Quad::text(d.key, rect));
+            let Some(rect) = self.text_rect(cx, d) else { continue };
+            match d.clip {
+                None => out.push(Quad::text(d.key, rect)),
+                Some(c) => {
+                    let (a, b) = (cx.ed.view.doc_to_screen([c[0], c[1]]), cx.ed.view.doc_to_screen([c[2], c[3]]));
+                    out.extend(clipped(d.key, rect, [a[0], a[1], b[0], b[1]], 1.0));
+                }
             }
         }
     }

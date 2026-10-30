@@ -9,6 +9,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.PointerIcon;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowInsets;
@@ -113,6 +114,29 @@ public class Host extends NativeActivity {
         }
     }
 
+    /** The file's own name (the provider's DISPLAY_NAME), or null if it will not say. */
+    public String displayName(String address) {
+        try (android.database.Cursor cursor = getContentResolver().query(Uri.parse(address), new String[] {android.provider.OpenableColumns.DISPLAY_NAME}, null, null, null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                return cursor.getString(0);
+            }
+        } catch (Exception e) {
+            lastError = String.valueOf(e);
+        }
+        return null;
+    }
+
+    /** Show this system pointer icon (a PointerIcon type) over the window, for a mouse or a hovering stylus: a finger has no pointer. */
+    public void setPointer(int type) {
+        runOnUiThread(new Task(this, Task.POINTER, type, null));
+    }
+
+    void doPointer(int type) {
+        if (Build.VERSION.SDK_INT >= 24) {
+            getWindow().getDecorView().setPointerIcon(PointerIcon.getSystemIcon(this, type));
+        }
+    }
+
     /** Ask the system for a PDF to open (kind 0) or for a place and a name to save under (kind 1). */
     public void pick(int kind, String name) {
         runOnUiThread(new Task(this, Task.PICK, kind, name));
@@ -142,6 +166,7 @@ public class Host extends NativeActivity {
         static final int COPY = 1;
         static final int URL = 2;
         static final int BARS = 3;
+        static final int POINTER = 4;
         private final Host host;
         private final int what;
         private final int kind;
@@ -161,6 +186,8 @@ public class Host extends NativeActivity {
                     host.doPick(kind, text);
                 } else if (what == BARS) {
                     host.doBars();
+                } else if (what == POINTER) {
+                    host.doPointer(kind);
                 } else if (what == COPY) {
                     ClipboardManager clipboard = (ClipboardManager) host.getSystemService(Context.CLIPBOARD_SERVICE);
                     clipboard.setPrimaryClip(ClipData.newPlainText("InkPDF", text == null ? "" : text));

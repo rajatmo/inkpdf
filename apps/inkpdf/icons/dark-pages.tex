@@ -1,0 +1,13 @@
+\documentclass[tikz,border=0pt]{standalone}
+\input{style}
+\begin{document}
+\begin{tikzpicture}
+  \iconbox
+  % Dark pages: a page with its lower half in shade (hatched).
+  \draw[soft] (-0.5,0.714) -- (0.214,0.714) -- (0.5,0.429) -- (0.5,-0.714) -- (-0.5,-0.714) -- cycle;
+  \draw (0.214,0.714) -- (0.214,0.429) -- (0.5,0.429);
+  \draw (-0.286,-0.357) -- (0.286,0.214);
+  \draw (-0.286,-0.643) -- (0.429,0.071);
+  \draw (0,-0.643) -- (0.429,-0.214);
+\end{tikzpicture}
+\end{document}

@@ -6,15 +6,18 @@ use std::sync::Arc;
 use pdfcraft_annot::appearance::parse_da;
 use pdfcraft_annot::{Markup, Meta, NewAnnotation as AnnotNew, Shape, Style as AnnotStyle, add_annotation, delete_annotation, page_refs};
 use pdfcraft_cos::{Dict, Document, ObjRef, Object, SaveOptions, pdf_date, write_full, write_incremental};
-use pdfcraft_organize::{OrganizeError as OrgError, bookmarks, delete_pages, duplicate_pages, insert_blank_page, move_pages, page_count};
+use pdfcraft_forms as forms;
+use pdfcraft_organize::{
+    OrganizeError as OrgError, add_bookmark, bookmarks, delete_bookmark, delete_pages, duplicate_pages, insert_blank_page, move_pages, page_count,
+};
 use pdfcraft_render::{
     PageRenderer, PageText, ReadingColors, ReadingParams, RenderConfig, RenderPool as Pool, RenderRequest as Request, RenderedPage, Tile as PdfTile,
     text::TextFilter,
 };
 
 use super::{
-    AnnotKind, Annotation, NewAnnotation, NewShape, OrganizeError, PageLook, PdfBackend, PdfDocument, Pixels, RawLink, RawOutlineItem, RawTarget,
-    RenderPool, RenderRequest, Rendered, TextSource,
+    AnnotKind, Annotation, NewAnnotation, NewShape, OrganizeError, PageLook, PdfBackend, PdfDocument, Pixels, RawField, RawFieldKind, RawLink,
+    RawOutlineItem, RawTarget, RawValue, RawWidget, RenderPool, RenderRequest, Rendered, TextSource,
 };
 use crate::coords::PageGeom;
 use crate::ink::MarkupKind;
@@ -27,6 +30,8 @@ const MAX_NAMED: usize = 200_000;
 const MAX_TREE_DEPTH: usize = 24;
 /// Most outline entries read from one file, so a hostile file cannot fill memory.
 const MAX_ITEMS: usize = 20_000;
+/// Most form fields read from one file.
+const MAX_FIELDS: usize = 5_000;
 /// The bit of a request's tag that pdfcraft reads as "a print preview" (it then ignores the reading colours). Ours must keep it clear.
 const PRINT_TAG: u64 = 1 << 60;
 
@@ -258,6 +263,73 @@ impl PdfDocument for PdfcraftDoc {
             .take(MAX_ITEMS)
             .map(|b| RawOutlineItem { title: b.title.clone(), depth: b.path.len().saturating_sub(1), page: b.page, open: b.open })
             .collect()
+    }
+
+    fn set_flags(&mut self, prefix: &str, pages: &[usize]) -> Result<(), String> {
+        // The flags there are, highest first (a deleted entry moves the ones after it).
+        let mut old: Vec<usize> =
+            bookmarks(&self.doc).iter().filter(|b| b.path.len() == 1 && b.title.starts_with(prefix)).map(|b| b.path[0]).collect();
+        old.sort_unstable_by(|a, b| b.cmp(a));
+        for at in old {
+            delete_bookmark(&mut self.doc, &[at]).map_err(|e| e.to_string())?;
+        }
+        let first = bookmarks(&self.doc).iter().filter(|b| b.path.len() == 1).count();
+        for (next, &page) in (first..).zip(pages.iter().take(MAX_ITEMS)) {
+            add_bookmark(&mut self.doc, &[], next, &format!("{prefix}{}", page + 1), page).map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
+
+    fn fields(&self) -> Vec<RawField> {
+        forms::fields(&self.doc)
+            .into_iter()
+            .filter(|f| !f.read_only() && !f.has(forms::flags::PASSWORD))
+            .filter_map(|f| {
+                let kind = match f.kind {
+                    forms::FieldKind::Text => RawFieldKind::Text,
+                    forms::FieldKind::CheckBox => RawFieldKind::Check,
+                    forms::FieldKind::Radio => RawFieldKind::Radio,
+                    forms::FieldKind::Combo | forms::FieldKind::List => RawFieldKind::Choice,
+                    forms::FieldKind::PushButton | forms::FieldKind::Signature => return None,
+                };
+                let widgets: Vec<RawWidget> = f
+                    .widgets
+                    .iter()
+                    .filter(|w| !w.hidden && !w.read_only)
+                    .filter_map(|w| Some(RawWidget { page: w.page?, rect: w.rect.map(|v| v as f32), on_state: w.on_state.clone() }))
+                    .collect();
+                (!widgets.is_empty()).then(|| RawField {
+                    multiline: f.has(forms::flags::MULTILINE),
+                    max_len: f.max_len,
+                    name: f.name,
+                    kind,
+                    value: f.value,
+                    options: f.options,
+                    widgets,
+                })
+            })
+            .take(MAX_FIELDS)
+            .collect()
+    }
+
+    fn set_fields(&mut self, values: &[(String, RawValue)]) -> Result<(), String> {
+        let values: Vec<(String, forms::FieldValue)> = values
+            .iter()
+            .map(|(name, value)| {
+                let value = match value {
+                    RawValue::Text(text) => forms::FieldValue::Text(text.clone()),
+                    RawValue::Check(on) => forms::FieldValue::Check(*on),
+                    RawValue::Radio(state) => forms::FieldValue::Radio(state.clone()),
+                    RawValue::Choice(chosen) => forms::FieldValue::Choice(chosen.clone()),
+                };
+                (name.clone(), value)
+            })
+            .collect();
+        // (Each value that cannot be put in is its own failure, and the rest are written; a form whose calculations fail still has the values.)
+        forms::set_values(&mut self.doc, &values).map(|_| ()).or_else(|e| match e {
+            forms::FormError::Cos(e) => Err(e.to_string()),
+            _ => Ok(()),
+        })
     }
 
     fn annotations(&self) -> Vec<Annotation> {

@@ -51,6 +51,11 @@ pub trait FileStore: Send + Sync {
     /// Replace the file with `bytes`, or make it. All or nothing: a failure part-way leaves the file as it was, and a file the
     /// person has made read-only is refused.
     fn write_atomic(&self, id: &DocId, bytes: &[u8]) -> Result<(), String>;
+    /// The name to show for the file: what the store knows it as (Android's picker has the file's real name, which its address does not
+    /// say), else the one [`DocId::name`] reads from the address.
+    fn display_name(&self, id: &DocId) -> String {
+        id.name()
+    }
 }
 
 #[cfg(test)]

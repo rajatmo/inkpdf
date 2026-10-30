@@ -1,6 +1,7 @@
 //! Writes a many-page test PDF with dense text and vector drawing, for scrolling and zoom
-//! benchmarks: `inkpdf-gen out.pdf [pages] [--outline]`. With `--outline` it also has a table of contents: a chapter every three
-//! pages, and a section under the first.
+//! benchmarks: `inkpdf-gen out.pdf [pages] [--outline] [--form]`. With `--outline` it also has a table of contents: a chapter every three
+//! pages, and a section under the first. With `--form` page 1 is a form to fill in (a text field, a check box, radio buttons, a combo box and
+//! a field of several lines).
 
 use std::fmt::Write as _;
 use std::fs;
@@ -99,13 +100,68 @@ fn add_outline(objs: &mut Vec<String>, pages: usize) {
     objs[0] = format!("<< /Type /Catalog /Pages 2 0 R /Outlines {root} 0 R >>");
 }
 
+/// What page 1 shows with `--form`: a title and the labels of the fields (the dense text of the other pages would run under them).
+fn form_content() -> String {
+    let mut c = String::from("BT /F2 22 Tf 60 740 Td (A form to fill in) Tj ET\n");
+    for (x, y, label) in [
+        (60, 686, "Name"),
+        (178, 644, "I agree"),
+        (60, 604, "Size"),
+        (178, 604, "Small"),
+        (278, 604, "Large"),
+        (60, 562, "Colour"),
+        (60, 520, "Notes"),
+    ] {
+        let _ = writeln!(c, "BT /F1 12 Tf {x} {y} Td ({label}) Tj ET");
+    }
+    c
+}
+
+/// The form of `--form` on page 1 (objects 5 and 6): a text field, a check box, a group of two radio buttons, a combo box and a field of several
+/// lines, set in Helvetica; page 1's boxes are drawn (a frame, and a mark when on) by the file's own appearances.
+fn add_form(objs: &mut Vec<String>) {
+    let at = objs.len() + 1;
+    let frame = "0.4 G 0.5 0.5 17 17 re S";
+    let appearance = |extra: &str| {
+        let content = format!("{frame}\n{extra}");
+        format!("<< /Type /XObject /Subtype /Form /BBox [0 0 18 18] /Length {} >>\nstream\n{content}endstream", content.len())
+    };
+    let widget = |rest: &str| format!("<< /Type /Annot /Subtype /Widget /P 5 0 R /F 4 {rest} >>");
+    let text = "/FT /Tx /DA (/Helv 12 Tf 0 g) /V ()";
+    // (Objects, in order: the font, the five fields' boxes, the radio group, the form, and the two appearances.)
+    let (on, off) = (at + 9, at + 10);
+    let states = |name: &str| format!("/AP << /N << /{name} {on} 0 R /Off {off} 0 R >> >> /AS /Off");
+    objs.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".into());
+    objs.push(widget(&format!("{text} /T (name) /Rect [150 680 450 704]")));
+    objs.push(widget(&format!("/FT /Btn /T (agree) /V /Off /Rect [150 640 168 658] {}", states("Yes"))));
+    objs.push("<< /FT /Btn /Ff 32768 /T (size) /V /Off /Kids [".to_string() + &format!("{} 0 R {} 0 R] >>", at + 4, at + 5));
+    objs.push(widget(&format!("/Parent {} 0 R /Rect [150 600 168 618] {}", at + 3, states("Small"))));
+    objs.push(widget(&format!("/Parent {} 0 R /Rect [250 600 268 618] {}", at + 3, states("Large"))));
+    objs.push(widget("/FT /Ch /Ff 131072 /T (colour) /Opt [(Red) (Green) (Blue)] /V () /DA (/Helv 12 Tf 0 g) /Rect [150 556 350 578]"));
+    objs.push(widget(&format!("{text} /Ff 4096 /T (notes) /Rect [150 440 450 536]")));
+    objs.push(format!(
+        "<< /Fields [{} 0 R {} 0 R {} 0 R {} 0 R {} 0 R] /DA (/Helv 0 Tf 0 g) /DR << /Font << /Helv {at} 0 R >> >> >>",
+        at + 1,
+        at + 2,
+        at + 3,
+        at + 6,
+        at + 7
+    ));
+    objs.push(appearance("0 g 4 4 10 10 re f\n"));
+    objs.push(appearance(""));
+    let annots = [at + 1, at + 2, at + 4, at + 5, at + 6, at + 7].map(|n| format!("{n} 0 R")).join(" ");
+    objs[4] = objs[4].replace("/Resources", &format!("/Annots [{annots}] /Resources"));
+    objs[0] = objs[0].replace(" >>", &format!(" /AcroForm {} 0 R >>", at + 8));
+}
+
 fn main() {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     let with_outline = args.iter().any(|a| a == "--outline");
-    args.retain(|a| a != "--outline");
+    let with_form = args.iter().any(|a| a == "--form");
+    args.retain(|a| a != "--outline" && a != "--form");
     let mut args = args.into_iter();
     let Some(out) = args.next() else {
-        eprintln!("usage: inkpdf-gen out.pdf [pages] [--outline]");
+        eprintln!("usage: inkpdf-gen out.pdf [pages] [--outline] [--form]");
         std::process::exit(2);
     };
     let pages: usize = args.next().and_then(|p| p.parse().ok()).unwrap_or(60).clamp(1, 5000);
@@ -120,7 +176,7 @@ fn main() {
     let mut kids = String::new();
     for p in 0..pages {
         let page_obj = 5 + p * 2;
-        let content = page_content(p);
+        let content = if with_form && p == 0 { form_content() } else { page_content(p) };
         let _ = write!(kids, "{page_obj} 0 R ");
         objs.push(format!(
             "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents {} 0 R /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> >>",
@@ -131,6 +187,9 @@ fn main() {
     objs[1] = format!("<< /Type /Pages /Kids [{}] /Count {pages} >>", kids.trim_end());
     if with_outline {
         add_outline(&mut objs, pages);
+    }
+    if with_form {
+        add_form(&mut objs);
     }
 
     let mut pdf = b"%PDF-1.7\n".to_vec();

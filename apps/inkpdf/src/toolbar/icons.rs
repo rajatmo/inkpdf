@@ -1,4 +1,4 @@
-//! Toolbar icons. They are drawn in TikZ (`icons/*.tex`), compiled to SVG with `icons/build.ps1`
+//! Toolbar icons. Every one is drawn in TikZ (`icons/*.tex`), compiled to SVG with `icons/build.ps1`
 //! and embedded here. At start-up each SVG's stroked paths are flattened into polylines in a box
 //! from -1 to 1 (y down), which the toolbar draws as round-ended capsules at any size.
 
@@ -42,7 +42,7 @@ pub(super) struct Icons {
     pub check: Icon,
     /// Arrows pointing left and right.
     pub earlier: Icon,
-    /// The look: the system's (a circle half in shade), light (a sun), dark (a moon).
+    /// The look: the system's (a sun and a moon), light (a sun), dark (a moon).
     pub theme_system: Icon,
     pub theme_light: Icon,
     pub theme_dark: Icon,
@@ -54,10 +54,23 @@ pub(super) struct Icons {
     pub search: Icon,
     /// A folder: open a PDF.
     pub open: Icon,
+    /// A page with its corner folded: the document's pill, folded into its round button.
+    pub document: Icon,
     pub highlight: Icon,
     pub underline: Icon,
     pub strikeout: Icon,
     pub later: Icon,
+    /// What the search matches: the case ("Aa") and whole words.
+    pub match_case: Icon,
+    pub whole_word: Icon,
+    /// Choosing every page of the overview, and none: a box with a tick, a box with a dash.
+    pub select_all: Icon,
+    pub select_none: Icon,
+    /// A new page before a page, and after it.
+    pub add_before: Icon,
+    pub add_after: Icon,
+    /// A bookmark: the flag of a page.
+    pub flag: Icon,
 }
 
 static ICONS: LazyLock<Icons> = LazyLock::new(|| Icons {
@@ -84,10 +97,17 @@ static ICONS: LazyLock<Icons> = LazyLock::new(|| Icons {
     node_add: Icon::from_svg(include_str!("../../icons/svg/node-add.svg")),
     node_smooth: Icon::from_svg(include_str!("../../icons/svg/node-smooth.svg")),
     options: Icon::from_svg(include_str!("../../icons/svg/options.svg")),
-    pages: Icon::pages(),
-    check: Icon::check(),
-    earlier: Icon::arrow(-1.0),
-    later: Icon::arrow(1.0),
+    pages: Icon::from_svg(include_str!("../../icons/svg/pages.svg")),
+    check: Icon::from_svg(include_str!("../../icons/svg/check.svg")),
+    earlier: Icon::from_svg(include_str!("../../icons/svg/earlier.svg")),
+    later: Icon::from_svg(include_str!("../../icons/svg/later.svg")),
+    match_case: Icon::from_svg(include_str!("../../icons/svg/match-case.svg")),
+    whole_word: Icon::from_svg(include_str!("../../icons/svg/whole-word.svg")),
+    select_all: Icon::from_svg(include_str!("../../icons/svg/select-all.svg")),
+    select_none: Icon::from_svg(include_str!("../../icons/svg/select-none.svg")),
+    add_before: Icon::from_svg(include_str!("../../icons/svg/add-before.svg")),
+    add_after: Icon::from_svg(include_str!("../../icons/svg/add-after.svg")),
+    flag: Icon::from_svg(include_str!("../../icons/svg/flag.svg")),
     theme_system: Icon::from_svg(include_str!("../../icons/svg/theme-system.svg")),
     theme_light: Icon::from_svg(include_str!("../../icons/svg/theme-light.svg")),
     theme_dark: Icon::from_svg(include_str!("../../icons/svg/theme-dark.svg")),
@@ -95,6 +115,7 @@ static ICONS: LazyLock<Icons> = LazyLock::new(|| Icons {
     text_select: Icon::from_svg(include_str!("../../icons/svg/text-select.svg")),
     search: Icon::from_svg(include_str!("../../icons/svg/search.svg")),
     open: Icon::from_svg(include_str!("../../icons/svg/open.svg")),
+    document: Icon::from_svg(include_str!("../../icons/svg/document.svg")),
     highlight: Icon::from_svg(include_str!("../../icons/svg/highlight.svg")),
     underline: Icon::from_svg(include_str!("../../icons/svg/underline.svg")),
     strikeout: Icon::from_svg(include_str!("../../icons/svg/strikeout.svg")),
@@ -124,28 +145,6 @@ pub(super) fn icons() -> &'static Icons {
 }
 
 impl Icon {
-    /// Four small pages, two by two.
-    fn pages() -> Icon {
-        let square = |x0: f32, y0: f32| vec![[x0, y0], [x0 + 0.78, y0], [x0 + 0.78, y0 + 0.78], [x0, y0 + 0.78], [x0, y0]];
-        Icon { lines: vec![square(-0.9, -0.9), square(0.12, -0.9), square(-0.9, 0.12), square(0.12, 0.12)] }
-    }
-
-    /// An arrow pointing right (`way` 1) or left (-1).
-    fn arrow(way: f32) -> Icon {
-        Icon { lines: vec![vec![[-0.8 * way, 0.0], [0.8 * way, 0.0]], vec![[0.2 * way, -0.55], [0.8 * way, 0.0], [0.2 * way, 0.55]]] }
-    }
-
-    /// A tick in a circle.
-    fn check() -> Icon {
-        let circle: Vec<[f32; 2]> = (0..=32)
-            .map(|i| {
-                let a = i as f32 / 32.0 * std::f32::consts::TAU;
-                [0.9 * a.cos(), 0.9 * a.sin()]
-            })
-            .collect();
-        Icon { lines: vec![circle, vec![[-0.42, 0.02], [-0.1, 0.36], [0.46, -0.32]]] }
-    }
-
     /// The paths of an SVG written by dvisvgm. Anything that cannot be read gives an empty icon.
     fn from_svg(svg: &str) -> Icon {
         let Some([vx, vy, vw, vh]) = view_box(svg) else { return Icon::default() };
@@ -431,9 +430,21 @@ mod tests {
             ("text-select", &all.text_select),
             ("search", &all.search),
             ("open", &all.open),
+            ("document", &all.document),
             ("highlight", &all.highlight),
             ("underline", &all.underline),
             ("strikeout", &all.strikeout),
+            ("pages", &all.pages),
+            ("check", &all.check),
+            ("earlier", &all.earlier),
+            ("later", &all.later),
+            ("match-case", &all.match_case),
+            ("whole-word", &all.whole_word),
+            ("select-all", &all.select_all),
+            ("select-none", &all.select_none),
+            ("add-before", &all.add_before),
+            ("add-after", &all.add_after),
+            ("flag", &all.flag),
         ] {
             assert!(!icon.lines.is_empty(), "{name} has no strokes");
             for p in icon.lines.iter().flatten() {

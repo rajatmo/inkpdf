@@ -1,0 +1,13 @@
+\documentclass[tikz,border=0pt]{standalone}
+\input{style}
+\begin{document}
+\begin{tikzpicture}
+  \iconbox
+  % Follow the system: a sun and a moon, one on each side of the diagonal.
+  \draw (-0.4,0.4) circle (0.2);
+  \foreach \a in {0,45,...,315} \draw[shift={(-0.4,0.4)}] (\a:0.33) -- (\a:0.5);
+  \begin{scope}[shift={(0.4,-0.4)}, scale=0.5]
+    \draw (0.0043,0.8) arc (89.7:348.3:0.8) arc (305.9:132.1:0.62) -- cycle;
+  \end{scope}
+\end{tikzpicture}
+\end{document}

@@ -20,6 +20,7 @@ impl Editor {
                 let first_finger = self.fingers.fingers() == 0 && matches!(self.chrome.act, Act::Idle);
                 if first_finger {
                     self.dismiss_theme_menu(first.pos);
+                    self.dismiss_pill(first.pos);
                 }
                 if first_finger && self.press_panel(Device::Touch, ev.id, first.pos) {
                     return;
@@ -89,6 +90,7 @@ impl Editor {
                     // a selection.
                     if !self.follow_link_at(pos) {
                         self.ws.selection.clear();
+                        self.tap_on_page(pos, last.t_ms);
                     }
                 }
             }

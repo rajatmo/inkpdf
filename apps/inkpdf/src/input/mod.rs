@@ -15,19 +15,26 @@
 //! What the plain tip does (draw, select or erase) is chosen on screen ([`Intent`]), so a device with no
 //! eraser end, barrel button or right button can still select and erase; those are shortcuts for the same.
 
+mod click;
 mod contract;
 mod event;
 mod gestures;
 mod palm;
 mod predict;
 pub mod record;
+mod rules;
 
+pub use click::{FINGER, POINTER};
 #[allow(unused_imports, dead_code, reason = "the checker is for the sources' tests and for replay, which validates a recorded session with it")]
 pub use contract::{Broken, Checker, check};
 pub use event::{ButtonState, Dir, InputEvent, Key, KeyInput, MouseButton, Wheel};
 pub use gestures::{GestureDelta, TouchGestures};
 pub use palm::PalmGuard;
 pub use predict::predict;
+pub use rules::{Action, CursorKind, Target, decide};
+
+/// The pointer id a mouse has when it stands in for a stylus (real pointer ids are small): a tool that is handed it knows the press is the mouse's.
+pub const MOUSE_STYLUS_ID: u32 = u32::MAX;
 
 /// How the machine is being held, which decides what the devices do: with a keyboard and mouse in front of
 /// you (desktop), or as a slate you touch and write on (tablet). It follows the machine's posture (see

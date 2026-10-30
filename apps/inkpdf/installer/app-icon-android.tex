@@ -1,0 +1,11 @@
+\documentclass[tikz,border=0pt]{standalone}
+\input{pen-art}
+\begin{document}
+% The pen of the app icon alone, on a transparent square of 108 dp (a square 3.4 wide): the adaptive icon's foreground, which the launcher
+% lays on its white background and cuts to its own shape. The pen is inside the middle 66 dp (a circle 2.1 across) that is never cut. The
+% same picture, in one colour, is the themed icon of Android 13.
+\begin{tikzpicture}[x=1cm,y=1cm,line cap=round,line join=round]
+  \useasboundingbox (-1.7,-1.7) rectangle (1.7,1.7);
+  \penart{1.9pt}
+\end{tikzpicture}
+\end{document}

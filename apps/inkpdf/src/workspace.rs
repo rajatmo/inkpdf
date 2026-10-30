@@ -22,6 +22,9 @@ pub struct Workspace {
     pub dpr: f32,
     /// Whether the zoom follows the window width (until the user zooms).
     pub fit_mode: bool,
+    /// Whether Shift is held (the shell says, with `InputEvent::Shift`): a press with the Select tool then extends the selection instead of
+    /// beginning one.
+    pub shift: bool,
     pub ink: InkStore,
     pub selection: Vec<u64>,
     /// Strokes the eraser has touched in the current gesture: hidden now, removed when it ends.
@@ -70,6 +73,7 @@ impl Workspace {
             view: View::new(viewport),
             dpr,
             fit_mode: true,
+            shift: false,
             ink: InkStore::new(),
             selection: Vec::new(),
             erasing: HashSet::new(),

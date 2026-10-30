@@ -14,6 +14,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::coords::PageGeom;
 use crate::figure::Figure;
+use crate::form::Form;
 use crate::ink::{InkStore, MarkupKind, P, PageStroke, Style, TextBlock};
 use crate::links::Link;
 use crate::outline::OutlineItem;
@@ -33,8 +34,10 @@ pub struct Loaded {
     /// What the page renderer should draw: the file without our ink annotations, because the ink
     /// layer draws those (so they can be erased and moved). The file itself when it has none.
     pub render_bytes: Arc<Vec<u8>>,
-    /// The links the file has, where touch can follow them.
+    /// The links the file has, where touch can follow them, and a link for each box of a form field (see [`crate::form`]).
     pub links: Vec<Link>,
+    /// The fields of the file's form that can be filled.
+    pub form: Form,
     /// The table of contents the file has.
     pub outline: Vec<OutlineItem>,
 }
@@ -113,11 +116,14 @@ fn find_ours(doc: &dyn PdfDocument) -> Vec<Found> {
 /// Read the ink this app saved earlier.
 pub fn load(bytes: &Arc<Vec<u8>>, geoms: &[PageGeom], layout: &Layout) -> Result<Loaded, String> {
     let mut doc = pdf::native().open(bytes)?;
-    let links = crate::pdf_read::links(&*doc, geoms, layout);
+    let mut links = crate::pdf_read::links(&*doc, geoms, layout);
+    let (form, boxes) = crate::pdf_read::form(&*doc, geoms, layout);
+    // (The boxes go last: where a link and a box overlap, the box is what a press finds.)
+    links.extend(boxes);
     let outline = crate::pdf_read::outline(&*doc);
     let found = find_ours(&*doc);
     if found.is_empty() {
-        return Ok(Loaded { strokes: Vec::new(), render_bytes: bytes.clone(), links, outline });
+        return Ok(Loaded { strokes: Vec::new(), render_bytes: bytes.clone(), links, form, outline });
     }
     let mut strokes = Vec::new();
     for f in &found {
@@ -161,7 +167,7 @@ pub fn load(bytes: &Arc<Vec<u8>>, geoms: &[PageGeom], layout: &Layout) -> Result
         doc.delete_annotation(f.page, f.index)?;
     }
     let render_bytes = doc.save_full()?;
-    Ok(Loaded { strokes, render_bytes: Arc::new(render_bytes), links, outline })
+    Ok(Loaded { strokes, render_bytes: Arc::new(render_bytes), links, form, outline })
 }
 
 /// Put the pages of the file that are left (the deleted ones are out of it by now) in the order the document has them:
@@ -227,6 +233,7 @@ fn finish_markup(
 /// saved file); a page of the document that no page of the file is, is one that was added (it is put in, as big as
 /// `layout` says), and the pages of the file are put in the order the document has them. `copies` are the pages of the
 /// document that are copies of pages of the file, each with the page of the file it is a copy of: they are made from them.
+#[cfg(test)]
 pub fn save(
     base: &Arc<Vec<u8>>,
     store: &InkStore,
@@ -235,6 +242,30 @@ pub fn save(
     pages: &BTreeSet<u32>,
     doc_of_file: &[Option<usize>],
     copies: &[(usize, usize)],
+) -> Result<Vec<u8>, String> {
+    save_with(base, store, geoms, layout, pages, doc_of_file, copies, &Extras::default())
+}
+
+/// What a save writes besides the ink and the pages.
+#[derive(Default)]
+pub struct Extras<'a> {
+    /// The pages of the document that are flagged (see [`crate::outline::FLAG`]): the flags of the file are made to be those. `None`: left as they are.
+    pub flags: Option<&'a [usize]>,
+    /// The values the person put in the fields of the form (see [`crate::form`]).
+    pub fields: &'a [(String, pdf::RawValue)],
+}
+
+/// [`save`], and with `extras`.
+#[allow(clippy::too_many_arguments, reason = "the same arguments as `save`, each a different part of what the document is, and one more")]
+pub fn save_with(
+    base: &Arc<Vec<u8>>,
+    store: &InkStore,
+    geoms: &[PageGeom],
+    layout: &Layout,
+    pages: &BTreeSet<u32>,
+    doc_of_file: &[Option<usize>],
+    copies: &[(usize, usize)],
+    extras: &Extras<'_>,
 ) -> Result<Vec<u8>, String> {
     let mut doc = pdf::native().open(base)?;
     let now = pdf::native().date(unix_now());
@@ -294,6 +325,13 @@ pub fn save(
     arrange(&mut *doc, doc_of_file, &order)?;
     for &(at, size) in inserts {
         doc.insert_blank_page(at, size)?;
+    }
+    // (The pages are in their places: the flags are the document's numbers.)
+    if let Some(flags) = extras.flags {
+        doc.set_flags(crate::outline::FLAG, flags)?;
+    }
+    if !extras.fields.is_empty() {
+        doc.set_fields(extras.fields)?;
     }
 
     for &page in pages {

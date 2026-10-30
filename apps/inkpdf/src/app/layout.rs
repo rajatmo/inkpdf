@@ -3,6 +3,7 @@
 //!
 //! ```text
 //! {"client":[w,h],"dpr":1.5,"buttons":{"undo":[x,y],"pen":[x,y],…},"bar":{"delete":[x,y],"swatch2":[x,y],…},
+//!  "fields":{"name":[x,y],"size#1":[x,y],…},
 //!  "overview":{"controls":{"edit":[x,y],…},"actions":{"duplicate":[x,y],…},"pages":{"1":[x,y,w,h],…},"toc":{"Chapter 2":[x,y],…}}}
 //! ```
 //!
@@ -13,7 +14,7 @@ use std::fmt::Write;
 use std::path::PathBuf;
 
 use crate::editor::Editor;
-use crate::toolbar::{ContextItem, Item};
+use crate::toolbar::{ContextItem, Item, Pill};
 
 pub(super) struct Reporter {
     path: PathBuf,
@@ -56,6 +57,10 @@ fn item_name(item: Item) -> String {
         Item::ModeSwitch => "mode".into(),
         Item::Fullscreen => "full".into(),
         Item::Theme => "theme".into(),
+        // The round buttons of the folded pills.
+        Item::Fold(Pill::Document) => "fold-doc".into(),
+        Item::Fold(Pill::Tools) => "fold-tools".into(),
+        Item::Fold(Pill::View) => "fold-view".into(),
     }
 }
 
@@ -108,6 +113,16 @@ fn describe(ed: &Editor) -> String {
     let buttons = points(ed.toolbar().items().iter().map(|&(item, r)| (item_name(item), middle(r))));
     let bar = ed.context_bar().map(|b| points(b.items().iter().map(|&(item, r)| (bar_name(item), middle(r))))).unwrap_or_default();
     let mut out = format!("{{\"client\":[{w:.0},{h:.0}],\"dpr\":{:.3},\"buttons\":{{{buttons}}},\"bar\":{{{bar}}}", ed.dpr);
+    // The boxes of a form's fields that are in the window (a field of several boxes: `size`, then `size#1`, …).
+    let boxes = ed.field_places().filter_map(|(field, widget, r)| {
+        let [x, y] = ed.view.doc_to_screen(middle(r));
+        let name = ed.form.fields.get(field)?.name.clone();
+        (x >= 0.0 && y >= 0.0 && x <= w && y <= h).then(|| (if widget == 0 { name } else { format!("{name}#{widget}") }, [x, y]))
+    });
+    let fields = points(boxes);
+    if !fields.is_empty() {
+        let _ = write!(out, ",\"fields\":{{{fields}}}");
+    }
     if let (Some(state), Some(shown)) = (ed.chrome.overview.as_ref(), ed.overview_pages()) {
         let l = ed.overview_layout();
         let controls = points(l.controls.iter().map(|&(c, r)| (format!("{c:?}").to_lowercase(), middle(r))));
@@ -166,6 +181,22 @@ mod tests {
         // Braces and brackets balance (a reader would refuse anything else).
         let depth = open.chars().fold(0i32, |d, c| d + i32::from(c == '{' || c == '[') - i32::from(c == '}' || c == ']'));
         assert_eq!(depth, 0);
+    }
+
+    #[test]
+    fn the_boxes_of_a_form_are_named_by_their_fields_and_only_those_in_the_window_are_given() {
+        use crate::form::{Field, Form, Kind, Spec};
+        use crate::links::{Link, Target};
+        let mut ed = Editor::new([1600.0, 1000.0], 1.0, crate::motion::Prefs::REDUCED);
+        ed.load(crate::view::Layout::new(&[[612.0, 792.0]; 3]), vec![]);
+        assert!(!describe(&ed).contains("\"fields\""), "none without a form");
+        let spec = |name: &str| Spec { name: name.into(), on_states: vec![Some("On".into()), Some("Off2".into())], ..Spec::default() };
+        ed.form = Form { fields: vec![Field::new(Kind::Radio, spec("size")), Field::new(Kind::Check, spec("far"))] };
+        let at = |field: usize, widget: usize, y: f32| Link { rect: [112.0, y, 132.0, y + 20.0], target: Target::Field { field, widget } };
+        ed.links = vec![at(0, 0, 202.0), at(0, 1, 252.0), at(1, 0, 2300.0)];
+        let text = describe(&ed);
+        assert!(text.contains("\"fields\":{\"size\":[") && text.contains("\"size#1\":["), "{text}");
+        assert!(!text.contains("\"far\""), "a box that is not in the window is not given: {text}");
     }
 
     #[test]

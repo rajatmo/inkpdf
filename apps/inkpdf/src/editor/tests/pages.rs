@@ -375,3 +375,71 @@ fn duplicated_pages_copy_their_ink_and_links_and_the_outline_stays_with_the_orig
     ed.redo();
     assert_eq!((ed.layout.len(), ed.ink.len(), ed.links.len()), (5, 2, 4));
 }
+
+#[test]
+fn a_pull_lifts_the_document_off_its_end_with_the_finger_and_then_less_and_less() {
+    let mut ed = at_the_end();
+    let rest = ed.view.doc_to_screen([0.0, 0.0]);
+    assert_eq!(ed.view.lift(), 0.0);
+    let end = drag(&mut ed, [600.0, 800.0], [0.0, -10.0], 4);
+    let first = ed.view.lift();
+    assert!(first > 30.0 && first <= 40.0, "40 pixels of finger lift it nearly as far: {first}");
+    let now = ed.view.doc_to_screen([0.0, 0.0]);
+    assert!((rest[1] - now[1] - first).abs() < 0.01, "all of it moves with the lift: {rest:?} {now:?}");
+    assert!((ed.view.screen_to_doc(now)[1]).abs() < 0.01, "and what is pressed is where it is drawn");
+    drag_on(&mut ed, end, [0.0, -10.0], 4);
+    let second = ed.view.lift() - first;
+    assert!(second > 0.0 && second < first, "the next 40 pixels lift it less: {second} after {first}");
+    assert!((ed.view.lift_ring() - ed.pull_progress()).abs() < 1e-3, "the ring on the badge is the pull's progress");
+}
+
+#[test]
+fn a_pull_let_go_before_it_is_long_enough_comes_back_down_softly_and_adds_nothing() {
+    let mut ed = at_the_end();
+    let end = drag(&mut ed, [600.0, 800.0], [0.0, -10.0], 8);
+    ed.pointer_event(touch(1, Phase::Up, end, 30.0));
+    let mut last = ed.view.lift();
+    assert!(last > 0.0, "it is still up when the finger lets go: the pull is not cut short");
+    let mut frames = 0;
+    while ed.step_view(1.0 / 60.0) {
+        let now = ed.view.lift();
+        assert!(now <= last, "it only comes down");
+        assert!(last - now < 0.5 * last.max(1.0), "and softly: {last} to {now}");
+        last = now;
+        frames += 1;
+        assert!(frames < 200);
+    }
+    assert!(frames > 5, "over a moment, not at once: {frames}");
+    assert_eq!((ed.view.lift(), ed.view.lift_ring(), ed.layout.len()), (0.0, 0.0, 2));
+}
+
+#[test]
+fn a_long_pull_adds_the_page_and_the_view_glides_to_it_slowly_while_the_document_comes_down() {
+    let mut ed = at_the_end();
+    drag(&mut ed, [600.0, 800.0], [0.0, -10.0], 16);
+    assert_eq!(ed.layout.len(), 3);
+    assert_eq!(ed.view.lift_ring(), 1.0, "the ring is full as the page comes");
+    let page = ed.layout.page(2).expect("the new page");
+    let goal = page.y - crate::view::DOC_MARGIN;
+    let (mut last, mut frames) = (ed.view.scroll[1], 0);
+    while ed.step_view(1.0 / 60.0) {
+        let now = ed.view.scroll[1];
+        assert!(now >= last - 1e-3 && now <= goal + 1.0, "it goes one way and does not overshoot: {last} to {now} for {goal}");
+        last = now;
+        frames += 1;
+        assert!(frames < 400);
+    }
+    assert!(frames > 30, "a glide to be watched, not a jump: {frames} frames");
+    assert!((ed.view.scroll[1] - goal).abs() < 1.0 || ed.view.at_end(&ed.layout));
+    assert_eq!(ed.view.lift(), 0.0);
+    // A finger that keeps going in the meantime does not stop it half way: the pull has done what it was for.
+    let mut ed = at_the_end();
+    let end = drag(&mut ed, [600.0, 800.0], [0.0, -10.0], 16);
+    ed.step_view(1.0 / 60.0);
+    let (before, goal) = (ed.view.scroll[1], ed.layout.page(2).expect("page").y - crate::view::DOC_MARGIN);
+    drag_on(&mut ed, end, [0.0, 10.0], 5);
+    for _ in 0..10 {
+        ed.step_view(1.0 / 60.0);
+    }
+    assert!(ed.view.scroll[1] > before, "still on its way to {goal}: {before} to {}", ed.view.scroll[1]);
+}

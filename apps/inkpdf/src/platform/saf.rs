@@ -21,8 +21,12 @@ pub trait Bridge: Send + Sync {
     fn paste(&self) -> Option<String>;
     /// Open a web address in the system's program for it.
     fn open_url(&self, url: &str);
+    /// The file's own name, which the system's provider knows and a `content://` address does not say, if it will tell.
+    fn display_name(&self, uri: &str) -> Option<String>;
     /// Hide the system's bars (status and navigation), or show them again.
     fn set_bars_hidden(&self, hidden: bool);
+    /// Show the system pointer icon of this PointerIcon type over the window (what a mouse or a hovering stylus shows).
+    fn set_pointer_icon(&self, type_code: i32);
     /// Ask the system's picker for a file to open, or for a place and name to save under (the answer comes by [`Bridge::take_picked`]).
     fn pick(&self, kind: Pick, name: &str);
     /// What the picker answered, if it has, as the Java side words it: the kind (`0` open, `1` save), a tab, and the address (none if the
@@ -57,6 +61,13 @@ impl FileStore for SafStore {
             // document is only ever written whole, from memory, in one call.)
             DocId::Uri(uri) => self.bridge.write(uri, bytes),
             DocId::Path(_) => PathStore.write_atomic(id, bytes),
+        }
+    }
+
+    fn display_name(&self, id: &DocId) -> String {
+        match id {
+            DocId::Uri(uri) => self.bridge.display_name(uri).filter(|n| !n.is_empty()).unwrap_or_else(|| id.name()),
+            DocId::Path(_) => id.name(),
         }
     }
 }
@@ -99,11 +110,19 @@ mod tests {
         launch: Mutex<Option<String>>,
         urls: Mutex<Vec<String>>,
         bars_hidden: Mutex<bool>,
+        pointer: Mutex<i32>,
     }
 
     impl Bridge for Fake {
+        fn display_name(&self, uri: &str) -> Option<String> {
+            // (A provider that knows a file's name, as Android's does for a picked one; this one knows only the addresses that say "named".)
+            uri.contains("named").then(|| "Meeting notes.pdf".to_string())
+        }
         fn set_bars_hidden(&self, hidden: bool) {
             *self.bars_hidden.lock().unwrap() = hidden;
+        }
+        fn set_pointer_icon(&self, type_code: i32) {
+            *self.pointer.lock().unwrap() = type_code;
         }
         fn read(&self, uri: &str) -> Result<Vec<u8>, String> {
             self.files.lock().unwrap().iter().find(|(u, _)| u == uri).map(|(_, b)| b.clone()).ok_or_else(|| format!("no such file: {uri}"))
@@ -212,5 +231,13 @@ mod tests {
         assert!(*bridge.bars_hidden.lock().unwrap());
         bridge.set_bars_hidden(false);
         assert!(!*bridge.bars_hidden.lock().unwrap());
+    }
+
+    #[test]
+    fn the_name_shown_is_the_providers_own_when_it_has_one_and_the_addresss_last_part_when_it_has_not() {
+        let store = SafStore::new(Arc::new(Fake::default()));
+        assert_eq!(store.display_name(&DocId::Uri("content://media/external/file/10-named".into())), "Meeting notes.pdf");
+        assert_eq!(store.display_name(&DocId::Uri("content://media/external/file/10".into())), "10");
+        assert_eq!(store.display_name(&DocId::Path("/a/b.pdf".into())), "b.pdf");
     }
 }

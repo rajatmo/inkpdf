@@ -2,7 +2,7 @@
 # The Linux and Android half of a build of all three platforms (tools/cross-build.ps1 runs it in WSL; it also runs on any Ubuntu that
 # tools/linux/setup-dev.sh has prepared). Tests and builds what is asked, and puts the packages in `out`.
 #   bash tools/linux/build-all.sh [linux|android|all] [out-folder]
-#   linux:   the unit tests, clippy, and the portable tarball (InkPDF-Portable-<version>-linux-x86_64.tar.gz)
+#   linux:   the unit tests, clippy, and the portable tarball (InkPDF-Portable-<version>-linux-x86_64.tar.gz), and the AppImage if appimagetool is there
 #   android: an APK for phones and tablets and for the PC emulator (arm64-v8a and x86_64), signed with the test key (needs
 #            setup-dev.sh --android; on Windows use tools/android/build-apk.ps1 instead)
 set -euo pipefail
@@ -24,6 +24,14 @@ if [ "$what" = linux ] || [ "$what" = all ]; then
     cargo clippy -p inkpdf -p inkpdf-api -p inkpdf-ext --all-targets -- -D warnings
     echo "== Linux: portable package"
     tools/linux/build-portable.sh "$out"
+    # The AppImage needs `appimagetool`, a program that is downloaded: it is built when the tool is already there (APPIMAGETOOL, or the cache
+    # build-appimage.sh fills), and otherwise left for whoever runs `tools/linux/build-appimage.sh` and so chooses to download it.
+    if [ -x "${APPIMAGETOOL:-$HOME/.cache/inkpdf/appimagetool-x86_64.AppImage}" ]; then
+        echo "== Linux: AppImage"
+        tools/linux/build-appimage.sh "$out"
+    else
+        echo "== Linux: no AppImage (appimagetool is not there: run tools/linux/build-appimage.sh once, which downloads it)"
+    fi
 fi
 
 if [ "$what" = android ] || [ "$what" = all ]; then

@@ -15,6 +15,8 @@ pub struct Motions {
     ripple: [Tween; BUTTONS],
     tool: Tween,
     unsaved: Tween,
+    /// How far each pill that folds is unfolded (see [`Look::unfold`]).
+    unfold: [Tween; 3],
     /// The button a press is on, to start a ripple when it is a new one.
     pressed: Option<usize>,
     /// How much of the overview that has just been put away is still there (the shell draws it as it was while it goes).
@@ -45,6 +47,7 @@ impl Motions {
             ripple: [Tween::at(0.0); BUTTONS],
             tool: Tween::at(0.0),
             unsaved: Tween::at(0.0),
+            unfold: [Tween::at(1.0); 3],
             pressed: None,
             overview_out: Tween::at(0.0),
             prompt: Presence::default(),
@@ -73,8 +76,19 @@ impl Motions {
             }
             self.tool.jump(rest.tool);
             self.unsaved.jump(rest.unsaved);
+            for (tween, to) in self.unfold.iter_mut().zip(rest.unfold) {
+                tween.jump(to);
+            }
         }
         let p = self.prefs;
+        for (tween, to) in self.unfold.iter_mut().zip(rest.unfold) {
+            // (A pill comes out as a panel does, fast and settling; it goes back in more quickly.)
+            if to > tween.value() {
+                tween.go(to, p.time(seconds::MEDIUM), Curve::Decelerate);
+            } else {
+                tween.go(to, p.time(seconds::SHORT), Curve::Accelerate);
+            }
+        }
         for slot in 0..BUTTONS {
             self.hover[slot].go(rest.hover[slot], p.time(seconds::QUICK), Curve::Standard);
             self.enabled[slot].go(rest.enabled[slot], p.time(seconds::SHORT), Curve::Standard);
@@ -174,6 +188,7 @@ impl Motions {
         }
         look.tool = self.tool.value();
         look.unsaved = self.unsaved.value();
+        look.unfold = self.unfold.map(|t| t.value());
         look
     }
 
@@ -187,6 +202,9 @@ impl Motions {
         }
         moving |= self.tool.step(dt);
         moving |= self.unsaved.step(dt);
+        for tween in &mut self.unfold {
+            moving |= tween.step(dt);
+        }
         moving |= self.overview_out.step(dt);
         moving |= self.prompt.step(dt);
         moving |= self.panel.step(dt);

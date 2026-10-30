@@ -7,7 +7,7 @@
 use crate::colour::{self, Hsv};
 use crate::input::{Device, Phase};
 use crate::requests::{Choice, Request};
-use crate::toolbar::{Channel, Item, PanelState, PromptLayout, PromptView};
+use crate::toolbar::{Channel, Item, PanelState, Pill, PromptLayout, PromptView};
 use crate::workspace::Workspace;
 
 use super::Act;
@@ -38,6 +38,8 @@ pub struct Chrome {
     pub overview: Option<super::overview::OverviewState>,
     /// The card under the theme button is open (see [`super::theme_menu`]).
     pub theme_menu: bool,
+    /// The pill unfolded from its round button, in a window too narrow for all three whole (see [`super::pills`]).
+    pub pill: Option<Pill>,
     /// The press under way on the window's own controls, if any.
     pub(crate) act: Act,
 }
@@ -47,6 +49,7 @@ impl Chrome {
     pub(super) fn clear_press_and_prompt(&mut self) {
         self.act = Act::Idle;
         self.theme_menu = false;
+        self.pill = None;
         self.overview = None;
         self.prompt = None;
         self.prompt_grab = None;
@@ -57,6 +60,7 @@ impl Chrome {
         self.act = Act::Idle;
         self.overview = None;
         self.panel = None;
+        self.pill = None;
         self.hover = None;
         self.prompt = Some(PromptView::default());
         self.prompt_grab = None;

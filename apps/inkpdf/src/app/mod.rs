@@ -174,6 +174,10 @@ pub struct State {
     mode_forced: bool,
     /// Which of Ctrl, Shift, … are held (for the desktop mode's shortcuts).
     modifiers: ModifiersState,
+    /// The cursor the window shows now (it is set when what the rules say changes, not on every move), and the ones drawn in code, made when the window was
+    /// (the dot, the ring: None where the window system would not make them).
+    cursor: crate::input::CursorKind,
+    custom_cursors: [Option<winit::window::CustomCursor>; 2],
     /// The look the window's title bar was last told to have.
     last_appearance: crate::settings::Appearance,
     /// The input given to the editor, being copied to a file (`--record`).
@@ -256,6 +260,12 @@ impl State {
             keyboard_shown: false,
             mode_forced: opts.mode.is_some(),
             modifiers: ModifiersState::empty(),
+            cursor: crate::input::CursorKind::Arrow,
+            custom_cursors: [crate::input::CursorKind::Dot, crate::input::CursorKind::Eraser].map(|kind| {
+                let (rgba, size) = translate::cursor_image(kind)?;
+                let hot = size / 2;
+                el.create_custom_cursor(winit::window::CustomCursor::from_rgba(rgba, size, size, hot, hot).ok()?).into()
+            }),
             last_appearance: crate::settings::Appearance::default(),
             recorder: opts.record.map(replay::Recorder::new),
             player: opts.replay.as_deref().map(replay::Player::load).transpose()?,
@@ -351,14 +361,27 @@ impl State {
                 self.window.request_redraw();
             }
             WindowEvent::ThemeChanged(_) => self.refresh_system_scheme(),
-            WindowEvent::ModifiersChanged(m) => self.modifiers = m.state(),
+            WindowEvent::ModifiersChanged(m) => {
+                let shift_was = self.modifiers.shift_key();
+                self.modifiers = m.state();
+                if self.modifiers.shift_key() != shift_was {
+                    self.feed(InputEvent::Shift(self.modifiers.shift_key()));
+                }
+            }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => self.feed(InputEvent::ScaleChanged(scale_factor as f32)),
             WindowEvent::RedrawRequested => self.redraw(),
             WindowEvent::DroppedFile(path) => self.open(path),
-            WindowEvent::CursorMoved { position, .. } => self.feed(InputEvent::MouseMoved([position.x as f32, position.y as f32])),
-            WindowEvent::MouseInput { state, button, .. } => {
-                self.feed(InputEvent::MouseButton { state: translate::button_state(state), button: translate::button(button) })
+            WindowEvent::CursorMoved { position, .. } => {
+                self.feed(InputEvent::MouseMoved([position.x as f32, position.y as f32]));
+                self.sync_cursor();
             }
+            WindowEvent::MouseInput { state, button, .. } => {
+                self.feed(InputEvent::MouseButton { state: translate::button_state(state), button: translate::button(button) });
+                // (A press changes what the pointer promises: a hand closes on the page it drags, a button that was pressed changed the tool.)
+                self.sync_cursor();
+            }
+            // (With Ctrl held the wheel zooms, as in every reader.)
+            WindowEvent::MouseWheel { delta, .. } if self.modifiers.control_key() => self.feed(InputEvent::Zoom(translate::wheel_steps(delta))),
             WindowEvent::MouseWheel { delta, .. } => self.feed(InputEvent::Wheel(translate::wheel(delta))),
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => self.key_pressed(&event),
             // With the pointer layer installed pen and touch never reach winit; this is only the
@@ -383,6 +406,26 @@ impl State {
             recorder.push(&event);
         }
         self.ed.handle(event);
+    }
+
+    /// Show the cursor the editor says the mouse should have (see `Editor::cursor_kind`), when that is not the one shown. Asked after the mouse
+    /// moves or a button goes down or up: never on the pen's path, which has no cursor.
+    fn sync_cursor(&mut self) {
+        let kind = self.ed.cursor_kind();
+        if kind != self.cursor {
+            self.cursor = kind;
+            // (The pen's dot and the eraser's ring are images; where there is none, or for any other kind, the system's.)
+            let custom = match kind {
+                crate::input::CursorKind::Dot => self.custom_cursors[0].clone(),
+                crate::input::CursorKind::Eraser => self.custom_cursors[1].clone(),
+                _ => None,
+            };
+            match custom {
+                Some(image) => self.window.set_cursor(image),
+                None => self.window.set_cursor(translate::cursor_icon(kind)),
+            }
+            self.platform.set_pointer_icon(kind);
+        }
     }
 
     /// Ask what the system's look is: the platform first (it knows `INKPDF_THEME`, and the desktop's settings where the toolkit cannot), then the

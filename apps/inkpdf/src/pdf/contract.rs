@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use super::*;
-use crate::testutil::{build_pdf, pdf_with_links, pdf_with_outline, sample_pdf};
+use crate::testutil::{build_pdf, pdf_with_form, pdf_with_links, pdf_with_outline, sample_pdf};
 
 /// One page of a corpus document.
 struct Page {
@@ -161,6 +161,99 @@ pub(super) fn check_find(b: &dyn PdfBackend) {
     let r = t1.line_rects(0..t1.glyph_count())[0];
     assert!(r[3] - r[1] > r[2] - r[0], "a line of text on a page turned a quarter runs down the page: {r:?}");
     assert!(r[2] <= 680.0 && r[3] <= 490.0, "and is inside the displayed page: {r:?}");
+}
+
+/// The program's flags are outline entries of its own: written at the end of the outline, replaced as a set, and the other entries left alone.
+pub(super) fn check_flags(b: &dyn PdfBackend) {
+    const P: &str = "# ";
+    // (A file with an outline has four pages, the sample has one.)
+    for (name, file, pages) in [("a file with an outline", pdf_with_outline(), &[1_usize, 0][..]), ("a file with none", sample_pdf(), &[0_usize][..])]
+    {
+        let want = |pages: &[usize]| -> Vec<(String, Option<usize>)> { pages.iter().map(|&p| (format!("{P}{}", p + 1), Some(p))).collect() };
+        let mut doc = b.open(&arc(file)).expect("open");
+        let before = doc.outline();
+        doc.set_flags(P, pages).expect(name);
+        let reopened = b.open(&arc(doc.save_full().expect("save"))).expect("reopen");
+        let flags = |d: &dyn PdfDocument| -> Vec<(String, Option<usize>)> {
+            d.outline().iter().filter(|o| o.title.starts_with(P)).map(|o| (o.title.clone(), o.page)).collect()
+        };
+        let others = |d: &dyn PdfDocument| -> Vec<RawOutlineItem> { d.outline().into_iter().filter(|o| !o.title.starts_with(P)).collect() };
+        assert_eq!(flags(&*reopened), want(pages), "{name}: one for each page, in the order given");
+        assert_eq!(others(&*reopened), before, "{name}: the other entries are as they were");
+        // A new set replaces the old one; an empty set takes them all away.
+        let mut again = reopened;
+        again.set_flags(P, &pages[..1]).expect(name);
+        let again = b.open(&arc(again.save_full().expect("save"))).expect("reopen");
+        assert_eq!(flags(&*again), want(&pages[..1]), "{name}: replaced, not added to");
+        let mut none = again;
+        none.set_flags(P, &[]).expect(name);
+        let none = b.open(&arc(none.save_full().expect("save"))).expect("reopen");
+        assert!(flags(&*none).is_empty() && others(&*none) == before, "{name}: none left, and the others still there");
+    }
+}
+
+/// Form fields: the ones that can be filled are read with their boxes, and values put in come back after a save (whole or as an update), while
+/// what cannot be filled (read only, a button, a name the file does not have) is left as it is.
+pub(super) fn check_form(b: &dyn PdfBackend) {
+    let file = arc(pdf_with_form());
+    let mut doc = b.open(&file).expect("open");
+    let fields = doc.fields();
+    let names: Vec<&str> = fields.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(names, ["name", "agree", "size", "colour"], "a read-only field and a push button are not offered");
+    let kinds: Vec<RawFieldKind> = fields.iter().map(|f| f.kind).collect();
+    assert_eq!(kinds, [RawFieldKind::Text, RawFieldKind::Check, RawFieldKind::Radio, RawFieldKind::Choice]);
+    assert_eq!(fields[0].widgets[0].rect, [100.0, 700.0, 300.0, 720.0]);
+    assert_eq!((fields[0].widgets[0].page, fields[0].value.concat()), (0, String::new()));
+    assert_eq!(fields[2].widgets.iter().map(|w| w.on_state.as_deref()).collect::<Vec<_>>(), [Some("Small"), Some("Large")]);
+    assert_eq!(fields[3].options.iter().map(|(e, _)| e.as_str()).collect::<Vec<_>>(), ["Red", "Green", "Blue"]);
+    let values = [
+        ("name".to_string(), RawValue::Text("Ada Lovelace".to_string())),
+        ("agree".to_string(), RawValue::Check(true)),
+        ("size".to_string(), RawValue::Radio(Some("Large".to_string()))),
+        ("colour".to_string(), RawValue::Choice(vec!["Green".to_string()])),
+        ("locked".to_string(), RawValue::Text("changed".to_string())),
+        ("no such field".to_string(), RawValue::Text("x".to_string())),
+    ];
+    doc.set_fields(&values).expect("fill");
+    let read = |bytes: Vec<u8>| -> Vec<(String, Vec<String>)> {
+        let d = b.open(&arc(bytes)).expect("reopen");
+        d.fields().into_iter().map(|f| (f.name, f.value)).collect()
+    };
+    let want = |on: &str| -> Vec<(String, Vec<String>)> {
+        vec![
+            ("name".into(), vec!["Ada Lovelace".into()]),
+            ("agree".into(), vec![on.into()]),
+            ("size".into(), vec!["Large".into()]),
+            ("colour".into(), vec!["Green".into()]),
+        ]
+    };
+    let whole = read(doc.save_full().expect("save"));
+    assert_eq!(whole[0], want("Yes")[0], "the text comes back");
+    assert_eq!(whole[2..], want("Yes")[2..], "and the chosen radio button and option");
+    assert_eq!(whole[1].1.first().map(String::as_str), Some("Yes"), "and the box is checked");
+    // What was put in is drawn by the file's own appearances: the page, rendered, differs where the fields are.
+    let (empty, filled) =
+        (b.render_now(file.clone(), &RenderRequest::default()), b.render_now(arc(doc.save_full().expect("save")), &RenderRequest::default()));
+    let differs = |x: std::ops::Range<usize>, y: std::ops::Range<usize>| {
+        let at = |r: &Rendered, x: usize, y: usize| r.rgba.as_slice()[(y * r.width as usize + x) * 4..][..4].to_vec();
+        y.flat_map(|y| x.clone().map(move |x| (x, y))).filter(|&(x, y)| at(&empty, x, y) != at(&filled, x, y)).count()
+    };
+    assert!(differs(100..300, 72..92) > 20, "the text is drawn in its box");
+    assert!(differs(100..120, 122..142) > 5, "and the check box is checked");
+    assert_eq!(differs(0..612, 94..120), 0, "and the page is as it was where there is no field");
+    let update = read(doc.save_incremental(&b.date(1_700_000_000)).expect("save an update"));
+    assert_eq!(update, whole, "an update says the same as the whole file");
+    // A box can be unchecked, a radio group emptied, and a text emptied again.
+    let mut again = b.open(&arc(doc.save_full().expect("save"))).expect("reopen");
+    let clear = [
+        ("name".to_string(), RawValue::Text(String::new())),
+        ("agree".to_string(), RawValue::Check(false)),
+        ("size".to_string(), RawValue::Radio(None)),
+    ];
+    again.set_fields(&clear).expect("clear");
+    let cleared = read(again.save_full().expect("save"));
+    assert!(cleared[0].1.concat().is_empty() && cleared[1].1.concat().is_empty() && cleared[2].1.concat().is_empty(), "{cleared:?}");
+    assert!(b.open(&arc(sample_pdf())).expect("open").fields().is_empty(), "a file with no form has no fields");
 }
 
 pub(super) fn check_outline_and_links(b: &dyn PdfBackend) {
@@ -390,12 +483,13 @@ pub(super) fn check_look(b: &dyn PdfBackend) {
 
 pub(super) fn check_hostile(b: &dyn PdfBackend) {
     // A file that is cut short, or damaged in many places, is refused or opens with less: never a panic, anywhere the program looks.
-    let good = [corpus(), arc(pdf_with_links()), arc(pdf_with_outline())];
+    let good = [corpus(), arc(pdf_with_links()), arc(pdf_with_outline()), arc(pdf_with_form())];
     let explore = |bytes: Vec<u8>| {
         let bytes = arc(bytes);
         let _ = b.inspect(&bytes);
         if let Ok(mut doc) = b.open(&bytes) {
-            let _ = (doc.page_count(), doc.links(), doc.outline(), doc.annotations());
+            let _ = (doc.page_count(), doc.links(), doc.outline(), doc.annotations(), doc.fields());
+            let _ = doc.set_fields(&[("name".to_string(), RawValue::Text("x".to_string()))]);
             let _ = doc.delete_annotation(0, 0);
             let _ = doc.save_full();
         }
@@ -426,6 +520,8 @@ pub(super) fn backend_contract(b: &dyn PdfBackend) {
     check_text(b);
     check_find(b);
     check_outline_and_links(b);
+    check_flags(b);
+    check_form(b);
     check_annotations(b);
     check_organize(b);
     check_render(b);
@@ -459,6 +555,12 @@ fn pdfcraft_finds_text_and_reads_turned_pages_and_columns() {
 #[test]
 fn pdfcraft_reads_the_outline_and_the_links() {
     check_outline_and_links(native());
+    check_flags(native());
+}
+
+#[test]
+fn pdfcraft_reads_and_fills_form_fields() {
+    check_form(native());
 }
 
 #[test]

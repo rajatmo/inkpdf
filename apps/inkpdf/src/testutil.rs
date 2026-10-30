@@ -48,6 +48,38 @@ pub fn pdf_with_links() -> Vec<u8> {
     ])
 }
 
+/// One page with a form: a text field `name` (a box 200 wide at the top), a check box `agree`, a group of two radio buttons `size` (small and large), a
+/// combo box `colour` (Red, Green, Blue), a read-only text field `locked` and a push button `send`, which cannot be filled.
+pub fn pdf_with_form() -> Vec<u8> {
+    let off = "<< /Type /XObject /Subtype /Form /BBox [0 0 20 20] /Length 0 >>\nstream\n\nendstream";
+    // (The look of a box that is on: a black square.)
+    let on = "<< /Type /XObject /Subtype /Form /BBox [0 0 20 20] /Length 18 >>\nstream\n0 g 4 4 12 12 re f\nendstream";
+    build_pdf(&[
+        "<< /Type /Catalog /Pages 2 0 R /AcroForm 6 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Annots [7 0 R 8 0 R 10 0 R 11 0 R 12 0 R 15 0 R 16 0 R] >>".to_string(),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>".to_string(),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_string(),
+        "<< /Fields [7 0 R 8 0 R 9 0 R 12 0 R 15 0 R 16 0 R] /DA (/Helv 0 Tf 0 g) /DR << /Font << /Helv 5 0 R >> >> >>".to_string(),
+        "<< /Type /Annot /Subtype /Widget /FT /Tx /T (name) /Rect [100 700 300 720] /V () /DA (/Helv 12 Tf 0 g) /P 3 0 R /F 4 >>".to_string(),
+        "<< /Type /Annot /Subtype /Widget /FT /Btn /T (agree) /Rect [100 650 120 670] /V /Off /AS /Off /P 3 0 R /F 4 \
+         /AP << /N << /Yes 13 0 R /Off 14 0 R >> >> >>"
+            .to_string(),
+        "<< /FT /Btn /Ff 32768 /T (size) /Kids [10 0 R 11 0 R] /V /Off >>".to_string(),
+        "<< /Type /Annot /Subtype /Widget /Parent 9 0 R /Rect [100 600 120 620] /AS /Off /P 3 0 R /F 4 /AP << /N << /Small 13 0 R /Off 14 0 R >> >> >>"
+            .to_string(),
+        "<< /Type /Annot /Subtype /Widget /Parent 9 0 R /Rect [200 600 220 620] /AS /Off /P 3 0 R /F 4 /AP << /N << /Large 13 0 R /Off 14 0 R >> >> >>"
+            .to_string(),
+        "<< /Type /Annot /Subtype /Widget /FT /Ch /Ff 131072 /T (colour) /Opt [(Red) (Green) (Blue)] /V () /Rect [100 550 300 570] \
+         /DA (/Helv 12 Tf 0 g) /P 3 0 R /F 4 >>"
+            .to_string(),
+        on.to_string(),
+        off.to_string(),
+        "<< /Type /Annot /Subtype /Widget /FT /Tx /Ff 1 /T (locked) /Rect [100 500 300 520] /V (fixed) /DA (/Helv 12 Tf 0 g) /P 3 0 R /F 4 >>".to_string(),
+        "<< /Type /Annot /Subtype /Widget /FT /Btn /Ff 65536 /T (send) /Rect [100 450 200 470] /DA (/Helv 12 Tf 0 g) /P 3 0 R /F 4 >>".to_string(),
+    ])
+}
+
 /// Writes the link sample to the path in `INKPDF_DEMO_LINKS_OUT`, for trying links in the real app:
 /// `INKPDF_DEMO_LINKS_OUT=links.pdf cargo test -p inkpdf write_link_demo -- --ignored`.
 #[test]

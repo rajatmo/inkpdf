@@ -12,8 +12,7 @@ use crate::tools::{Key, MouseUse, PageEvent, TextEdit};
 use super::modal::Modal;
 use super::{Editor, Request};
 
-/// The pointer id the mouse has when it stands in for a stylus (real pointer ids are small).
-const MOUSE_AS_STYLUS_ID: u32 = u32::MAX;
+use crate::input::MOUSE_STYLUS_ID as MOUSE_AS_STYLUS_ID;
 
 impl Editor {
     /// The text box being typed into, for drawing it.
@@ -69,7 +68,7 @@ impl Editor {
         match self.modal() {
             Some(Modal::Prompt) => false,
             Some(Modal::Overview) => false,
-            None => self.search.open || (self.ws.tool == Tool::Text && self.tools.text.is_typing()),
+            None => self.search.open || self.form_typing.is_some() || (self.ws.tool == Tool::Text && self.tools.text.is_typing()),
         }
     }
 
@@ -116,13 +115,25 @@ impl Editor {
             self.close_theme_menu();
             return true;
         }
+        // And folds an open pill.
+        if self.chrome.pill.is_some() && key == Key::Escape {
+            self.fold_pill();
+            return true;
+        }
         // The card of the search has the keyboard while it is open.
         if self.search.open && self.search_key(key) {
+            return true;
+        }
+        // And so does a field of a form that is being typed into.
+        if self.form_typing.is_some() && self.form_key(key) {
+            self.ws.redraw = true;
             return true;
         }
         let mode = self.mode;
         let tool = self.tools.get_mut(self.ws.tool);
         let used = tool.policy(mode).keyboard && tool.key(&mut self.ws, key);
+        // What no tool took scrolls, as in any reader.
+        let used = used || self.reader_key(key);
         self.ws.redraw |= used;
         used
     }
@@ -180,6 +191,9 @@ impl Editor {
             let used = letter.chars().next().is_some_and(|c| self.key(Key::Chord(c)));
             self.ws.redraw = true;
             return used;
+        }
+        if self.zoom_shortcut(&letter) {
+            return true;
         }
         match (letter.as_str(), shift) {
             ("z", false) => self.undo(),

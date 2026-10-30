@@ -83,23 +83,38 @@ asked (the last page there is stays; undo brings it back, with its ink, until yo
 page after the one you are looking at; the four small pages open the pages overview (below); then the pen, shape, text and pointer tools
 (a tool's button only chooses it; its settings are in the bar under the tools); a monitor or a tablet, which shows the
 mode in use (the tablet in blue) and switches to the other when pressed; full screen. Left of the mode button is
-the look: each press goes from the system's look to light to dark and round (a half-shaded circle, a sun, a moon) and drops a
-card down with one switch, "Pages follow the theme", which turns the pages dark too, with light text on a dark paper, when the look
+the look: each press goes from the system's look to light to dark and round (a sun beside a moon, a sun, a moon) and drops a
+card down with a page half in shade and one switch, which turns the pages dark too, with light text on a dark paper, when the look
 is dark (a press elsewhere, or Esc, puts the card away; your file is not changed, and ink you drew in a dark colour is shown light on a dark page). (Under the tools:
 the bar described above.)
+In a window too narrow for the three groups of buttons (a phone held upright), the document's group folds into one round button, a page,
+and so does the look's group, sliders; the tools stay. Press a round button and its group unfolds over the others; it folds again when
+you press a button in it (undo, redo and the look's button keep it open), press anywhere else, or press Esc. A very small window folds the tools too.
+
+READING. At a desk: Ctrl and the wheel zoom about the pointer, Ctrl+plus and Ctrl+minus zoom, Ctrl+0 fits the width of the window, Ctrl+1 shows the page at its size;
+Page Up, Page Down and the space bar scroll a screen (Shift+space goes back), Home and End go to the top and the bottom, and the arrows scroll when
+nothing is selected. With the Select tool, drag empty page to move it, or use the middle mouse button (in the drawing tools the middle button is the barrel button).
+The mouse pointer shows what a press will do: a hand over a link, an I-beam over text, an open hand over page that can be dragged (closed while it is).
+On a touch screen a double tap fits the page to the width and the next double tap goes back to where it was.
 
 PAGES OVERVIEW. The four-pages button opens a card over the document: a picture of every page (with its ink), its
 number, and on the left the PDF's own table of contents when it has one. The page you are looking at is ringed and
 its section lit. Tap a page to go to it; tap an entry of the contents to go there (its arrow folds it); scroll with the
 wheel, a finger or by dragging empty space. Header: + adds a page after the one you were looking at, the check mark is
 edit mode, undo and redo (the same as the document's), X closes (so do Esc and a tap on the dimmed document).
-In edit mode a tap chooses a page (a tick shows) or lets go of it, and a bar under the pages offers: Select all / none,
-duplicate, move earlier, move later and delete (all of it for the chosen pages). Dragging a page with the stylus or the
+In edit mode a tap chooses a page (a tick shows) or lets go of it, and a bar under the pages offers: a box with a tick (choose every
+page; with every page chosen, a box with a dash lets them all go), duplicate, move earlier, move later and delete (all of it for the chosen pages). Dragging a page with the stylus or the
 mouse moves it (all the chosen ones together if it is one of them): the blue bar shows where it will land, and holding it
 near the top or bottom scrolls. A finger scrolls; use the arrows of the bar to move pages with it. The number under a page
-opens its menu: add a page before, add a page after, duplicate, delete. Every one of these is a step of the history. At a
+opens its menu, a row of five round buttons: add a page before, add a page after, duplicate, flag (a bookmark) and delete. Add, duplicate and delete are steps of the
+history; a flag is a mark, taken away by pressing it again. A flagged page wears a bookmark in the overview, and the file keeps it as an entry "Flag: page N" in its
+contents, so any reader shows it as a bookmark (the program keeps these apart from the contents it shows). At a
 desk: Ctrl+A chooses every page, Ctrl+D duplicates the chosen ones, Delete deletes them, Ctrl+Z and Ctrl+Y undo and redo,
 and Esc steps out one level at a time (a drag, the chosen pages, edit mode, the overview).
+FORMS. A PDF's form fields are lit faintly on the page. A finger taps a field with any tool; with the pointer tool the stylus's tip and the left mouse button
+do the same. A text field is then typed into (Enter ends it, so does Esc or a press elsewhere; a field of several lines takes Enter as a new line); a check
+box turns on and off; a radio button is chosen; a choice goes to its next option each time it is pressed, and to none after the last. Saving writes the values
+into the file, so any reader shows them. Fields that are read only, buttons, signatures and passwords are left alone, and a form's own scripts are not run.
 SELECTING AND MARKING TEXT. The I-beam tool (between the text tool and the pointer) selects the text a PDF has. Press on a letter and
 drag to the one you want; press twice for a word, three times for a line; a round handle sits at each end of what is selected and
 moves it (with a stylus tip, that is how you stretch a selection). Ctrl+A takes the page's text, Ctrl+C copies it, Esc lets go. The

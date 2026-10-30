@@ -49,7 +49,7 @@ public static class W {
 
 # ---- The app
 # Start the app on a blank document, or on a copy of the PDF `$Pdf` ("pages3": three pages from the build's own generator,
-# "outline12": twelve pages with a table of contents, or a name in the scratch folder), with the settings `$Settings` (the light
+# "outline12": twelve pages with a table of contents, "form": one page with a form to fill in, or a name in the scratch folder), with the settings `$Settings` (the light
 # look is always added, so the colours counted are the light ones) and extra arguments.
 function Launch([string]$Settings = "", [string]$Pdf = "", [string[]]$AppArgs = @()) {
     Get-Process inkpdf -ErrorAction SilentlyContinue | Stop-Process -Force
@@ -62,6 +62,7 @@ function Launch([string]$Settings = "", [string]$Pdf = "", [string[]]$AppArgs = 
         $script:file = Join-Path $script:sp "work-$Pdf.pdf"
         if ($Pdf -match "^pages(\d+)$") { & "$script:target\inkpdf-gen.exe" $script:file $Matches[1] | Out-Null }
         elseif ($Pdf -match "^outline(\d+)$") { & "$script:target\inkpdf-gen.exe" $script:file $Matches[1] --outline | Out-Null }
+        elseif ($Pdf -eq "form") { & "$script:target\inkpdf-gen.exe" $script:file 1 --form | Out-Null }
         else { Copy-Item (Join-Path $script:sp $Pdf) $script:file -Force }
     }
     $script:appArgs = @($AppArgs)

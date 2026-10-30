@@ -57,6 +57,8 @@ pub enum Key<'a> {
     End(bool),
     /// A letter pressed with Ctrl (the ones that work on text being edited: a, c, x, v).
     Chord(char),
+    /// Page Down (`true`) or Page Up, or the space bar when nothing is being typed.
+    Page(bool),
 }
 
 /// A [`Key`] that owns its text, so that it can be kept (in an event that is queued, or recorded).
@@ -70,6 +72,7 @@ pub enum KeyInput {
     Home(bool),
     End(bool),
     Chord(char),
+    Page(bool),
 }
 
 impl KeyInput {
@@ -84,6 +87,7 @@ impl KeyInput {
             KeyInput::Home(shift) => Key::Home(*shift),
             KeyInput::End(shift) => Key::End(*shift),
             KeyInput::Chord(c) => Key::Chord(*c),
+            KeyInput::Page(down) => Key::Page(*down),
         }
     }
 }
@@ -99,6 +103,7 @@ impl From<Key<'_>> for KeyInput {
             Key::Home(shift) => KeyInput::Home(shift),
             Key::End(shift) => KeyInput::End(shift),
             Key::Chord(c) => KeyInput::Chord(c),
+            Key::Page(down) => KeyInput::Page(down),
         }
     }
 }
@@ -117,6 +122,10 @@ pub enum InputEvent {
     /// The mouse left the window.
     MouseLeft,
     Wheel(Wheel),
+    /// The wheel turned with Ctrl held: zoom, by this many notches (positive is in), about the mouse.
+    Zoom(f32),
+    /// Shift went down or up.
+    Shift(bool),
     Key(KeyInput),
     /// A letter pressed with Ctrl (a shortcut), with whether Shift is held.
     Shortcut {

@@ -35,7 +35,7 @@ enforced by tests (`src/architecture.rs`, `src/editor/tests/contract.rs`).
 * **session** (`src/editor/`) — `Editor` is the facade the shell talks to. `routing.rs` hands pointer
   and keyboard input to the tool in use according to its policy and exposes read accessors; `pen.rs`,
   `mouse.rs`, `touch.rs`, `navigation.rs` do the window's own work (toolbar presses, panning, links,
-  pull-for-a-page); `toolbar_ui.rs`, `prompt.rs`, `commands.rs`, `select.rs` are chrome and history.
+  pull-for-a-page); `toolbar_ui.rs`, `cursor.rs` (which cursor, from `input::decide`), `reader.rs` (the reader's keys and zoom), `pills.rs` (the pills that fold into round buttons in a narrow window), `prompt.rs`, `commands.rs`, `select.rs` are chrome and history.
 * **adapters** — everything touching the OS. The session knows winit's event *types* (the vocabulary of
   input) but never the window, GPU, files or the pointer layer.
 
@@ -59,7 +59,7 @@ ones below; no two modules may reach each other, directly or through others.
 | tools | `tools` |
 | ui | `toolbar` |
 | domain | `tool`, `input`, `requests`, `workspace`, `selection`, `settings`, `store` |
-| model | `figure`, `ink`, `laser`, `links`, `outline`, `pages`, `page_table`, `pagetext` |
+| model | `figure`, `form`, `ink`, `laser`, `links`, `outline`, `pages`, `page_table`, `pagetext` |
 | base | `plane`, `motion`, `scene`, `clock`, `geometry`, `colour`, `coords`, `view`, `text`, `smooth`, `clipboard`, `palette` |
 
 * `plane` holds the point type `P` and the plane arithmetic (distances, polygon tests, simplify, thin, `clamp_into`)

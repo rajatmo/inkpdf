@@ -75,7 +75,8 @@ impl State {
         self.session.failed.clear();
         self.ed.load(doc.layout(), strokes);
         self.ed.links = doc.take_links();
-        self.ed.outline = doc.take_outline();
+        self.ed.form = doc.take_form();
+        self.ed.set_outline(doc.take_outline());
         self.ed.forget_text();
         self.session.indexer = Some(crate::indexer::Indexer::start(doc.text_bytes()));
         self.session.doc = Some(doc);
@@ -162,7 +163,11 @@ impl State {
     /// The Save As dialog was confirmed with the file `id`: the document is written there, and becomes that file.
     fn save_to(&mut self, id: DocId) {
         let result = match &mut self.session.doc {
-            Some(doc) => doc.save_as_to(&*self.session.files, &id, &self.ed.ink),
+            Some(doc) => {
+                doc.set_flags(self.ed.flags.iter().copied().collect());
+                doc.set_fields(self.ed.form.changes());
+                doc.save_as_to(&*self.session.files, &id, &self.ed.ink)
+            }
             None => Err("there is no document to save".to_string()),
         };
         match result {
@@ -197,6 +202,8 @@ impl State {
             return false;
         }
         let Some(doc) = &mut self.session.doc else { return true };
+        doc.set_flags(self.ed.flags.iter().copied().collect());
+        doc.set_fields(self.ed.form.changes());
         match doc.save_to(&*self.session.files, &self.ed.ink) {
             Ok(()) => {
                 self.ed.document_saved();

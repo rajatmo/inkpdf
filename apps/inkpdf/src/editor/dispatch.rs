@@ -16,6 +16,8 @@ impl Editor {
             InputEvent::MouseButton { state, button } => self.mouse_button(state, button),
             InputEvent::MouseLeft => self.mouse_left(),
             InputEvent::Wheel(delta) => self.wheel(delta),
+            InputEvent::Zoom(steps) => self.wheel_zoom(steps),
+            InputEvent::Shift(down) => self.ws.shift = down,
             InputEvent::Key(key) => {
                 self.press(key.as_key());
             }

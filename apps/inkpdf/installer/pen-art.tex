@@ -1,0 +1,13 @@
+% The fountain pen of the app's icon, shared by the Windows icon (app-icon.tex) and the Android ones (app-icon-android.tex), so that they
+% are the same picture. \penart{width} draws it in a box of about 1.8 by 1.8 around the origin: upright, then turned so that its nib points
+% to the lower left. Outlines only; `width` is the line width.
+\newcommand{\penart}[1]{%
+  \begin{scope}[rotate=-40, scale=1.08, yshift=-0.04cm, line width=#1]
+    % barrel with its rounded end, and the line where the cap ends
+    \draw[rounded corners=0.12cm] (-0.19,0.02) rectangle (0.19,0.84);
+    \draw (-0.19,0.62) -- (0.19,0.62);
+    % the section and nib, with the slit and the breather hole
+    \draw (-0.19,0.02) -- (-0.11,-0.30) -- (0,-0.74) -- (0.11,-0.30) -- (0.19,0.02);
+    \draw (0,-0.74) -- (0,-0.40);
+    \draw (0,-0.31) circle (0.05);
+  \end{scope}}

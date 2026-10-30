@@ -6,6 +6,9 @@
 //! The program is this library; the `inkpdf` binary only calls [`run`], and the `inkpdf-android` library calls
 //! `run_android`, so that each host has its own entry point and nothing else of its own.
 
+/// The program's version (the Android crate that wraps it has a version of its own, which is not what the log should say).
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 mod app;
 #[cfg(test)]
 mod architecture;
@@ -17,6 +20,7 @@ mod doc;
 mod doctext;
 mod editor;
 mod figure;
+mod form;
 mod geometry;
 mod gpu;
 mod indexer;
@@ -239,7 +243,8 @@ pub fn run_android(android: winit::platform::android::activity::AndroidApp) {
         mode: None,
         record: None,
         replay: None,
-        layout: None,
+        // (Where the buttons are, for the emulator test, if it asked: see `platform::layout_request`.)
+        layout: platform::layout_request(),
     };
     serve(event_loop, options);
 }

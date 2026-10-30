@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
+  <!-- The adaptive icon's foreground: a page with an ink stroke on it, inside the 66-point circle the launcher never cuts. -->
+  <rect x="35" y="29" width="38" height="50" rx="4" fill="#ffffff"/>
+  <rect x="41" y="37" width="26" height="3" rx="1.5" fill="#c3d4ee"/>
+  <rect x="41" y="44" width="18" height="3" rx="1.5" fill="#c3d4ee"/>
+  <path d="M41 66 C45 55 49 74 55 62 S63 56 67 52" fill="none" stroke="#2f80ed" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

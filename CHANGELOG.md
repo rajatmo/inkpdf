@@ -6,6 +6,9 @@
 - Whether the **pages follow the theme** is a card that drops down from the theme button (which still goes system, light, dark), with one switch;
   it goes away on a press elsewhere, Esc or another button. It replaces the separate button. Works with the left mouse button and keyboard, the
   stylus tip and a finger.
+- The Android app has an **icon**: an adaptive one (a white page with a blue ink stroke on the accent blue, which the launcher masks as a circle or a rounded square)
+  and a plain one for launchers before Android 8. The pictures are `tools/android/icon/*.svg`; `tools/android/make-icons.js` makes the PNGs, and
+  `build-apk.sh` compiles them into the APK.
 
 ## 1.3.0
 

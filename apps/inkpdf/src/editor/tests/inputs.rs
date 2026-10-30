@@ -4,7 +4,7 @@
 
 use super::*;
 
-const TOOLS: [Tool; 5] = [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Select, Tool::Laser];
+const TOOLS: [Tool; 5] = [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Select, LASER];
 
 fn with(tool: Tool) -> Editor {
     let mut ed = editor();
@@ -15,7 +15,7 @@ fn with(tool: Tool) -> Editor {
 
 /// Everything about the document and the view that a stray input could change.
 fn snapshot(ed: &Editor) -> (usize, Vec<u64>, [f32; 2], f32, bool, bool) {
-    (ed.ink.len(), ed.selection.clone(), ed.view.scroll, ed.view.zoom, ed.laser().is_fading() || ed.laser().head().is_some(), ed.ink.is_dirty())
+    (ed.ink.len(), ed.selection.clone(), ed.view.scroll, ed.view.zoom, laser_fading(ed) || laser_dot(ed).is_some(), ed.ink.is_dirty())
 }
 
 #[test]
@@ -63,7 +63,7 @@ fn a_finger_pans_and_zooms_with_any_tool_and_draws_or_selects_nothing() {
     for tool in TOOLS {
         let mut ed = with(tool);
         add_stroke(&mut ed, &[[100.0, 300.0], [300.0, 300.0]]);
-        let before = (ed.ink.len(), ed.selection.clone(), ed.laser().is_fading());
+        let before = (ed.ink.len(), ed.selection.clone(), laser_fading(&ed));
         // One finger pans.
         let scroll = ed.view.scroll;
         ed.pointer_event(touch(1, Phase::Down, on_page(&ed, 200.0, 600.0), 30.0));
@@ -81,7 +81,7 @@ fn a_finger_pans_and_zooms_with_any_tool_and_draws_or_selects_nothing() {
         ed.pointer_event(touch(2, Phase::Up, [500.0, 500.0], 30.0));
         assert!(ed.view.zoom > zoom, "{tool:?}: two fingers zoom");
         // And none of it drew, selected or pointed.
-        assert_eq!((ed.ink.len(), ed.selection.clone(), ed.laser().is_fading()), before, "{tool:?}");
+        assert_eq!((ed.ink.len(), ed.selection.clone(), laser_fading(&ed)), before, "{tool:?}");
         assert!(!ed.ink.is_dirty() || ed.ink.len() == 1);
     }
 }
@@ -107,12 +107,12 @@ fn the_stylus_does_the_work_and_what_it_does_depends_on_the_tool() {
         assert_eq!((ed.ink.len(), ed.selection.len(), ed.text_edit().is_none(), ed.ink.is_dirty()), (0, 0, true, false));
     }
     // The pointer tool: the tip draws nothing and leaves a trail.
-    let mut ed = with(Tool::Laser);
+    let mut ed = with(LASER);
     drag(&mut ed, TIP);
     assert_eq!(ed.ink.len(), 0);
-    assert!(ed.laser().is_fading());
+    assert!(laser_fading(&ed));
     // The eraser end erases with the pen and shape tools (what each made), and does not with the pointer.
-    for (tool, erases) in [(Tool::Pen, true), (Tool::Geometry, true), (Tool::Text, false), (Tool::Select, false), (Tool::Laser, false)] {
+    for (tool, erases) in [(Tool::Pen, true), (Tool::Geometry, true), (Tool::Text, false), (Tool::Select, false), (LASER, false)] {
         let mut ed = with(tool);
         let id = match tool {
             Tool::Geometry => add_shape(&mut ed, [100.0, 300.0], [400.0, 300.0]),
@@ -123,7 +123,7 @@ fn the_stylus_does_the_work_and_what_it_does_depends_on_the_tool() {
         assert_eq!(ed.ink.get(id).is_none(), erases, "{tool:?}");
     }
     // The barrel button lassos with the pen and shape tools.
-    for (tool, selects) in [(Tool::Pen, true), (Tool::Geometry, true), (Tool::Text, false), (Tool::Select, false), (Tool::Laser, false)] {
+    for (tool, selects) in [(Tool::Pen, true), (Tool::Geometry, true), (Tool::Text, false), (Tool::Select, false), (LASER, false)] {
         let mut ed = with(tool);
         let id = match tool {
             Tool::Geometry => add_shape(&mut ed, [200.0, 300.0], [300.0, 300.0]),
@@ -143,7 +143,7 @@ fn the_stylus_does_the_work_and_what_it_does_depends_on_the_tool() {
 
 #[test]
 fn only_the_shape_tool_selects_a_shape_by_tapping_it_with_the_stylus() {
-    for (tool, selects) in [(Tool::Pen, false), (Tool::Geometry, true), (Tool::Text, false), (Tool::Select, false), (Tool::Laser, false)] {
+    for (tool, selects) in [(Tool::Pen, false), (Tool::Geometry, true), (Tool::Text, false), (Tool::Select, false), (LASER, false)] {
         let mut ed = with(tool);
         let id = add_shape(&mut ed, [100.0, 300.0], [400.0, 300.0]);
         let on = on_page(&ed, 250.0, 300.0);

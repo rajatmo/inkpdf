@@ -237,7 +237,7 @@ fn choosing_a_tool_a_colour_or_a_thickness_asks_for_the_settings_to_be_saved() {
     ed.requests.take(&Request::SettingsChanged);
     ed.set_tool(Tool::Pen);
     assert!(!ed.requests.has(&Request::SettingsChanged), "the tool in use did not change");
-    ed.set_tool(Tool::Laser);
+    ed.set_tool(LASER);
     assert!(ed.requests.has(&Request::SettingsChanged));
     ed.requests.take(&Request::SettingsChanged);
     ed.set_tool(Tool::Pen);

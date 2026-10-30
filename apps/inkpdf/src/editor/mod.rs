@@ -96,6 +96,10 @@ pub struct Editor {
     held_bar: Option<(toolbar::ContextBar, toolbar::ContextState)>,
     /// The search card: what was typed, what it found (see [`search`]).
     pub search: search::Search,
+    /// The tools there are, as the toolbar lists them (the program's own and the extensions').
+    registry: crate::tool::Registry,
+    /// The extensions those tools came from, to make them afresh when a document is loaded.
+    extensions: Vec<inkpdf_api::Extension>,
     /// The tools that own their interaction (see [`crate::tools`]).
     pub tools: ToolSet,
     /// The window's own controls (see [`Chrome`]).
@@ -117,7 +121,15 @@ pub struct Editor {
 impl Editor {
     /// An editor for a window of `viewport` pixels at `dpr`, moving as `prefs` say (what the user asked of motion).
     pub fn new(viewport: [f32; 2], dpr: f32, prefs: crate::motion::Prefs) -> Self {
+        Self::with_extensions(viewport, dpr, prefs, &crate::tools::extensions())
+    }
+
+    /// The same, with the tools of `extensions` instead of the ones this build has (a test's own, or a fork's).
+    pub fn with_extensions(viewport: [f32; 2], dpr: f32, prefs: crate::motion::Prefs, extensions: &[inkpdf_api::Extension]) -> Self {
+        let registry = extensions.iter().fold(crate::tool::Registry::builtin(), |r, e| r.with(crate::tool::Tool::named(e.id), e.icon_svg));
         Self {
+            registry,
+            extensions: extensions.to_vec(),
             ws: Workspace::new(viewport, dpr),
             cursor: [0.0; 2],
             links: Vec::new(),
@@ -128,7 +140,7 @@ impl Editor {
             graves: HashMap::new(),
             held_bar: None,
             search: search::Search::default(),
-            tools: ToolSet::new(),
+            tools: ToolSet::with_extensions(extensions),
             chrome: Chrome::default(),
             motions: motions::Motions::new(prefs),
             mode: Mode::default(),
@@ -148,7 +160,7 @@ impl Editor {
         self.ws.ink.load(strokes);
         self.ws.selection.clear();
         self.ws.intent = crate::input::Intent::Draw;
-        self.tools = ToolSet::new();
+        self.tools = ToolSet::with_extensions(&self.extensions);
         self.ws.erasing.clear();
         self.search.close();
         self.chrome.clear_press_and_prompt();
@@ -171,7 +183,7 @@ impl Editor {
     }
 
     pub fn toolbar(&self) -> Toolbar {
-        Toolbar::layout(self.ws.view.viewport, self.ws.dpr)
+        Toolbar::layout_for(&self.registry, self.ws.view.viewport, self.ws.dpr)
     }
 
     /// Everything the toolbars' look depends on.
@@ -244,7 +256,7 @@ impl Editor {
         self.ws.shape = settings.shape;
         self.ws.shape_style = settings.shape_style;
         self.ws.text_style = settings.text_style;
-        self.tools = ToolSet::new();
+        self.tools = ToolSet::with_extensions(&self.extensions);
         self.chrome.panel = None;
         self.ws.redraw = true;
     }
@@ -264,6 +276,11 @@ impl Editor {
             shape_style: self.ws.shape_style,
             text_style: self.ws.text_style,
         }
+    }
+
+    /// Time has passed: whether any extension's tool is still moving by itself (a trail fading), which keeps the frames coming.
+    pub fn tick_tools(&mut self, now_ms: f64) -> bool {
+        self.tools.tick(now_ms)
     }
 
     /// Take the time from clock instead (a test's own, that it can set).

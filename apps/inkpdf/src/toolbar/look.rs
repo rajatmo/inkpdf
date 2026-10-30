@@ -3,15 +3,6 @@
 //! reads them, so the toolbar knows nothing of time. [`Look::resting`] is the look the state would settle to.
 
 use super::{BUTTONS, Item, State, Toolbar};
-use crate::tool::Tool;
-
-/// The tools in the order of their buttons.
-pub const TOOLS: [Tool; 5] = [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Select, Tool::Laser];
-
-/// Where the mark of the tool in use is, as a position along [`TOOLS`] (it slides between buttons).
-fn tool_position(tool: Tool) -> f32 {
-    TOOLS.iter().position(|&t| t == tool).unwrap_or(0) as f32
-}
 
 /// Whether the button can be pressed (the others are always enabled).
 pub fn enabled(item: Item, state: &State) -> bool {
@@ -44,10 +35,10 @@ impl Look {
             hover: [0.0; BUTTONS],
             ripple: [0.0; BUTTONS],
             enabled: [1.0; BUTTONS],
-            tool: tool_position(state.tool),
+            tool: bar.tool_index(state.tool).unwrap_or(0) as f32,
             unsaved: f32::from(state.unsaved),
         };
-        for (slot, (item, _)) in bar.items.iter().enumerate() {
+        for (slot, (item, _)) in bar.items().iter().enumerate() {
             let on = enabled(*item, state);
             look.enabled[slot] = f32::from(on);
             look.hover[slot] = f32::from(on && state.hover == Some(*item));
@@ -71,6 +62,7 @@ pub fn nearness(position: f32, index: usize) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tool::Tool;
 
     #[test]
     fn colours_mix_between_their_ends_and_the_mark_is_on_one_button_at_a_time_when_at_rest() {
@@ -78,9 +70,9 @@ mod tests {
         assert_eq!(mix([0, 100, 200, 255], [100, 200, 0, 255], 1.0), [100, 200, 0, 255]);
         assert_eq!(mix([0, 100, 200, 255], [100, 200, 0, 255], 0.5), [50, 150, 100, 255]);
         assert_eq!(mix([0; 4], [255; 4], 9.0), [255; 4], "beyond its ends is its end");
-        for (i, _) in TOOLS.iter().enumerate() {
+        for i in 0..crate::tool::registry().len() {
             assert_eq!(nearness(i as f32, i), 1.0);
-            assert_eq!(nearness(i as f32, (i + 1) % TOOLS.len()), 0.0);
+            assert_eq!(nearness(i as f32, (i + 1) % crate::tool::registry().len()), 0.0);
         }
         assert_eq!(nearness(0.5, 0), 0.5);
         assert_eq!(nearness(0.5, 1), 0.5);

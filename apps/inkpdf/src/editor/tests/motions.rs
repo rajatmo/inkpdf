@@ -130,7 +130,7 @@ fn a_look_in_motion_stays_within_its_ends_whatever_the_frame_times() {
             0 => ed.mouse_moved(at),
             1 => ed.set_tool(Tool::Geometry),
             2 => ed.mouse_moved([700.0, 500.0]),
-            _ => ed.set_tool(Tool::Laser),
+            _ => ed.set_tool(LASER),
         }
         ed.step_view(dt);
         let look = ed.toolbar_look();
@@ -196,7 +196,7 @@ fn the_tool_panel_unfolds_and_folds_over_a_moment_and_the_bar_comes_in_when_a_to
     frames(&mut ed, 30);
     assert!(ed.panel_look().is_none());
     // A tool with no bar: nothing of it; chosen again, it comes in from nothing.
-    ed.set_tool(Tool::Laser);
+    ed.set_tool(LASER);
     ed.step_view(0.016);
     assert!(ed.context_bar().is_none());
     ed.set_tool(Tool::Pen);
@@ -216,7 +216,7 @@ fn the_bar_under_the_tools_goes_out_as_it_was_when_the_tool_has_none_and_with_mo
     };
     let mut ed = moving_editor();
     let with_bar = lines(&ed);
-    ed.set_tool(Tool::Laser);
+    ed.set_tool(LASER);
     ed.step_view(0.016);
     let going = ed.motions.bar_amount();
     assert!(going > 0.0 && going < 1.0, "on its way out: {going}");
@@ -238,7 +238,7 @@ fn the_bar_under_the_tools_goes_out_as_it_was_when_the_tool_has_none_and_with_mo
     // Reduced: gone at once.
     let mut still = editor();
     still.step_view(0.016);
-    still.set_tool(Tool::Laser);
+    still.set_tool(LASER);
     still.step_view(0.016);
     assert_eq!(still.motions.bar_amount(), 0.0);
     assert_eq!(lines(&still), bare);

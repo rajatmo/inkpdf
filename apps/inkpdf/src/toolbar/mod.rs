@@ -27,6 +27,12 @@ use crate::settings::Appearance;
 use crate::tool::{MAX_WIDTH, MIN_WIDTH};
 use crate::tool::{PALETTE, Tool, width_range};
 
+/// Whether an SVG draws something and keeps inside its box (what an extension's icon must do: a test says so for each).
+#[cfg(test)]
+pub fn icon_is_drawable(svg: &str) -> bool {
+    icons::is_drawable(svg)
+}
+
 pub use context_bar::{ContextBar, ContextItem, ContextState};
 use icons::icons;
 pub use look::Look;
@@ -155,17 +161,10 @@ const LEFT: [Option<Item>; 10] = [
     Some(Item::Pages),
     Some(Item::Search),
 ];
-const MIDDLE: [Option<Item>; 5] = [
-    Some(Item::Tool(Tool::Pen)),
-    Some(Item::Tool(Tool::Geometry)),
-    Some(Item::Tool(Tool::Text)),
-    Some(Item::Tool(Tool::Select)),
-    Some(Item::Tool(Tool::Laser)),
-];
 const RIGHT: [Option<Item>; 4] = [Some(Item::Theme), Some(Item::DarkPages), Some(Item::ModeSwitch), Some(Item::Fullscreen)];
 
-/// Buttons in all.
-pub const BUTTONS: usize = 17;
+/// Buttons at most: the left pill's, the right pill's and as many tools as a toolbar can hold. (A toolbar has the buttons of the tools there are.)
+pub const BUTTONS: usize = 8 + 4 + crate::tool::MAX_TOOLS;
 
 pub struct Toolbar {
     /// The three pills, `[x0, y0, x1, y1]` in pixels: left, middle, right.
@@ -173,26 +172,49 @@ pub struct Toolbar {
     /// Every button and where it is; a fixed array, so laying the toolbar out (which happens on
     /// every pen and mouse event near it) allocates nothing.
     items: [(Item, [f32; 4]); BUTTONS],
+    /// How many of `items` are buttons.
+    len: usize,
+    /// The tools, in the order of their buttons, and the icon of each one an extension made (the program's own are drawn from `icons`).
+    tools: [Tool; crate::tool::MAX_TOOLS],
+    tool_icons: [Option<&'static str>; crate::tool::MAX_TOOLS],
+    tool_count: usize,
     unit: f32,
     dpr: f32,
 }
 
 impl Toolbar {
-    /// Along the top of a viewport of `viewport` pixels, sized for `dpr`.
+    /// Along the top of a viewport of `viewport` pixels, sized for `dpr`, with the tools of this build.
+    #[cfg(test)]
     pub fn layout(viewport: [f32; 2], dpr: f32) -> Toolbar {
+        Self::layout_for(crate::tool::registry(), viewport, dpr)
+    }
+
+    /// The same, with the tools `registry` lists.
+    pub fn layout_for(registry: &crate::tool::Registry, viewport: [f32; 2], dpr: f32) -> Toolbar {
         let (gap, pad, margin) = (10.0 * dpr, 8.0 * dpr, 12.0 * dpr);
+        let mut tools = [Tool::Pen; crate::tool::MAX_TOOLS];
+        let mut tool_icons = [None; crate::tool::MAX_TOOLS];
+        let mut middle = [None; crate::tool::MAX_TOOLS];
+        let tool_count = registry.len().min(crate::tool::MAX_TOOLS);
+        for (i, tool) in registry.tools().take(tool_count).enumerate() {
+            tools[i] = tool;
+            tool_icons[i] = registry.icon(tool);
+            middle[i] = Some(Item::Tool(tool));
+        }
+        let middle = &middle[..tool_count];
         // Shrink to fit narrow windows, never below something still tappable: the left pill (eight
         // buttons and two gaps) and half the middle one must fit in half the window.
-        let unit = (38.0 * dpr).min(((viewport[0] / 2.0 - margin - 3.0 * pad - 3.0 * gap) / 10.5).max(17.0 * dpr));
+        let across = 8.0 + tool_count as f32 / 2.0;
+        let unit = (38.0 * dpr).min(((viewport[0] / 2.0 - margin - 3.0 * pad - 3.0 * gap) / across).max(17.0 * dpr));
         let height = unit + 2.0 * pad;
         let width_of = |slots: &[Option<Item>]| slots.iter().map(|s| if s.is_some() { unit } else { gap }).sum::<f32>() + 2.0 * pad;
-        let (left_w, middle_w, right_w) = (width_of(&LEFT), width_of(&MIDDLE), width_of(&RIGHT));
+        let (left_w, middle_w, right_w) = (width_of(&LEFT), width_of(middle), width_of(&RIGHT));
         let lefts = [margin, (viewport[0] - middle_w) / 2.0, (viewport[0] - margin - right_w).max(0.0)];
         let widths = [left_w, middle_w, right_w];
         let mut items = [(Item::Close, [0.0; 4]); BUTTONS];
         let mut placed = 0;
         let mut pills = [[0.0; 4]; 3];
-        for (i, slots) in [&LEFT[..], &MIDDLE[..], &RIGHT[..]].into_iter().enumerate() {
+        for (i, slots) in [&LEFT[..], middle, &RIGHT[..]].into_iter().enumerate() {
             let mut x = lefts[i] + pad;
             for slot in slots {
                 match slot {
@@ -206,8 +228,22 @@ impl Toolbar {
             }
             pills[i] = [lefts[i], margin, lefts[i] + widths[i], margin + height];
         }
-        debug_assert_eq!(placed, BUTTONS, "every button is placed");
-        Toolbar { pills, items, unit, dpr }
+        Toolbar { pills, items, len: placed, tools, tool_icons, tool_count, unit, dpr }
+    }
+
+    /// Every button and where it is.
+    fn items(&self) -> &[(Item, [f32; 4])] {
+        &self.items[..self.len]
+    }
+
+    /// The tools, in the order of their buttons.
+    pub fn tools(&self) -> &[Tool] {
+        &self.tools[..self.tool_count]
+    }
+
+    /// Where the tool's button is among the tools' (what the mark of the tool in use is placed by).
+    pub fn tool_index(&self, tool: Tool) -> Option<usize> {
+        self.tools().iter().position(|&t| t == tool)
     }
 
     /// The bottom edge of the pills.
@@ -222,12 +258,12 @@ impl Toolbar {
 
     /// Where `item` is among the buttons (what a [`Look`] is indexed by).
     pub fn slot(&self, item: Item) -> Option<usize> {
-        self.items.iter().position(|(i, _)| *i == item)
+        self.items().iter().position(|(i, _)| *i == item)
     }
 
     #[cfg(test)]
     fn button(&self, item: Item) -> Option<[f32; 4]> {
-        self.items.iter().find(|(i, _)| *i == item).map(|(_, r)| *r)
+        self.items().iter().find(|(i, _)| *i == item).map(|(_, r)| *r)
     }
 
     /// The middle of a button, for tests that press it.
@@ -242,7 +278,7 @@ impl Toolbar {
     }
 
     pub fn hit(&self, p: [f32; 2]) -> Option<Item> {
-        self.items.iter().find(|(_, r)| rect_contains(*r, p)).map(|(i, _)| *i)
+        self.items().iter().find(|(_, r)| rect_contains(*r, p)).map(|(i, _)| *i)
     }
 
     /// Drawn as it rests: nothing moving.
@@ -265,7 +301,7 @@ impl Toolbar {
             ui.panel([cx - 0.46 * u, cy - 0.46 * u, cx + 0.46 * u, cy + 0.46 * u], 0.3 * u, ui.pal.accent_wash);
         }
         let mut last_end: Option<(usize, f32)> = None;
-        for (slot, &(item, r)) in self.items.iter().enumerate() {
+        for (slot, &(item, r)) in self.items().iter().enumerate() {
             let (cx, cy) = ((r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0);
             let pill = self.pills.iter().position(|&p| rect_contains(p, [cx, cy])).unwrap_or(0);
             if let Some((was, end)) = last_end
@@ -293,7 +329,7 @@ impl Toolbar {
             }
             let half = 0.33 * u;
             let ink = |amount: f32| look::mix(ui.pal.ink_dim, ui.pal.ink, amount);
-            let tool_ink = |index: usize| look::mix(ui.pal.ink, ui.pal.accent, look::nearness(look.tool, index));
+            let tool_ink = |index: Option<usize>| look::mix(ui.pal.ink, ui.pal.accent, index.map_or(0.0, |i| look::nearness(look.tool, i)));
             match item {
                 Item::Undo => icons.undo.draw(&mut ui.lines, cx, cy, half, line, ink(look.enabled[slot])),
                 Item::Redo => icons.redo.draw(&mut ui.lines, cx, cy, half, line, ink(look.enabled[slot])),
@@ -331,34 +367,41 @@ impl Toolbar {
                     icon.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink);
                 }
                 Item::Tool(tool @ (Tool::Pen | Tool::Geometry | Tool::Text)) => {
-                    let (icon, colour, index) = match tool {
-                        Tool::Pen => (&icons.pen, state.pen_colour, 0),
-                        Tool::Geometry => (&icons.geometry, state.shape_colour, 1),
-                        _ => (&icons.text, state.text_colour, 2),
+                    let (icon, colour) = match tool {
+                        Tool::Pen => (&icons.pen, state.pen_colour),
+                        Tool::Geometry => (&icons.geometry, state.shape_colour),
+                        _ => (&icons.text, state.text_colour),
                     };
-                    icon.draw(&mut ui.lines, cx, cy, half * 1.05, line, tool_ink(index));
+                    icon.draw(&mut ui.lines, cx, cy, half * 1.05, line, tool_ink(self.tool_index(tool)));
                     // The colour the tool writes in, as a dot on its corner.
                     let dot = [r[2] - 0.2 * u, r[3] - 0.2 * u];
                     ui.disc(dot, 0.3 * u, ui.pal.white);
                     ui.disc(dot, 0.24 * u, ui.pal.rim);
                     ui.disc(dot, 0.2 * u, colour);
                 }
-                Item::Tool(Tool::Select) => icons.text_select.draw(&mut ui.lines, cx, cy, half * 1.05, line, tool_ink(3)),
-                Item::Tool(Tool::Laser) => icons.laser.draw(&mut ui.lines, cx, cy, half * 1.05, line, tool_ink(4)),
+                Item::Tool(Tool::Select) => icons.text_select.draw(&mut ui.lines, cx, cy, half * 1.05, line, tool_ink(self.tool_index(Tool::Select))),
+                // An extension's tool: its own icon.
+                Item::Tool(other) => {
+                    let index = self.tool_index(other);
+                    if let Some(icon) = index.and_then(|i| self.tool_icons[i]).map(icons::from_svg_cached) {
+                        icon.draw(&mut ui.lines, cx, cy, half * 1.05, line, tool_ink(index));
+                    }
+                }
             }
         }
     }
 
     /// Where the mark of the tool in use is when it is `position` along the tools' buttons (between two while it slides).
     fn mark_of_tool(&self, position: f32) -> Option<[f32; 4]> {
-        let rect = |index: usize| self.button_rect(Item::Tool(look::TOOLS[index.min(look::TOOLS.len() - 1)]));
-        let position = position.clamp(0.0, (look::TOOLS.len() - 1) as f32);
+        let last = self.tool_count.saturating_sub(1);
+        let rect = |index: usize| self.button_rect(Item::Tool(self.tools[index.min(last)]));
+        let position = position.clamp(0.0, last as f32);
         let (a, b) = (rect(position.floor() as usize)?, rect(position.ceil() as usize)?);
         let t = position - position.floor();
         Some([0, 1, 2, 3].map(|i| a[i] + (b[i] - a[i]) * t))
     }
 
     fn button_rect(&self, item: Item) -> Option<[f32; 4]> {
-        self.items.iter().find(|(i, _)| *i == item).map(|(_, r)| *r)
+        self.items().iter().find(|(i, _)| *i == item).map(|(_, r)| *r)
     }
 }

@@ -12,22 +12,93 @@ pub const DEFAULT_WIDTH: f32 = 2.5;
 pub const MIN_WIDTH: f32 = 0.25;
 pub const MAX_WIDTH: f32 = 24.0;
 
-/// What the pen does on the page.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Tool {
+/// Which tool: a name, and nothing else (what a tool does is its object's, see [`crate::tools`]). The tools the program is made of are
+/// the constants here; an extension's tool is any other name, and is known by the [`Registry`] that lists it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Tool(&'static str);
+
+#[allow(non_upper_case_globals, reason = "the tools read like the cases of an enum, which they were")]
+impl Tool {
     /// Draws ink (and its eraser end erases, its barrel button lassos).
-    #[default]
-    Pen,
+    pub const Pen: Tool = Tool("pen");
     /// Draws shapes (see [crate::geometry]): a drag makes a line, a rectangle, an ellipse or a
     /// set of axes; a curve is dragged out and then shaped by its handles.
-    Geometry,
+    pub const Geometry: Tool = Tool("geometry");
     /// Types text: a tap of the stylus starts a text box (or edits the one tapped), and the keyboard
     /// types into it.
-    Text,
+    pub const Text: Tool = Tool("text");
     /// Selects the text a PDF has: to copy it, and to highlight, underline or strike it out.
-    Select,
-    /// Points: a dot that follows the pen, with a trail that fades. Draws nothing.
-    Laser,
+    pub const Select: Tool = Tool("select");
+
+    /// A tool known by `name` (an extension's: the name it registered under).
+    pub const fn named(name: &'static str) -> Tool {
+        Tool(name)
+    }
+}
+
+impl Default for Tool {
+    fn default() -> Self {
+        Tool::Pen
+    }
+}
+
+/// The tools there are, in the order the toolbar shows them: the program's own, then the extensions', each with what the toolbar needs
+/// to draw its button. A value, so that a test (or a fork) can have a set of its own.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Registry {
+    tools: Vec<(Tool, Option<&'static str>)>,
+}
+
+/// The most tools a toolbar can hold.
+pub const MAX_TOOLS: usize = 8;
+
+impl Registry {
+    /// The program's own tools.
+    pub fn builtin() -> Registry {
+        Registry { tools: [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Select].into_iter().map(|t| (t, None)).collect() }
+    }
+
+    /// Add a tool of an extension, drawn on its button from the SVG `icon` (a name already there, or more tools than fit, is refused).
+    pub fn with(mut self, tool: Tool, icon: &'static str) -> Registry {
+        if self.tools.len() < MAX_TOOLS && self.tools.iter().all(|(t, _)| *t != tool) {
+            self.tools.push((tool, Some(icon)));
+        }
+        self
+    }
+
+    /// The tools, in the toolbar's order.
+    pub fn tools(&self) -> impl Iterator<Item = Tool> + '_ {
+        self.tools.iter().map(|(t, _)| *t)
+    }
+
+    pub fn len(&self) -> usize {
+        self.tools.len()
+    }
+
+    /// Where the tool is in the order, if there is such a tool.
+    #[cfg(test)]
+    pub fn position(&self, tool: Tool) -> Option<usize> {
+        self.tools.iter().position(|(t, _)| *t == tool)
+    }
+
+    /// The tool of this name, if there is one.
+    pub fn find(&self, name: &str) -> Option<Tool> {
+        self.tools().find(|t| t.name() == name)
+    }
+
+    /// The icon of an extension's tool (the program's own are drawn by the toolbar).
+    pub fn icon(&self, tool: Tool) -> Option<&'static str> {
+        self.tools.iter().find(|(t, _)| *t == tool).and_then(|(_, icon)| *icon)
+    }
+}
+
+/// The registry of this build: the program's own tools and every extension's.
+pub fn registry() -> &'static Registry {
+    static REGISTRY: std::sync::OnceLock<Registry> = std::sync::OnceLock::new();
+    // (The extensions the program can serve: see `tools::extensions`, which says why one is left out.)
+    REGISTRY.get_or_init(|| {
+        inkpdf_ext::all().iter().filter(|e| e.problem().is_none()).fold(Registry::builtin(), |r, e| r.with(Tool::named(e.id), e.icon_svg))
+    })
 }
 
 /// What an item of the drawing is, which is what decides which tool works on it.
@@ -54,16 +125,13 @@ impl Kind {
 }
 
 impl Tool {
-    /// Every tool, in the order the toolbar shows them.
-    pub const ALL: [Tool; 5] = [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Select, Tool::Laser];
-
-    /// The kind of item the tool makes and works on; the pointer makes none.
+    /// The kind of item the tool makes and works on; the others make none.
     pub fn kind(self) -> Option<Kind> {
         match self {
             Tool::Pen => Some(Kind::Ink),
             Tool::Geometry => Some(Kind::Shape),
             Tool::Text => Some(Kind::Text),
-            Tool::Select | Tool::Laser => None,
+            _ => None,
         }
     }
 
@@ -80,17 +148,19 @@ impl Tool {
 
     /// The name used in the settings file.
     pub fn name(self) -> &'static str {
-        match self {
-            Tool::Pen => "pen",
-            Tool::Geometry => "geometry",
-            Tool::Text => "text",
-            Tool::Select => "select",
-            Tool::Laser => "laser",
-        }
+        self.0
     }
 
+    /// Every tool of this build, in the toolbar's order.
+    #[cfg(test)]
+    pub fn all() -> Vec<Tool> {
+        registry().tools().collect()
+    }
+
+    /// The tool of this name among those of this build (a name that is no tool, as one left in the settings by an extension that is gone,
+    /// is `None`).
     pub fn from_name(name: &str) -> Option<Tool> {
-        Tool::ALL.into_iter().find(|t| t.name() == name)
+        registry().find(name)
     }
 }
 
@@ -147,22 +217,37 @@ mod tests {
 
     #[test]
     fn every_tool_has_a_name_that_finds_it_again_and_nothing_else_does() {
-        for tool in Tool::ALL {
+        for tool in Tool::all() {
             assert_eq!(Tool::from_name(tool.name()), Some(tool));
         }
-        // Every tool but the pointer makes one kind of item, and a different one each.
-        let kinds: Vec<Option<Kind>> = Tool::ALL.iter().map(|t| t.kind()).collect();
-        assert_eq!(kinds, [Some(Kind::Ink), Some(Kind::Shape), Some(Kind::Text), None, None]);
-        assert_eq!(Tool::ALL.map(Tool::makes_items), [true, true, true, false, false]);
-        assert_eq!(Tool::ALL.map(Tool::has_bar), [true, true, true, true, false], "the text selection has its marks in the bar");
+        // The program's own tools come first, in the toolbar's order, each making its own kind of item (or none).
+        let builtin = [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Select];
+        assert_eq!(&Tool::all()[..4], &builtin);
+        assert_eq!(builtin.map(|t| t.kind()), [Some(Kind::Ink), Some(Kind::Shape), Some(Kind::Text), None]);
+        assert_eq!(builtin.map(Tool::makes_items), [true, true, true, false]);
+        assert_eq!(builtin.map(Tool::has_bar), [true, true, true, true], "the text selection has its marks in the bar");
+        // An extension's tool is only a name: it makes none of the program's items and has no bar.
+        let laser = Tool::from_name("laser").expect("the laser extension");
+        assert_eq!((laser.kind(), laser.has_bar()), (None, false));
         assert_eq!(Tool::from_name("brush"), None);
         assert_eq!(Tool::default(), Tool::Pen);
     }
 
     #[test]
+    fn a_registry_lists_tools_once_in_order_and_holds_no_more_than_a_toolbar_can() {
+        let r = Registry::builtin().with(Tool::named("a"), "<path/>").with(Tool::named("a"), "<path/>").with(Tool::named("b"), "<path/>");
+        assert_eq!(r.tools().map(Tool::name).collect::<Vec<_>>(), ["pen", "geometry", "text", "select", "a", "b"]);
+        assert_eq!((r.position(Tool::named("b")), r.position(Tool::named("zzz"))), (Some(5), None));
+        assert_eq!(r.icon(Tool::named("a")), Some("<path/>"));
+        assert_eq!(r.icon(Tool::Pen), None, "the toolbar draws the program's own");
+        let full = (0..50).fold(Registry::builtin(), |r, i| r.with(Tool::named(Box::leak(format!("t{i}").into_boxed_str())), "<path/>"));
+        assert_eq!(full.len(), MAX_TOOLS);
+    }
+
+    #[test]
     fn text_has_its_own_range_and_the_defaults_are_inside_the_ranges() {
         assert_eq!(width_range(Tool::Text), TEXT_SIZES);
-        for tool in [Tool::Pen, Tool::Geometry, Tool::Laser] {
+        for tool in [Tool::Pen, Tool::Geometry, Tool::Select, Tool::named("laser")] {
             assert_eq!(width_range(tool), (MIN_WIDTH, MAX_WIDTH));
         }
         for (tool, style) in [(Tool::Pen, ToolStyle::PEN), (Tool::Geometry, ToolStyle::SHAPES), (Tool::Text, ToolStyle::TEXT)] {

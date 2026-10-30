@@ -71,15 +71,15 @@ fn at_a_desk_the_mouse_makes_shapes_and_moves_the_selection_with_the_shape_tool(
 
 #[test]
 fn at_a_desk_the_pointer_tool_follows_the_mouse_with_a_dot_and_a_trail() {
-    let mut ed = with(Tool::Laser, Mode::Desktop);
+    let mut ed = with(LASER, Mode::Desktop);
     ed.mouse_moved(on_page(&ed, 200.0, 300.0));
-    assert!(ed.laser().head().is_some(), "the dot follows the hovering mouse");
+    assert!(laser_dot(&ed).is_some(), "the dot follows the hovering mouse");
     let path = wave(&ed);
     mouse_drag(&mut ed, MouseButton::Left, &path);
-    assert!(ed.laser().pieces(1000.0).count() > 0 || ed.laser().is_fading(), "a pressed mouse leaves a trail");
+    assert!(!laser_trail(&ed, 1000.0).is_empty() || laser_fading(&ed), "a pressed mouse leaves a trail");
     assert_eq!(ed.ink.len(), 0, "and draws nothing");
     ed.mouse_left();
-    assert_eq!(ed.laser().head(), None, "the dot goes with the mouse");
+    assert_eq!(laser_dot(&ed), None, "the dot goes with the mouse");
 }
 
 #[test]
@@ -151,18 +151,18 @@ fn a_lost_release_does_not_make_the_next_press_of_that_button_be_ignored() {
     ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
     ed.mouse_moved(path[1]);
     // The release never arrives. The next press is a new one, on the toolbar as much as on the page.
-    let laser = ed.toolbar().centre_of(Item::Tool(Tool::Laser));
+    let laser = ed.toolbar().centre_of(Item::Tool(LASER));
     ed.mouse_moved(laser);
     ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
     ed.mouse_button(ButtonState::Released, MouseButton::Left);
-    assert_eq!(ed.tool, Tool::Laser, "the toolbar button was pressed");
+    assert_eq!(ed.tool, LASER, "the toolbar button was pressed");
     assert!(!ed.tools.busy(), "and the old stroke is over");
 }
 
 #[test]
 fn the_other_buttons_do_nothing_on_the_toolbar_or_with_a_panel_open() {
     let mut ed = with(Tool::Pen, Mode::Desktop);
-    let laser = ed.toolbar().centre_of(Item::Tool(Tool::Laser));
+    let laser = ed.toolbar().centre_of(Item::Tool(LASER));
     mouse_drag(&mut ed, MouseButton::Right, &[laser, laser]);
     mouse_drag(&mut ed, MouseButton::Middle, &[laser, laser]);
     assert_eq!(ed.tool, Tool::Pen, "only the left button presses a button");
@@ -301,7 +301,7 @@ fn the_mode_button_switches_the_mode_with_every_device_and_shows_it() {
 
 #[test]
 fn the_button_works_with_every_tool_and_not_while_the_prompt_is_up() {
-    for tool in [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Laser] {
+    for tool in [Tool::Pen, Tool::Geometry, Tool::Text, LASER] {
         let mut ed = with(tool, Mode::Desktop);
         let button = mode_button(&ed);
         mouse_click_at(&mut ed, button);

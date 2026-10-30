@@ -33,6 +33,9 @@ path = "src/bin/gen.rs"
 winresource = "0.1"
 
 [dependencies]
+# The extension API, and the extensions built in (see docs/EXTENSIONS.md): the program serves the one and loads the other.
+inkpdf-api = { path = "../inkpdf-api" }
+inkpdf-ext = { path = "../inkpdf-ext" }
 pdfcraft-cos = { workspace = true }
 pdfcraft-annot = { workspace = true }
 pdfcraft-render = { workspace = true }

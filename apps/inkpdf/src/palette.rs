@@ -49,9 +49,8 @@ pub struct Palette {
     /// What marks the places the search found on the page, and the one that is current (drawn over the page: translucent).
     pub search_hit: Rgba,
     pub search_current: Rgba,
-    /// A ring and cross where a drag has snapped to another shape's anchor; the laser pointer's red; the grey of an eraser's or lasso's guide.
+    /// A ring and cross where a drag has snapped to another shape's anchor; the grey of an eraser's or lasso's guide.
     pub snap: Rgba,
-    pub laser: Rgba,
     pub guide: Rgba,
     /// The folder and page icons of the Save As card, and the ink of a file's name.
     pub folder: Rgba,
@@ -129,7 +128,6 @@ impl Palette {
             search_hit: c(a.search_hit, b.search_hit),
             search_current: c(a.search_current, b.search_current),
             snap: c(a.snap, b.snap),
-            laser: c(a.laser, b.laser),
             guide: c(a.guide, b.guide),
             folder: c(a.folder, b.folder),
             folder_tab: c(a.folder_tab, b.folder_tab),
@@ -172,7 +170,6 @@ pub const LIGHT: Palette = Palette {
     search_hit: [255, 200, 0, 110],
     search_current: [255, 120, 0, 170],
     snap: [226, 40, 150, 255],
-    laser: [236, 36, 48, 255],
     guide: [90, 90, 96, 230],
     folder: [240, 178, 52, 255],
     folder_tab: [226, 160, 36, 255],
@@ -208,7 +205,6 @@ pub const DARK: Palette = Palette {
     search_hit: [255, 200, 0, 110],
     search_current: [255, 120, 0, 170],
     snap: [226, 40, 150, 255],
-    laser: [236, 36, 48, 255],
     guide: [90, 90, 96, 230],
     folder: [240, 178, 52, 255],
     folder_tab: [226, 160, 36, 255],
@@ -373,7 +369,6 @@ mod tests {
             p.snap,
             p.search_hit,
             p.search_current,
-            p.laser,
             p.guide,
             p.folder,
             p.folder_tab,
@@ -414,7 +409,7 @@ mod tests {
         assert_ne!(LIGHT.ink, DARK.ink);
         assert_ne!(LIGHT.window, DARK.window);
         assert_eq!((LIGHT.white, DARK.white), ([255; 4], [255; 4]), "a mark on a coloured dot is white in both");
-        assert_eq!((LIGHT.laser, LIGHT.snap), (DARK.laser, DARK.snap), "a pointer's red does not change with the look of the bars");
+        assert_eq!(LIGHT.snap, DARK.snap, "a snap's colour does not change with the look of the bars");
     }
 
     #[test]

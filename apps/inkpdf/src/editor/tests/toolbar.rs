@@ -58,9 +58,9 @@ fn the_pen_is_the_tool_at_the_start_and_its_button_opens_and_closes_the_panel() 
 fn the_laser_button_chooses_the_laser_and_puts_the_panel_and_the_bar_away_and_the_pen_button_brings_back_the_bar() {
     let mut ed = editor();
     tap_pen_button(&mut ed);
-    let laser = ed.toolbar().centre_of(Item::Tool(Tool::Laser));
+    let laser = ed.toolbar().centre_of(Item::Tool(LASER));
     pen_tap(&mut ed, laser);
-    assert_eq!((ed.tool, ed.chrome.panel), (Tool::Laser, None));
+    assert_eq!((ed.tool, ed.chrome.panel), (LASER, None));
     assert!(ed.context_bar().is_none(), "the pointer has no settings");
     let pen_at = ed.toolbar().centre_of(Item::Tool(Tool::Pen));
     pen_tap(&mut ed, pen_at);
@@ -85,7 +85,7 @@ fn choosing_the_laser_lets_go_of_a_selection() {
     let mut ed = editor();
     let id = add_stroke(&mut ed, &[[100.0, 100.0], [200.0, 100.0]]);
     ed.selection = vec![id];
-    let laser = ed.toolbar().centre_of(Item::Tool(Tool::Laser));
+    let laser = ed.toolbar().centre_of(Item::Tool(LASER));
     mouse_click_at(&mut ed, laser);
     assert!(ed.selection.is_empty());
     assert_eq!(ed.ink.len(), 1, "the ink is untouched");
@@ -271,11 +271,11 @@ fn the_toolbar_acts_for_every_device() {
     let mut ed = editor();
     let bar = ed.toolbar();
     // The mouse chooses the laser.
-    let laser = bar.centre_of(Item::Tool(Tool::Laser));
+    let laser = bar.centre_of(Item::Tool(LASER));
     ed.mouse_moved(laser);
     ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
     ed.mouse_button(ButtonState::Released, MouseButton::Left);
-    assert_eq!(ed.tool, Tool::Laser);
+    assert_eq!(ed.tool, LASER);
     // A finger chooses the pen again, which only chooses it: the panel is the bar's.
     let pen_at = bar.centre_of(Item::Tool(Tool::Pen));
     ed.pointer_event(touch(1, Phase::Down, pen_at, 30.0));

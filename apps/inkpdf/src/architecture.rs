@@ -147,7 +147,7 @@ enum Layer {
 }
 
 /// Every top-level module of the program, and its layer. A new module is placed here or the test fails.
-const LAYERS: [(&str, Layer); 43] = [
+const LAYERS: [(&str, Layer); 42] = [
     ("plane", Layer::Base),
     ("motion", Layer::Base),
     ("scene", Layer::Base),
@@ -162,7 +162,6 @@ const LAYERS: [(&str, Layer); 43] = [
     ("clipboard", Layer::Base),
     ("figure", Layer::Model),
     ("ink", Layer::Model),
-    ("laser", Layer::Model),
     ("links", Layer::Model),
     ("outline", Layer::Model),
     ("pages", Layer::Model),
@@ -454,5 +453,66 @@ fn the_session_knows_nothing_of_the_shell() {
 fn only_the_session_chooses_by_tool_so_a_tool_added_is_one_file_and_one_line() {
     // The shell (app) draws and talks to the tools through the trait; it never names a tool's type, so adding
     // a tool does not touch it.
-    assert_free_of(&["app"], &["PenTool", "ShapeTool", "TextTool", "PointerTool"]);
+    assert_free_of(&["app"], &["PenTool", "ShapeTool", "TextTool"]);
+}
+
+// ── extensions (see `docs/EXTENSIONS.md`) ──────────────────────────────────────────────────────────
+
+fn workspace_crate(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join(name)
+}
+
+/// The names of the crates a manifest depends on (its `[dependencies]` and `[build-dependencies]` tables).
+fn dependencies_of(manifest: &Path) -> Vec<String> {
+    let text = std::fs::read_to_string(manifest).expect("a manifest");
+    let mut table = String::new();
+    let mut out = Vec::new();
+    for line in text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')) {
+        if let Some(name) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
+            table = name.to_string();
+        } else if table.ends_with("dependencies") {
+            if let Some((name, _)) = line.split_once('=') {
+                out.push(name.trim().to_string());
+            }
+        }
+    }
+    out
+}
+
+/// What an extension may depend on, besides the API: nothing so far. A crate is added to this list by the owner when the pull request that
+/// needs it is reviewed (and to `apps/inkpdf-ext/Cargo.toml`); until then a test fails, so that no dependency arrives unseen.
+const EXTENSION_DEPENDENCIES: [&str; 1] = ["inkpdf-api"];
+
+#[test]
+fn the_api_depends_on_nothing_and_an_extension_only_on_the_api_and_what_the_owner_has_reviewed() {
+    assert_eq!(dependencies_of(&workspace_crate("inkpdf-api").join("Cargo.toml")), Vec::<String>::new(), "the API is plain types and traits");
+    let ext = dependencies_of(&workspace_crate("inkpdf-ext").join("Cargo.toml"));
+    for name in &ext {
+        assert!(
+            EXTENSION_DEPENDENCIES.contains(&name.as_str()),
+            "{name} is not among the reviewed dependencies of an extension (`EXTENSION_DEPENDENCIES`)"
+        );
+    }
+    assert!(!ext.iter().any(|n| n == "inkpdf"), "an extension cannot reach into the program");
+}
+
+#[test]
+fn an_extension_reads_no_file_and_opens_no_connection_and_runs_no_program() {
+    // Built in does not mean trusted with the machine: what a tool needs of the document comes through the API.
+    let mut found = Vec::new();
+    for file in sources(&workspace_crate("inkpdf-ext").join("src")) {
+        let text = std::fs::read_to_string(&file).unwrap_or_default();
+        for (_, line) in production_lines(&text) {
+            let line = line.trim_start();
+            if line.starts_with("//") {
+                continue;
+            }
+            for banned in ["std::fs", "std::net", "std::process", "std::env", "unsafe ", "inkpdf::", "include_bytes!(\"/", "libc::"] {
+                if line.contains(banned) {
+                    found.push(format!("{}: {line}", file.display()));
+                }
+            }
+        }
+    }
+    assert!(found.is_empty(), "an extension must stay with the API:\n{}", found.join("\n"));
 }

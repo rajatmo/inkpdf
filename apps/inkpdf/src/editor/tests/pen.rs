@@ -201,7 +201,7 @@ fn the_pen_presses_toolbar_buttons_instead_of_drawing() {
     pen_stroke(&mut ed, TIP, &path);
     assert_eq!(ed.ink.strokes()[0].style.rgba, PALETTE[2]);
     // Pressing a button but lifting somewhere else does not press it.
-    let laser = bar.centre_of(Item::Tool(Tool::Laser));
+    let laser = bar.centre_of(Item::Tool(LASER));
     ed.pointer_event(pen(Phase::Down, TIP, &[laser]));
     ed.pointer_event(pen(Phase::Up, TIP, &[on_page(&ed, 400.0, 400.0)]));
     assert_eq!(ed.tool, Tool::Pen);

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["apps/inkpdf", "apps/inkpdf-thumb", "apps/inkpdf-android"]
+members = ["apps/inkpdf", "apps/inkpdf-thumb", "apps/inkpdf-android", "apps/inkpdf-api", "apps/inkpdf-ext"]
 
 [workspace.package]
 edition = "2024"

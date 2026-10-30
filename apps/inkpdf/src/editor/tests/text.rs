@@ -77,7 +77,7 @@ fn a_tap_on_empty_page_starts_a_box_and_the_keyboard_fills_it() {
 
 #[test]
 fn only_the_text_tool_while_a_box_is_being_edited_hears_the_keyboard() {
-    for tool in [Tool::Pen, Tool::Geometry, Tool::Laser] {
+    for tool in [Tool::Pen, Tool::Geometry, LASER] {
         let mut ed = editor();
         ed.set_tool(tool);
         let before = (ed.ink.len(), ed.selection.clone(), ed.ink.is_dirty(), ed.view.scroll);

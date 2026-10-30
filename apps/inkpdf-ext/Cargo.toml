@@ -1,0 +1,16 @@
+[package]
+name = "inkpdf-ext"
+description = "InkPDF's built-in extensions: one folder in src/ for each, found by build.rs"
+version = "1.0.0"
+authors = ["Rajat Mandal"]
+edition.workspace = true
+license.workspace = true
+publish = false
+
+# An extension may use this crate and the crates added here (reviewed by the owner); the program's own crate is not among its
+# dependencies, so an extension cannot reach into it.
+[dependencies]
+inkpdf-api = { path = "../inkpdf-api" }
+
+[lints.rust]
+unsafe_code = "forbid"

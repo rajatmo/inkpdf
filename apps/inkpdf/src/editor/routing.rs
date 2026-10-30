@@ -21,12 +21,6 @@ impl Editor {
         self.tools.text.edit()
     }
 
-    /// The pointer tool's dot and trail.
-    #[cfg(test)]
-    pub fn laser(&self) -> &crate::laser::Laser {
-        &self.tools.pointer.laser
-    }
-
     /// The polyline or spline being drawn by taps, if any.
     #[cfg(test)]
     pub fn draft(&self) -> Option<&crate::tools::Draft> {

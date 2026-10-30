@@ -1049,6 +1049,8 @@ name = "inkpdf"
 version = "1.2.0"
 dependencies = [
  "bytemuck",
+ "inkpdf-api",
+ "inkpdf-ext",
  "libc",
  "pdfcraft-annot",
  "pdfcraft-cos",
@@ -1071,6 +1073,17 @@ dependencies = [
  "inkpdf",
  "libc",
  "winit",
+]
+
+[[package]]
+name = "inkpdf-api"
+version = "1.0.0"
+
+[[package]]
+name = "inkpdf-ext"
+version = "1.0.0"
+dependencies = [
+ "inkpdf-api",
 ]
 
 [[package]]

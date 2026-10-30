@@ -22,7 +22,6 @@ pub(super) struct Icons {
     pub trash: Icon,
     pub back: Icon,
     pub pen: Icon,
-    pub laser: Icon,
     pub geometry: Icon,
     pub plus: Icon,
     pub text: Icon,
@@ -69,7 +68,6 @@ static ICONS: LazyLock<Icons> = LazyLock::new(|| Icons {
     trash: Icon::from_svg(include_str!("../../icons/svg/trash.svg")),
     back: Icon::from_svg(include_str!("../../icons/svg/back.svg")),
     pen: Icon::from_svg(include_str!("../../icons/svg/pen.svg")),
-    laser: Icon::from_svg(include_str!("../../icons/svg/laser.svg")),
     geometry: Icon::from_svg(include_str!("../../icons/svg/geometry.svg")),
     plus: Icon::from_svg(include_str!("../../icons/svg/plus.svg")),
     text: Icon::from_svg(include_str!("../../icons/svg/text.svg")),
@@ -98,6 +96,25 @@ static ICONS: LazyLock<Icons> = LazyLock::new(|| Icons {
     underline: Icon::from_svg(include_str!("../../icons/svg/underline.svg")),
     strikeout: Icon::from_svg(include_str!("../../icons/svg/strikeout.svg")),
 });
+
+/// Whether the SVG makes an icon that draws something and keeps inside its box.
+#[cfg(test)]
+pub(super) fn is_drawable(svg: &str) -> bool {
+    let icon = Icon::from_svg(svg);
+    !icon.lines.is_empty() && icon.lines.iter().flatten().all(|p| p[0].abs() <= 1.0 + 1e-3 && p[1].abs() <= 1.0 + 1e-3)
+}
+
+/// The icon of an extension's tool, made from its SVG the first time it is asked for and kept.
+pub(super) fn from_svg_cached(svg: &'static str) -> &'static Icon {
+    static CACHE: std::sync::Mutex<Vec<(&'static str, &'static Icon)>> = std::sync::Mutex::new(Vec::new());
+    let mut cache = CACHE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some((_, icon)) = cache.iter().find(|(s, _)| std::ptr::eq(*s, svg) || *s == svg) {
+        return icon;
+    }
+    let icon: &'static Icon = Box::leak(Box::new(Icon::from_svg(svg)));
+    cache.push((svg, icon));
+    icon
+}
 
 pub(super) fn icons() -> &'static Icons {
     &ICONS
@@ -390,7 +407,6 @@ mod tests {
             ("trash", &all.trash),
             ("back", &all.back),
             ("pen", &all.pen),
-            ("laser", &all.laser),
             ("geometry", &all.geometry),
             ("plus", &all.plus),
             ("text", &all.text),

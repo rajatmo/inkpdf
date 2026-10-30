@@ -130,7 +130,7 @@ impl Editor {
         let shown = map.as_ref().and_then(|m| m.touched().first().copied()).unwrap_or(0).min(after.len().saturating_sub(1));
         self.ws.layout = after;
         self.ws.prune_selection();
-        self.tools.pointer.laser.clear();
+        self.tools.pages_edited(&mut self.ws);
         self.ws.scroll_to_page(shown);
         self.overview_follow(map.as_ref(), before.len());
         self.ws.requests.push(Request::PagesEdited(edit.clone()));

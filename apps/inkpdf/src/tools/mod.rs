@@ -6,10 +6,10 @@
 //!
 //! Adding a tool is one file implementing [`Tool`] and one line in [`ToolSet`].
 
+mod ext;
 pub mod gestures;
 pub mod paint;
 mod pen;
-mod pointer;
 mod select;
 mod shape;
 mod shortcuts;
@@ -19,9 +19,9 @@ use crate::input::{Device, Mode, PenButtons, Phase, Sample};
 use crate::tool::{Tool as ToolId, ToolAction};
 use crate::workspace::Workspace;
 
+pub use ext::ExtTool;
 pub use paint::Painter;
 pub use pen::PenTool;
-pub use pointer::PointerTool;
 pub use select::SelectTool;
 #[cfg(test)]
 pub use shape::Draft;
@@ -158,54 +158,92 @@ pub trait Tool {
     fn paint(&self, _ws: &Workspace, _out: &mut dyn Painter) {}
 }
 
-/// The tools, by name: the one place that knows which there are.
+/// The extensions this build has, each already checked (one that the program cannot serve is left out, and said on the terminal).
+pub fn extensions() -> Vec<inkpdf_api::Extension> {
+    inkpdf_ext::all()
+        .into_iter()
+        .filter(|e| match e.problem() {
+            Some(why) => {
+                eprintln!("extension left out: {why}");
+                false
+            }
+            None => true,
+        })
+        .collect()
+}
+
+/// The tools, by name: the one place that knows which there are. The program's own are fields; an extension's are held in a list and spoken
+/// to through the API.
 pub struct ToolSet {
     pub pen: PenTool,
     pub shape: ShapeTool,
     pub text: TextTool,
     pub select: SelectTool,
-    pub pointer: PointerTool,
+    ext: Vec<ExtTool>,
 }
 
 impl ToolSet {
+    /// The program's tools and those of the extensions this build has.
     pub fn new() -> Self {
+        Self::with_extensions(&extensions())
+    }
+
+    /// The program's tools and those of `extensions` (a test's own).
+    pub fn with_extensions(extensions: &[inkpdf_api::Extension]) -> Self {
         Self {
             pen: PenTool::default(),
             shape: ShapeTool::default(),
             text: TextTool::default(),
             select: SelectTool::default(),
-            pointer: PointerTool::default(),
+            ext: extensions.iter().map(ExtTool::new).collect(),
         }
     }
 
+    /// The tool, if there is one of that name (the pen's if not: a name from a settings file that an extension has left).
     pub fn get(&self, id: ToolId) -> &dyn Tool {
         match id {
-            ToolId::Pen => &self.pen,
             ToolId::Geometry => &self.shape,
             ToolId::Text => &self.text,
             ToolId::Select => &self.select,
-            ToolId::Laser => &self.pointer,
+            other => match self.ext.iter().find(|t| t.id() == other) {
+                Some(t) => t,
+                None => &self.pen,
+            },
         }
     }
 
     pub fn get_mut(&mut self, id: ToolId) -> &mut dyn Tool {
         match id {
-            ToolId::Pen => &mut self.pen,
             ToolId::Geometry => &mut self.shape,
             ToolId::Text => &mut self.text,
             ToolId::Select => &mut self.select,
-            ToolId::Laser => &mut self.pointer,
+            other => match self.ext.iter().position(|t| t.id() == other) {
+                Some(at) => &mut self.ext[at],
+                None => &mut self.pen,
+            },
         }
     }
 
-    fn each(&mut self) -> [&mut dyn Tool; 5] {
-        [&mut self.pen, &mut self.shape, &mut self.text, &mut self.select, &mut self.pointer]
+    fn each(&mut self) -> Vec<&mut dyn Tool> {
+        let mut all: Vec<&mut dyn Tool> = vec![&mut self.pen, &mut self.shape, &mut self.text, &mut self.select];
+        all.extend(self.ext.iter_mut().map(|t| t as &mut dyn Tool));
+        all
     }
 
     /// Whether any tool has a gesture, or work not yet made part of the document, under way.
     #[cfg(test)]
     pub fn busy(&self) -> bool {
-        [&self.pen as &dyn Tool, &self.shape, &self.text, &self.select, &self.pointer].iter().any(|t| t.busy())
+        [&self.pen as &dyn Tool, &self.shape, &self.text, &self.select].iter().any(|t| t.busy()) || self.ext.iter().any(|t| t.busy())
+    }
+
+    /// Time has passed: whether any extension's tool is still moving by itself (the frames go on while one is).
+    pub fn tick(&mut self, now_ms: f64) -> bool {
+        self.ext.iter_mut().fold(false, |moving, t| t.tick(now_ms) | moving)
+    }
+
+    /// The pages were edited: the extensions' tools hear of it.
+    pub fn pages_edited(&mut self, ws: &mut Workspace) {
+        self.ext.iter_mut().for_each(|t| t.pages_edited(ws));
     }
 
     /// Finish the gesture of every tool (a new press, a new page).

@@ -523,14 +523,14 @@ fn the_bar_is_there_for_the_tools_that_make_items_and_not_for_the_pointer_or_whi
         ed.set_tool(tool);
         assert!(ed.context_bar().is_some(), "{tool:?}");
     }
-    ed.set_tool(Tool::Laser);
+    ed.set_tool(LASER);
     assert!(ed.context_bar().is_none() && ed.context_view().is_none());
     // A press where the bar would be reaches the page, not a button.
     ed.set_tool(Tool::Pen);
     let bar = ed.context_bar().expect("bar");
     let centre = bar.centre_of(ContextItem::Delete);
     assert!(ed.over_interface(centre));
-    ed.set_tool(Tool::Laser);
+    ed.set_tool(LASER);
     assert!(!ed.over_interface(centre));
 }
 

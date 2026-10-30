@@ -6,7 +6,10 @@ use crate::tools::{InputPolicy, MouseUse, PageEvent};
 
 use super::*;
 
-const ALL: [Tool; 5] = [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Select, Tool::Laser];
+/// Every tool of this build, the extensions' too: the suite runs on whatever is registered.
+fn all() -> Vec<Tool> {
+    Tool::all()
+}
 
 /// A tool's own pointer entry, with no policy in front of it.
 fn send(ed: &mut Editor, tool: Tool, dev: Device, id: u32, phase: Phase, pts: &[[f32; 2]], pen: PenButtons) {
@@ -38,14 +41,14 @@ fn each_tools_policy_is_the_device_rule_of_the_design_in_each_mode() {
         (Tool::Geometry, (true, AsStylus, true)),
         (Tool::Text, (false, Itself, true)),
         (Tool::Select, (true, AsStylus, true)),
-        (Tool::Laser, (true, AsStylus, false)),
+        (LASER, (true, AsStylus, false)),
     ];
     let tablet = [
         (Tool::Pen, (true, Scrolls, false)),
         (Tool::Geometry, (true, Scrolls, false)),
         (Tool::Text, (true, Scrolls, true)),
         (Tool::Select, (true, Scrolls, false)),
-        (Tool::Laser, (true, Scrolls, false)),
+        (LASER, (true, Scrolls, false)),
     ];
     for (mode, rules) in [(Mode::Desktop, desktop), (Mode::Tablet, tablet)] {
         for (tool, (stylus, mouse, keyboard)) in rules {
@@ -56,7 +59,7 @@ fn each_tools_policy_is_the_device_rule_of_the_design_in_each_mode() {
 #[test]
 fn a_new_tool_is_idle_and_owns_no_pointer() {
     let ed = editor();
-    for tool in ALL {
+    for tool in all() {
         let t = ed.tools.get(tool);
         assert!(!t.busy(), "{tool:?}");
         for dev in [Device::Pen, Device::Mouse, Device::Touch] {
@@ -68,14 +71,14 @@ fn a_new_tool_is_idle_and_owns_no_pointer() {
 
 #[test]
 fn a_press_and_lift_of_the_device_a_tool_listens_to_ends_with_the_tool_idle() {
-    for tool in ALL {
+    for tool in all() {
         let mut ed = editor();
         ed.tool = tool;
         let dev = listens_to(tool);
         let (a, b) = (on_page(&ed, 100.0, 100.0), on_page(&ed, 220.0, 160.0));
         send(&mut ed, tool, dev, 1, Phase::Down, &[a], TIP);
         send(&mut ed, tool, dev, 1, Phase::Move, &[a, b], TIP);
-        assert!(ed.tools.get(tool).owns(dev, 1) || tool == Tool::Laser, "{tool:?}: owns what it began");
+        assert!(ed.tools.get(tool).owns(dev, 1) || tool == LASER, "{tool:?}: owns what it began");
         send(&mut ed, tool, dev, 1, Phase::Up, &[b], TIP);
         // (A tap-drawn polyline's draft, a text box's edit: pending work, not a gesture; both are ended
         // by `settle`.)
@@ -104,7 +107,7 @@ fn another_pointer_never_ends_or_moves_the_gesture_of_the_first() {
 
 #[test]
 fn cancel_drops_the_gesture_and_leaves_the_document_as_it_was() {
-    for tool in ALL {
+    for tool in all() {
         let mut ed = editor();
         ed.tool = tool;
         add_stroke(&mut ed, &[[100.0, 100.0], [300.0, 100.0]]);
@@ -123,7 +126,7 @@ fn cancel_drops_the_gesture_and_leaves_the_document_as_it_was() {
 
 #[test]
 fn ending_settling_and_leaving_an_idle_tool_change_nothing_and_can_be_repeated() {
-    for tool in ALL {
+    for tool in all() {
         let mut ed = editor();
         add_stroke(&mut ed, &[[100.0, 100.0], [300.0, 100.0]]);
         let before = (ed.ink.revision(), ed.ink.len(), ed.selection.clone());
@@ -142,7 +145,7 @@ fn ending_settling_and_leaving_an_idle_tool_change_nothing_and_can_be_repeated()
 
 #[test]
 fn a_tool_put_away_in_the_middle_of_a_press_leaves_nothing_behind_to_surface_later() {
-    for tool in ALL {
+    for tool in all() {
         let mut ed = editor();
         ed.tool = tool;
         let dev = listens_to(tool);
@@ -164,7 +167,7 @@ fn a_tool_put_away_in_the_middle_of_a_press_leaves_nothing_behind_to_surface_lat
 }
 #[test]
 fn what_a_tool_does_not_listen_to_never_reaches_it() {
-    for (tool, mode) in ALL.into_iter().flat_map(|t| [(t, Mode::Desktop), (t, Mode::Tablet)]) {
+    for (tool, mode) in all().into_iter().flat_map(|t| [(t, Mode::Desktop), (t, Mode::Tablet)]) {
         let mut ed = editor();
         ed.set_mode(mode);
         ed.tool = tool;
@@ -193,7 +196,7 @@ fn what_a_tool_does_not_listen_to_never_reaches_it() {
 #[test]
 fn any_stream_of_events_leaves_every_tool_sound() {
     let mut rng = Rng::new(0x5EED_C0DE);
-    for tool in ALL {
+    for tool in all() {
         let mut ed = editor();
         ed.tool = tool;
         add_stroke(&mut ed, &[[100.0, 100.0], [300.0, 100.0]]);

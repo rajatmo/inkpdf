@@ -6,7 +6,7 @@ const WINDOWS: [(f32, f32); 5] = [(480.0, 1.0), (800.0, 1.0), (1100.0, 1.5), (16
 fn every_item_is_hit_at_its_centre_and_there_are_no_others() {
     let tb = Toolbar::layout([1650.0, 1350.0], 1.5);
     let mut seen = Vec::new();
-    for &(item, r) in &tb.items {
+    for &(item, r) in tb.items() {
         let c = [(r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0];
         assert_eq!(tb.hit(c), Some(item));
         assert!(tb.contains(c));
@@ -27,7 +27,7 @@ fn every_item_is_hit_at_its_centre_and_there_are_no_others() {
             Item::Tool(Tool::Geometry),
             Item::Tool(Tool::Text),
             Item::Tool(Tool::Select),
-            Item::Tool(Tool::Laser),
+            Item::Tool(Tool::named("laser")),
             Item::Theme,
             Item::DarkPages,
             Item::ModeSwitch,
@@ -40,10 +40,10 @@ fn every_item_is_hit_at_its_centre_and_there_are_no_others() {
 fn the_main_toolbar_holds_only_the_tools() {
     let tb = Toolbar::layout([1650.0, 1350.0], 1.5);
     let in_middle: Vec<Item> =
-        tb.items.iter().filter(|(_, r)| rect_contains(tb.pills[1], [(r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0])).map(|(i, _)| *i).collect();
+        tb.items().iter().filter(|(_, r)| rect_contains(tb.pills[1], [(r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0])).map(|(i, _)| *i).collect();
     assert_eq!(
         in_middle,
-        [Item::Tool(Tool::Pen), Item::Tool(Tool::Geometry), Item::Tool(Tool::Text), Item::Tool(Tool::Select), Item::Tool(Tool::Laser)]
+        [Item::Tool(Tool::Pen), Item::Tool(Tool::Geometry), Item::Tool(Tool::Text), Item::Tool(Tool::Select), Item::Tool(Tool::named("laser"))]
     );
 }
 
@@ -114,7 +114,7 @@ fn widths_map_to_the_slider_and_back() {
 #[test]
 fn items_are_big_enough_to_tap() {
     let tb = Toolbar::layout([1100.0, 900.0], 1.0);
-    for &(_, r) in &tb.items {
+    for &(_, r) in tb.items() {
         assert!(r[2] - r[0] >= 24.0 && r[3] - r[1] >= 24.0);
     }
 }
@@ -149,7 +149,7 @@ fn drawing_stays_inside_the_pills_and_marks_the_tool_in_use() {
     }
     // The other tool in use draws differently, so the choice is visible.
     let mut other = Ui::default();
-    tb.draw(&State { tool: Tool::Laser, ..state }, &mut other);
+    tb.draw(&State { tool: Tool::named("laser"), ..state }, &mut other);
     assert_ne!(ui.lines, other.lines);
     assert_eq!(ui.panels.len(), other.panels.len(), "one wash either way");
 }

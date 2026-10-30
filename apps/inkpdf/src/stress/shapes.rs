@@ -189,7 +189,7 @@ fn stress_settings_text_of_any_kind_never_stops_the_app_and_real_settings_come_b
     for _ in 0..(2_000 * scale()) {
         let hundredths = |v: f32| (v * 100.0).round() / 100.0;
         let mut s = crate::settings::Settings {
-            tool: rng.pick(&[Tool::Pen, Tool::Geometry, Tool::Text, Tool::Select, Tool::Laser]),
+            tool: rng.pick(&[Tool::Pen, Tool::Geometry, Tool::Text, Tool::Select, LASER]),
             shape: rng.pick(&crate::geometry::SHAPES),
             pen: crate::tool::ToolStyle { colour: rng.below(5), width: hundredths(rng.range(MIN_WIDTH, MAX_WIDTH)) },
             shape_style: crate::tool::ToolStyle { colour: rng.below(5), width: hundredths(rng.range(MIN_WIDTH, MAX_WIDTH)) },

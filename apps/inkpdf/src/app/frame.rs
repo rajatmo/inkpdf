@@ -92,7 +92,7 @@ impl State {
         let animating = self.ed.step_view(dt);
         // The laser's trail fades with the clock: keep drawing until it is gone, and no longer.
         let pen_clock = crate::clock::now_ms();
-        let fading = self.ed.tools.pointer.prune(pen_clock);
+        let fading = self.ed.tick_tools(pen_clock);
         let settled = self.zoom_settled(now);
         let pending = self.stream_tiles(settled) + usize::from(self.stream_text());
 

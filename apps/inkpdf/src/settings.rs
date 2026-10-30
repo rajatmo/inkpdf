@@ -227,7 +227,7 @@ mod tests {
     fn settings_round_trip_through_text() {
         let s = everything_changed();
         assert_eq!(Settings::parse(&s.to_text()), s);
-        for tool in Tool::ALL {
+        for tool in Tool::all() {
             for shape in crate::geometry::SHAPES {
                 let s = Settings { tool, shape, ..everything_changed() };
                 assert_eq!(Settings::parse(&s.to_text()), s, "{tool:?} {shape:?}");
@@ -248,7 +248,7 @@ mod tests {
         // Only the three good lines took effect.
         assert_eq!(s.palette[0], [0, 255, 0, 255]);
         assert_eq!(s.pen.width, 3.5);
-        assert_eq!(s.tool, Tool::Laser);
+        assert_eq!(s.tool, Tool::named("laser"));
         assert_eq!(s.palette[1], PALETTE[1]);
         assert_eq!(s.smoothing, DEFAULT_AMOUNT);
         assert_eq!((s.pen.colour, s.shape, s.shape_style), (Settings::default().pen.colour, Shape::default(), ToolStyle::SHAPES));

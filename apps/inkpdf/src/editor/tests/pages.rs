@@ -212,12 +212,12 @@ fn a_page_inserted_among_the_others_carries_the_ink_on_the_later_pages_down_with
 #[test]
 fn inserting_a_page_stops_what_the_pen_was_doing_and_clears_the_laser_and_shows_the_new_page() {
     let (mut ed, _, _) = two_pages_with_ink();
-    ed.set_tool(Tool::Laser);
+    ed.set_tool(LASER);
     let path = [on_page(&ed, 100.0, 300.0), on_page(&ed, 200.0, 320.0)];
     pen_stroke(&mut ed, TIP, &path);
-    assert!(ed.laser().is_fading());
+    assert!(laser_fading(&ed));
     assert!(ed.edit_pages(PageEdit::Insert { at: 1, size: [612.0, 792.0] }));
-    assert!(!ed.laser().is_fading());
+    assert!(!laser_fading(&ed));
     assert!(ed.is_idle());
     settle(&mut ed);
     let page = ed.layout.page(1).expect("page");

@@ -7,6 +7,7 @@ mod capability;
 mod contract;
 mod delete_page;
 mod draft;
+mod extensions;
 mod golden;
 mod handle;
 mod inputs;
@@ -36,6 +37,31 @@ use crate::input::{ButtonState, Device, MouseButton, PenButtons, Phase, PointerE
 use crate::tool::{PALETTE, Tool, ToolStyle};
 use crate::toolbar::{Channel, Item, PanelState, Slider};
 use crate::view::Layout;
+
+/// The laser, which is an extension: the core knows it only by its name, and its tests see only what it shows.
+const LASER: Tool = Tool::named("laser");
+
+/// What the laser paints at pen-clock time `now`.
+fn laser_view(ed: &Editor, now: f64) -> crate::tools::paint::tests::Recorder {
+    let mut out = crate::tools::paint::tests::Recorder { now, ..Default::default() };
+    ed.tools.get(LASER).paint(&ed.ws, &mut out);
+    out
+}
+
+/// Where the laser's dot is on the screen, if it shows one.
+fn laser_dot(ed: &Editor) -> Option<[f32; 2]> {
+    laser_view(ed, 1000.0).screen.first().map(|l| l.0)
+}
+
+/// The pieces of the laser's trail at `now`, as pairs of points in document space.
+fn laser_trail(ed: &Editor, now: f64) -> Vec<([f32; 2], [f32; 2])> {
+    laser_view(ed, now).doc.iter().map(|l| (l.0, l.1)).collect()
+}
+
+/// Whether a trail is still fading (what the shell asks, to know whether to go on drawing frames).
+fn laser_fading(ed: &Editor) -> bool {
+    !laser_trail(ed, 0.0).is_empty()
+}
 
 /// A 1200 x 900 window at 100% scale showing two 612 x 792 pages at zoom 1.
 fn editor() -> Editor {

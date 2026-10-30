@@ -73,7 +73,7 @@ fn scenarios(pal: Palette) -> Vec<(&'static str, Ui)> {
     all.push(("toolbar, tablet, text, hovering undo", interface(&ed, pal)));
 
     let mut ed = base(1);
-    ed.set_tool(Tool::Laser);
+    ed.set_tool(LASER);
     ed.chrome.fullscreen = true;
     all.push(("toolbar, one page, laser, fullscreen", interface(&ed, pal)));
 

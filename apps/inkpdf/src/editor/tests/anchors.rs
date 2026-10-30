@@ -638,7 +638,7 @@ fn the_laser_and_a_finger_leave_anchors_alone() {
     ed.pointer_event(touch(1, Phase::Up, [corner[0], corner[1] - 80.0], 30.0));
     assert_eq!(figure_of(&ed), before);
     // The laser draws no shape and edits none.
-    ed.set_tool(Tool::Laser);
+    ed.set_tool(LASER);
     pen_at(&mut ed, Phase::Down, corner, 200_000.0);
     pen_at(&mut ed, Phase::Move, [corner[0] + 50.0, corner[1] + 50.0], 200_010.0);
     pen_at(&mut ed, Phase::Up, [corner[0] + 50.0, corner[1] + 50.0], 200_020.0);

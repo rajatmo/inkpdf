@@ -24,7 +24,6 @@ mod indexer;
 mod ink;
 mod ink_io;
 mod input;
-mod laser;
 mod links;
 mod motion;
 mod outline;

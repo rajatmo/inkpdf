@@ -1,0 +1,13 @@
+[package]
+name = "inkpdf-api"
+description = "InkPDF's extension API: the one thing an extension (a tool) may use of the program"
+version = "1.0.0"
+authors = ["Rajat Mandal"]
+edition.workspace = true
+license.workspace = true
+publish = false
+
+# No dependencies, on purpose: the API is plain types and traits, so an extension can depend on nothing of the program.
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"

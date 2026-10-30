@@ -2,10 +2,10 @@
 //! that fades away. Nothing here is ink: it is never saved and never changes the document.
 //!
 //! Positions are in document space, so a trail stays on the page if the page is scrolled; times are
-//! in milliseconds on the pen's clock ([`crate::clock::now_ms`]). Pure logic with no window
+//! in milliseconds on the pen's clock (the pen's samples are stamped with them). Pure logic with no window
 //! or GPU types, so it is unit-tested.
 
-use crate::plane::P;
+use inkpdf_api::P;
 
 /// How long a point of the trail lasts, in milliseconds.
 pub const FADE_MS: f64 = 1100.0;

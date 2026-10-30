@@ -93,7 +93,7 @@ fn open(ed: &mut Editor, how: Press) {
 #[test]
 fn the_pages_button_opens_the_overview_with_every_device_in_both_modes_and_with_every_tool() {
     for mode in [Mode::Desktop, Mode::Tablet] {
-        for tool in [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Laser] {
+        for tool in [Tool::Pen, Tool::Geometry, Tool::Text, LASER] {
             for how in ALL {
                 let mut ed = many(5);
                 ed.set_mode(mode);
@@ -153,7 +153,7 @@ fn while_it_is_up_nothing_reaches_the_page_not_the_pen_nor_a_finger_nor_the_keyb
     let layout = ed.overview_layout();
     let inside = [layout.grid[0] + 30.0, layout.grid[3] - 10.0];
     // The stylus draws nothing, in any tool.
-    for tool in [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Laser] {
+    for tool in [Tool::Pen, Tool::Geometry, Tool::Text, LASER] {
         ed.set_tool(tool);
         pen_stroke(&mut ed, TIP, &[inside, [inside[0] + 80.0, inside[1] - 5.0], [inside[0] + 160.0, inside[1]]]);
         assert_eq!(ed.ink.len(), 0, "{tool:?}");

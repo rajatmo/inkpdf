@@ -3,7 +3,7 @@ use super::*;
 /// An editor with the laser chosen.
 fn lasering() -> Editor {
     let mut ed = editor();
-    ed.set_tool(Tool::Laser);
+    ed.set_tool(LASER);
     ed
 }
 
@@ -23,8 +23,8 @@ fn the_mouse_is_timed_by_the_clock_the_editor_was_given() {
         ed.mouse_moved(at);
     }
     ed.mouse_button(ButtonState::Released, MouseButton::Left);
-    assert!(ed.laser().pieces(5000.0 + 10.0).count() >= 9, "the trail was stamped 5000");
-    assert_eq!(ed.laser().pieces(5000.0 + crate::laser::FADE_MS + 1.0).count(), 0, "and fades as 5000 ages");
+    assert!(laser_trail(&ed, 5000.0 + 10.0).len() >= 9, "the trail was stamped 5000");
+    assert_eq!(laser_trail(&ed, 5000.0 + 1100.0 + 1.0).len(), 0, "and fades as 5000 ages");
 }
 
 #[test]
@@ -34,7 +34,7 @@ fn the_pen_with_the_laser_leaves_a_trail_and_draws_nothing() {
     pen_stroke(&mut ed, TIP, &p);
     assert_eq!(ed.ink.len(), 0, "a laser draws no ink");
     assert!(!ed.ink.is_dirty(), "and changes nothing to save");
-    assert!(ed.laser().pieces(1000.0).count() >= 9, "a piece between each pair of points");
+    assert!(laser_trail(&ed, 1000.0).len() >= 9, "a piece between each pair of points");
     assert!(ed.is_idle(), "the stroke is over");
 }
 
@@ -43,7 +43,7 @@ fn the_trail_is_where_the_pen_went_in_the_document() {
     let mut ed = lasering();
     let p = path(&ed);
     pen_stroke(&mut ed, TIP, &p);
-    let first = ed.laser().pieces(1000.0).next().expect("a piece");
+    let first = laser_trail(&ed, 1000.0).first().copied().expect("a piece");
     let at = ed.view.doc_to_screen(first.0);
     assert!((at[0] - p[0][0]).abs() < 0.01 && (at[1] - p[0][1]).abs() < 0.01, "{at:?} vs {:?}", p[0]);
     // Scrolling the page moves the trail with it.
@@ -63,7 +63,7 @@ fn the_eraser_end_and_the_barrel_button_only_point_too() {
         [on_page(&ed, 60.0, 260.0), on_page(&ed, 340.0, 260.0), on_page(&ed, 340.0, 380.0), on_page(&ed, 60.0, 380.0), on_page(&ed, 60.0, 260.0)];
     pen_stroke(&mut ed, BARREL, &around);
     assert!(ed.selection.is_empty(), "the barrel button did not lasso");
-    assert!(ed.laser().pieces(1000.0).count() > 0);
+    assert!(!laser_trail(&ed, 1000.0).is_empty());
 }
 
 #[test]
@@ -71,12 +71,11 @@ fn a_hovering_pen_is_followed_by_a_dot_that_goes_when_the_pen_does() {
     let mut ed = lasering();
     let at = on_page(&ed, 200.0, 300.0);
     ed.pointer_event(pen(Phase::Hover, HOVER, &[at]));
-    let head = ed.laser().head().expect("a dot");
-    let screen = ed.view.doc_to_screen(head);
+    let screen = laser_dot(&ed).expect("a dot");
     assert!((screen[0] - at[0]).abs() < 0.01 && (screen[1] - at[1]).abs() < 0.01);
-    assert!(!ed.laser().is_fading(), "hovering leaves no trail");
+    assert!(!laser_fading(&ed), "hovering leaves no trail");
     ed.pointer_event(pen(Phase::Leave, HOVER, &[at]));
-    assert_eq!(ed.laser().head(), None);
+    assert_eq!(laser_dot(&ed), None);
 }
 
 #[test]
@@ -84,10 +83,10 @@ fn no_dot_over_the_toolbar_or_without_the_laser() {
     let mut ed = lasering();
     let bar = ed.toolbar().centre_of(Item::Undo);
     ed.pointer_event(pen(Phase::Hover, HOVER, &[bar]));
-    assert_eq!(ed.laser().head(), None, "the toolbar is not part of the page");
+    assert_eq!(laser_dot(&ed), None, "the toolbar is not part of the page");
     let mut ed = editor();
     ed.pointer_event(pen(Phase::Hover, HOVER, &[on_page(&ed, 200.0, 300.0)]));
-    assert_eq!(ed.laser().head(), None, "the pen tool shows no dot");
+    assert_eq!(laser_dot(&ed), None, "the pen tool shows no dot");
 }
 
 #[test]
@@ -96,13 +95,13 @@ fn the_mouse_does_not_point_or_select_with_the_laser_in_the_tablet_mode() {
     ed.set_mode(Mode::Tablet);
     let id = add_stroke(&mut ed, &[[100.0, 300.0], [300.0, 300.0]]);
     ed.mouse_moved(on_page(&ed, 100.0, 300.0));
-    assert_eq!(ed.laser().head(), None, "no dot follows the mouse");
+    assert_eq!(laser_dot(&ed), None, "no dot follows the mouse");
     ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
     for i in 1..8 {
         ed.mouse_moved(on_page(&ed, 100.0 + i as f32 * 25.0, 300.0));
     }
     ed.mouse_button(ButtonState::Released, MouseButton::Left);
-    assert!(ed.selection.is_empty() && !ed.laser().is_fading(), "no selection and no trail");
+    assert!(ed.selection.is_empty() && !laser_fading(&ed), "no selection and no trail");
     assert!(ed.ink.get(id).is_some() && ed.is_idle());
 }
 
@@ -115,7 +114,7 @@ fn a_finger_still_only_pans_and_leaves_no_trail() {
     ed.pointer_event(touch(1, Phase::Move, b, 30.0));
     ed.pointer_event(touch(1, Phase::Up, b, 30.0));
     assert_ne!(ed.view.scroll, before, "the page panned");
-    assert!(!ed.laser().is_fading() && ed.laser().head().is_none());
+    assert!(!laser_fading(&ed) && laser_dot(&ed).is_none());
 }
 
 #[test]
@@ -123,16 +122,16 @@ fn choosing_a_tool_or_loading_a_document_clears_the_laser() {
     let mut ed = lasering();
     let p = path(&ed);
     pen_stroke(&mut ed, TIP, &p);
-    assert!(ed.laser().is_fading());
+    assert!(laser_fading(&ed));
     ed.set_tool(Tool::Pen);
-    assert!(!ed.laser().is_fading(), "the trail went with the tool");
-    ed.set_tool(Tool::Laser);
+    assert!(!laser_fading(&ed), "the trail went with the tool");
+    ed.set_tool(LASER);
     pen_stroke(&mut ed, TIP, &p);
     ed.load(Layout::new(&[[612.0, 792.0]]), vec![]);
-    assert!(!ed.laser().is_fading() && ed.laser().head().is_none());
+    assert!(!laser_fading(&ed) && laser_dot(&ed).is_none());
     ed.pointer_event(pen(Phase::Hover, HOVER, &[[300.0, 300.0]]));
     ed.ask_unsaved();
-    assert_eq!(ed.laser().head(), None, "the prompt hides the dot");
+    assert_eq!(laser_dot(&ed), None, "the prompt hides the dot");
 }
 
 #[test]
@@ -140,7 +139,7 @@ fn pressing_the_toolbar_with_the_laser_chosen_leaves_no_trail() {
     let mut ed = lasering();
     let undo = ed.toolbar().centre_of(Item::Undo);
     pen_stroke(&mut ed, TIP, &[undo, [undo[0] + 5.0, undo[1]]]);
-    assert!(!ed.laser().is_fading());
+    assert!(!laser_fading(&ed));
 }
 
 #[test]

@@ -134,7 +134,7 @@ impl Workspace {
         match tool {
             Tool::Geometry => self.shape_style,
             Tool::Text => self.text_style,
-            Tool::Pen | Tool::Select | Tool::Laser => self.pen,
+            _ => self.pen,
         }
     }
 
@@ -142,7 +142,7 @@ impl Workspace {
         match self.tool {
             Tool::Geometry => &mut self.shape_style,
             Tool::Text => &mut self.text_style,
-            Tool::Pen | Tool::Select | Tool::Laser => &mut self.pen,
+            _ => &mut self.pen,
         }
     }
 

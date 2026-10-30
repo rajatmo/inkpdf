@@ -357,10 +357,10 @@ mod from_motion_events {
     #[test]
     fn a_pen_hovering_over_the_page_is_told_and_a_pen_and_a_finger_together_stay_apart() {
         let (mut ed, mut decoder) = (tablet(), Decoder::new(0.0));
-        ed.set_tool(Tool::Laser);
+        ed.set_tool(LASER);
         let over = on_page(&ed, 150.0, 300.0);
         feed(&mut ed, &mut decoder, vec![motion(Action::HoverEnter, 1, vec![pointer(7, Held::Stylus, over, 0.0)])]);
-        assert!(ed.laser().head().is_some(), "the pointer tool's dot follows a hovering pen");
+        assert!(laser_dot(&ed).is_some(), "the pointer tool's dot follows a hovering pen");
         feed(&mut ed, &mut decoder, vec![motion(Action::HoverExit, 2, vec![pointer(7, Held::Stylus, over, 0.0)])]);
         // A pen draws while a finger rests on the screen (a palm or a thumb): the stroke is the pen's alone.
         ed.set_tool(Tool::Pen);

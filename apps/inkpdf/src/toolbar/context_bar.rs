@@ -266,7 +266,7 @@ impl ContextBar {
                     Tool::Geometry => &all.geometry,
                     Tool::Text => &all.text,
                     Tool::Select => &all.text_select,
-                    Tool::Pen | Tool::Laser => &all.pen,
+                    _ => &all.pen,
                 },
                 ContextItem::Intent(Intent::Select) => &all.select,
                 ContextItem::Intent(Intent::Erase) => &all.erase,

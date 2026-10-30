@@ -458,7 +458,7 @@ fn poke(ed: &mut Editor, rng: &mut Rng, hostile: bool) -> String {
                 Item::Tool(Tool::Text),
                 Item::Tool(Tool::Text),
                 Item::Tool(Tool::Select),
-                Item::Tool(Tool::Laser),
+                Item::Tool(LASER),
                 Item::Fullscreen,
                 Item::AddPage,
                 Item::DeletePage,
@@ -762,7 +762,7 @@ fn check_editor(ed: &Editor, what: &str) {
     );
     assert!((0.0..=1.0).contains(&ed.smoothing), "{what}: smoothing {}", ed.smoothing);
     assert!(ed.chrome.colour_hsv.iter().all(|c| c.is_finite()), "{what}: hsv {:?}", ed.chrome.colour_hsv);
-    assert!(ed.tool != crate::tool::Tool::Laser || ed.chrome.panel.is_none(), "{what}: a panel is open with the laser chosen");
+    assert!(ed.tool != crate::tool::Tool::named("laser") || ed.chrome.panel.is_none(), "{what}: a panel is open with the laser chosen");
     for s in ed.ink.strokes() {
         if let Some(figure) = &s.figure {
             let drawn = figure.points();
@@ -798,11 +798,8 @@ fn check_editor(ed: &Editor, what: &str) {
             && (back.smoothing - saved.smoothing).abs() <= 0.006,
         "{what}: settings drifted"
     );
-    assert!(ed.laser().head().is_none_or(|h| h[0].is_finite() && h[1].is_finite()), "{what}: laser head {:?}", ed.laser().head());
-    assert!(
-        ed.laser().pieces(1.0e6).all(|(a, b, life)| a.iter().chain(&b).all(|c| c.is_finite()) && (0.0..=1.0).contains(&life)),
-        "{what}: a bad laser trail"
-    );
+    assert!(laser_dot(ed).is_none_or(|h| h[0].is_finite() && h[1].is_finite()), "{what}: laser head {:?}", laser_dot(ed));
+    assert!(laser_trail(ed, 1.0e6).iter().all(|(a, b)| a.iter().chain(b).all(|c| c.is_finite())), "{what}: a bad laser trail");
     assert!(!(ed.chrome.prompt.is_some() && ed.requests.answer().is_some()), "{what}: a question and its answer at once");
     assert!(ed.pull.is_finite() && ed.pull >= 0.0 && (0.0..=1.0).contains(&ed.pull_progress()), "{what}: pull {}", ed.pull);
     // What the shell draws from it must not blow up either.
@@ -817,6 +814,21 @@ fn check_editor(ed: &Editor, what: &str) {
         ui.lines.iter().all(|c| c.a.iter().chain(&c.b).chain(&[c.width]).all(|x| x.is_finite())),
         "{what}: the interface drew a non-finite shape"
     );
+}
+
+/// The laser is an extension: the storms know it by its name and see what it shows.
+const LASER: Tool = Tool::named("laser");
+
+fn laser_dot(ed: &Editor) -> Option<[f32; 2]> {
+    let mut out = crate::tools::paint::tests::Recorder { now: 1000.0, ..Default::default() };
+    ed.tools.get(LASER).paint(ed, &mut out);
+    out.screen.first().map(|l| l.0)
+}
+
+fn laser_trail(ed: &Editor, now: f64) -> Vec<([f32; 2], [f32; 2])> {
+    let mut out = crate::tools::paint::tests::Recorder { now, ..Default::default() };
+    ed.tools.get(LASER).paint(ed, &mut out);
+    out.doc.iter().map(|l| (l.0, l.1)).collect()
 }
 
 fn editor_with_pages(pages: usize) -> Editor {
@@ -1382,7 +1394,7 @@ fn run_with(prefs: crate::motion::Prefs, seed: u64, rounds: usize) -> Vec<Outcom
                 ed.edit_pages(edit);
             }
             10 => {
-                let at = ed.toolbar().centre_of(crate::toolbar::Item::Tool(rng.pick(&Tool::ALL)));
+                let at = ed.toolbar().centre_of(crate::toolbar::Item::Tool(rng.pick(&Tool::all())));
                 mouse_click(&mut ed, at);
             }
             11 => {

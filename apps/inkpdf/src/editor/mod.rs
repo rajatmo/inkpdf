@@ -39,6 +39,7 @@ mod prompt;
 mod routing;
 mod save_as;
 mod select;
+mod text_pages;
 mod toolbar_ui;
 mod touch;
 

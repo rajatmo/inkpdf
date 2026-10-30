@@ -94,7 +94,7 @@ impl State {
         let pen_clock = crate::clock::now_ms();
         let fading = self.ed.tools.pointer.prune(pen_clock);
         let settled = self.zoom_settled(now);
-        let pending = self.stream_tiles(settled);
+        let pending = self.stream_tiles(settled) + usize::from(self.stream_text());
 
         let t_plan = Instant::now();
         self.layers.sync_texts(&mut paint!(self));
@@ -221,6 +221,21 @@ impl State {
             }
         }
         pending
+    }
+
+    /// Take the text the indexer has read, tell the editor which page of the file draws each page, and ask for the pages nearest the one in
+    /// view first. `true` while there is more to read (frames go on until it is all in).
+    fn stream_text(&mut self) -> bool {
+        let (Some(doc), Some(indexer)) = (&self.session.doc, &self.session.indexer) else { return false };
+        let changed = self.ed.set_text_files(doc.file_pages());
+        while let Some((file, text)) = indexer.try_recv() {
+            self.ed.add_text(file, text);
+        }
+        let current = self.ed.view.current_page(&self.ed.layout);
+        if changed || self.ed.text.progress().0 < self.ed.text.progress().1 && !indexer.busy() {
+            indexer.want(self.ed.text.wanted(current));
+        }
+        indexer.busy()
     }
 
     fn update_title(&mut self) {

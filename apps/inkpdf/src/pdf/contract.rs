@@ -494,6 +494,10 @@ impl PdfBackend for Wrong<'_> {
         self.0.page_text(bytes, page)
     }
 
+    fn text_source(&self, bytes: Arc<Vec<u8>>) -> Box<dyn TextSource> {
+        self.0.text_source(bytes)
+    }
+
     fn date(&self, unix_seconds: i64) -> String {
         self.0.date(unix_seconds)
     }

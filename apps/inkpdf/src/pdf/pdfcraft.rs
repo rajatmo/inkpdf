@@ -14,7 +14,7 @@ use pdfcraft_render::{
 
 use super::{
     AnnotKind, Annotation, NewAnnotation, NewShape, OrganizeError, PageLook, PdfBackend, PdfDocument, Pixels, RawLink, RawOutlineItem, RawTarget,
-    RenderPool, RenderRequest, Rendered,
+    RenderPool, RenderRequest, Rendered, TextSource,
 };
 use crate::coords::PageGeom;
 use crate::pagetext::PageTextView;
@@ -119,8 +119,11 @@ impl PdfBackend for Pdfcraft {
     }
 
     fn page_text(&self, bytes: &Arc<Vec<u8>>, page: usize) -> Result<Box<dyn PageTextView>, String> {
-        let text = PageRenderer::new(bytes.clone(), RenderConfig::default()).filtered_text(page, TextFilter::default())?;
-        Ok(Box::new(PdfcraftText(text)))
+        self.text_source(bytes.clone()).page(page)
+    }
+
+    fn text_source(&self, bytes: Arc<Vec<u8>>) -> Box<dyn TextSource> {
+        Box::new(PdfcraftSource(PageRenderer::new(bytes, RenderConfig::default())))
     }
 
     fn date(&self, unix_seconds: i64) -> String {
@@ -128,7 +131,15 @@ impl PdfBackend for Pdfcraft {
     }
 }
 
-#[allow(dead_code, reason = "made by `page_text`, whose users are the text tools and the conformance suite")]
+struct PdfcraftSource(PageRenderer);
+
+impl TextSource for PdfcraftSource {
+    fn page(&mut self, page: usize) -> Result<Box<dyn PageTextView>, String> {
+        Ok(Box::new(PdfcraftText(self.0.filtered_text(page, TextFilter::default())?)))
+    }
+}
+
+#[allow(dead_code, reason = "read through the trait by the select tool and the search card (X4, X5)")]
 struct PdfcraftText(PageText);
 
 impl PageTextView for PdfcraftText {

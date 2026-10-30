@@ -54,6 +54,8 @@ pub struct Workspace {
     pub appearance: Appearance,
     pub dark_pages: bool,
     pub system_scheme: Scheme,
+    /// The text of the pages, as far as it has been read (see `doctext`).
+    pub text: crate::doctext::DocText,
     /// The colours of the interface now (what the tools paint their handles and outlines in), as the editor resolved the scheme.
     pub theme: Palette,
     /// What the shell is asked to do, and whether a frame is wanted.
@@ -86,6 +88,7 @@ impl Workspace {
             smoothing: crate::smooth::DEFAULT_AMOUNT,
             appearance: Appearance::default(),
             dark_pages: false,
+            text: crate::doctext::DocText::default(),
             system_scheme: Scheme::default(),
             theme: Palette::default(),
             requests: Requests::default(),

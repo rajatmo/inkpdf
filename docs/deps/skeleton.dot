@@ -1,6 +1,6 @@
 digraph G {
 rankdir=BT; newrank=true; compound=true; splines=true; nodesep=0.35; ranksep=0.9; pad=0.4;
-label=<<b>InkPDF essential skeleton (transitive reduction: 67 of 150 edges)</b>>; labelloc=t; fontsize=22; fontname="Helvetica";
+label=<<b>InkPDF essential skeleton (transitive reduction: 71 of 156 edges)</b>>; labelloc=t; fontsize=22; fontname="Helvetica";
 node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=13, margin="0.14,0.07", color="#888888"];
 edge [arrowsize=0.6];
 subgraph cluster_Base { label="base — plain data and arithmetic"; labeljust=l; fontname="Helvetica"; fontsize=14; style="rounded,filled"; fillcolor="#e8f1fb55"; color="#4a7fb5";
@@ -18,6 +18,7 @@ subgraph cluster_Base { label="base — plain data and arithmetic"; labeljust=l;
   "view" [fillcolor="white"];
 }
 subgraph cluster_Model { label="model — what a drawing is made of"; labeljust=l; fontname="Helvetica"; fontsize=14; style="rounded,filled"; fillcolor="#e3f4ea55"; color="#3a8f5c";
+  "doctext" [fillcolor="white"];
   "figure" [fillcolor="white"];
   "ink" [fillcolor="white"];
   "laser" [fillcolor="white"];
@@ -50,6 +51,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
   "app" [fillcolor="white"];
   "doc" [fillcolor="white"];
   "gpu" [fillcolor="white"];
+  "indexer" [fillcolor="white"];
   "ink_io" [fillcolor="white"];
   "path_store" [fillcolor="white"];
   "pdf" [fillcolor="white"];
@@ -61,11 +63,13 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "app" -> "doc" [color="#55555599", penwidth=1.60, tooltip="3 uses"];
 "app" -> "editor" [color="#55555599", penwidth=1.60, tooltip="4 uses"];
 "app" -> "gpu" [color="#55555599", penwidth=1.60, tooltip="5 uses"];
+"app" -> "indexer" [color="#55555599", penwidth=1.60, tooltip="2 uses"];
 "app" -> "platform" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "doc" -> "ink_io" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "doc" -> "page_table" [color="#55555599", penwidth=1.60, tooltip="2 uses"];
 "doc" -> "store" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "doc" -> "tiles" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
+"doctext" -> "pagetext" [color="#3a8f5c99", penwidth=1.60, tooltip="1 uses"];
 "editor" -> "clock" [color="#6a5acd99", penwidth=1.60, tooltip="1 uses"];
 "editor" -> "links" [color="#6a5acd99", penwidth=1.60, tooltip="3 uses"];
 "editor" -> "motion" [color="#6a5acd99", penwidth=1.60, tooltip="3 uses"];
@@ -75,6 +79,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "figure" -> "plane" [color="#3a8f5c99", penwidth=1.60, tooltip="1 uses"];
 "gpu" -> "scene" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "gpu" -> "tiles" [color="#55555599", penwidth=1.60, tooltip="2 uses"];
+"indexer" -> "pdf" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "ink" -> "figure" [color="#3a8f5c99", penwidth=1.60, tooltip="3 uses"];
 "ink" -> "pages" [color="#3a8f5c99", penwidth=1.60, tooltip="1 uses"];
 "ink_io" -> "pdf_read" [color="#55555599", penwidth=1.60, tooltip="2 uses"];
@@ -122,6 +127,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "tools" -> "laser" [color="#d2691e99", penwidth=1.60, tooltip="1 uses"];
 "tools" -> "selection" [color="#d2691e99", penwidth=1.60, tooltip="1 uses"];
 "workspace" -> "clipboard" [color="#b8860b99", penwidth=1.60, tooltip="1 uses"];
+"workspace" -> "doctext" [color="#b8860b99", penwidth=1.60, tooltip="2 uses"];
 "workspace" -> "input" [color="#b8860b99", penwidth=1.60, tooltip="1 uses"];
 "workspace" -> "requests" [color="#b8860b99", penwidth=1.60, tooltip="1 uses"];
 "workspace" -> "settings" [color="#b8860b99", penwidth=1.60, tooltip="1 uses"];

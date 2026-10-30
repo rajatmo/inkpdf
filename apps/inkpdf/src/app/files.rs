@@ -79,6 +79,8 @@ impl State {
         self.ed.load(doc.layout(), strokes);
         self.ed.links = doc.take_links();
         self.ed.outline = doc.take_outline();
+        self.ed.forget_text();
+        self.session.indexer = Some(crate::indexer::Indexer::start(doc.text_bytes()));
         self.session.doc = Some(doc);
         self.session.save_then = None;
         self.layers.ink_built = InkStamp::NEVER;

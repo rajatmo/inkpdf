@@ -106,6 +106,8 @@ struct FrameLoop {
 /// The open document and what waits on it: the file, the store it lives in, and the questions asked about unsaved work.
 struct DocumentSession {
     doc: Option<Doc>,
+    /// Reads the text of the document's pages behind the frame.
+    indexer: Option<crate::indexer::Indexer>,
     /// Where files are read and written (see `store`); the platform's.
     files: Arc<dyn FileStore>,
     /// Tiles the renderer could not draw, so they are not asked for again.
@@ -238,6 +240,7 @@ impl State {
             session: DocumentSession {
                 doc: None,
                 files: platform.file_store(),
+                indexer: None,
                 failed: HashSet::new(),
                 then: None,
                 save_then: None,

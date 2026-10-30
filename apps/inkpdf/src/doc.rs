@@ -184,6 +184,17 @@ impl Doc {
         }
     }
 
+    /// The file the text is read from: as the renderer has it, without the ink and the text boxes this program keeps itself (those are the
+    /// editor's own to search, so they are not found twice).
+    pub fn text_bytes(&self) -> Arc<Vec<u8>> {
+        self.render_bytes.clone()
+    }
+
+    /// The page of the file that draws each page of the document (`None` for a page that was added).
+    pub fn file_pages(&self) -> Vec<Option<u32>> {
+        (0..self.pages.len()).map(|p| self.pages.render_page(p)).collect()
+    }
+
     /// How the pages are drawn now.
     #[cfg(test)]
     pub fn look(&self) -> PageLook {

@@ -210,6 +210,13 @@ pub trait PdfDocument {
     fn save_incremental(&self, modified: &str) -> Result<Vec<u8>, String>;
 }
 
+/// The text of the pages of one file, read page by page. A source is made on the thread that uses it (a parsed file is not shared between
+/// threads), and keeps the file parsed between pages: reading every page of a long document is one parse, not one per page.
+pub trait TextSource {
+    /// The text of a page: no text for a page with none, an error for a page that is not there or cannot be read.
+    fn page(&mut self, page: usize) -> Result<Box<dyn PageTextView>, String>;
+}
+
 /// The PDF engine.
 pub trait PdfBackend: Send + Sync {
     /// The geometry of each page, as the file says (size, crop box, rotation). An error if it is not a PDF this engine can read.
@@ -221,9 +228,11 @@ pub trait PdfBackend: Send + Sync {
     fn render_pool(&self, bytes: Arc<Vec<u8>>, threads: usize, look: PageLook) -> Box<dyn RenderPool>;
     /// One render on this thread, now (a thumbnail of a file that is not open).
     fn render_now(&self, bytes: Arc<Vec<u8>>, request: &RenderRequest) -> Rendered;
-    /// The text of one page.
-    #[allow(dead_code, reason = "the text tools and the conformance suite are its users")]
+    /// The text of one page (a one-off: from a fresh parse; see [`PdfBackend::text_source`] for many).
+    #[allow(dead_code, reason = "the conformance suite is its user")]
     fn page_text(&self, bytes: &Arc<Vec<u8>>, page: usize) -> Result<Box<dyn PageTextView>, String>;
+    /// A reader of the text of this file's pages.
+    fn text_source(&self, bytes: Arc<Vec<u8>>) -> Box<dyn TextSource>;
     /// A date in the file's own format, for a modification date and an annotation's.
     fn date(&self, unix_seconds: i64) -> String;
 }

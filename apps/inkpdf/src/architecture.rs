@@ -147,7 +147,7 @@ enum Layer {
 }
 
 /// Every top-level module of the program, and its layer. A new module is placed here or the test fails.
-const LAYERS: [(&str, Layer); 41] = [
+const LAYERS: [(&str, Layer); 43] = [
     ("plane", Layer::Base),
     ("motion", Layer::Base),
     ("scene", Layer::Base),
@@ -168,6 +168,7 @@ const LAYERS: [(&str, Layer); 41] = [
     ("pages", Layer::Model),
     ("page_table", Layer::Model),
     ("pagetext", Layer::Model),
+    ("doctext", Layer::Model),
     ("tool", Layer::Domain),
     ("browse", Layer::Domain),
     ("input", Layer::Domain),
@@ -189,6 +190,7 @@ const LAYERS: [(&str, Layer); 41] = [
     ("ink_io", Layer::Adapter),
     ("tiles", Layer::Adapter),
     ("thumbnail", Layer::Adapter),
+    ("indexer", Layer::Adapter),
 ];
 
 /// Edges that point up the layers and are still there, `(user, used)`, each to be removed (see the plan in

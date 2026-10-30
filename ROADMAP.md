@@ -158,7 +158,7 @@ implements it over pdfcraft; tools and the editor use the trait and never see a 
 | pdfcraft insulation | A `pdf` module (the K1 backend seam) is the only one that names `pdfcraft_*` or `hayro*`, enforced by a test. Do **not** adopt `pdfcraft-engine` (it has its own undo stack that would fight ours). |
 | Lasso and Eraser (owner, 2026-10-30) | They are **tools** of the toolbar (after Text), not buttons of the bar under the tools. They work on items of every kind; the stylus's eraser end and barrel button, and the mouse's right and middle buttons, still erase and loop with the pen, shape and text tools, each on its own kind. |
 | File dialogs (owner, 2026-10-30) | **The system's own** on every platform (Windows, Linux through the desktop portal, Android's picker); there is no in-app file browser. |
-| Input (owner, 2026-10-30) | The plan under Milestone 1.4.0: one `decide` table for cursor and press, a drawing tool never loses a press to a link or text, hardware cursors only, a double tap fits the page to the width and a second goes back; no Space+drag pan. |
+| Input (owner, 2026-10-30) | The plan is `docs/INPUT.md`, summarised under Milestone 1.4.0: one `decide` table for cursor and press, a drawing tool never loses a press to a link or text, hardware cursors only, a double tap fits the page to the width and a second goes back; no Space+drag pan. |
 | Not now | Windows ARM64 (scrapped), OCR, forms, printing, signing, redaction, compare, export. |
 
 ## 5. pdfcraft: what we use and what it already gives us
@@ -427,7 +427,7 @@ filling form fields, printing. Only on the owner's say-so.
 
 ### Milestone 1.4.0: input (I)
 
-*Planned with the owner, 2026-10-30. Not started.* Goal: input that behaves like a PDF reader, with a cursor that says what a press will do, and **no cost to drawing latency**. Today the shell never sets a cursor, a finger's tap and a mouse click follow two separate code paths, and the Lasso and Eraser rows are missing from the device-rule test.
+*Planned with the owner, 2026-10-30. Not started.* **The full design is `docs/INPUT.md`** (how input works today, the `decide` table, the click recogniser, roles, the reader's rules and keys, cursors, the latency guardrails, the tests); what follows is the summary and the task list. Goal: input that behaves like a PDF reader, with a cursor that says what a press will do, and **no cost to drawing latency**. Today the shell never sets a cursor, a finger's tap and a mouse click follow two separate code paths, and the Lasso and Eraser rows are missing from the device-rule test.
 
 **The one rule.** `Affordance = decide(layer, mode, tool, device, target, held keys)`. The cursor on hover and the action on press both call it, so a cursor cannot promise what the press does not do. *Layer* (strongest first): modal, card or toolbar, a gesture already under way (it keeps the pointer until release), the page. *Target*: ink, text run, link, handle, empty page. One table in code, one row per combination, and a test that every combination has exactly one row (the design of `editor/tests/contract.rs`, extended).
 
@@ -445,7 +445,7 @@ filling form fields, printing. Only on the owner's say-so.
 | selection handle | resize | none | stretches the selection |
 | toolbar, cards | arrow | the button | none |
 
-Wheel scrolls, **Ctrl+wheel zooms**, a **middle-button drag pans**, Esc clears the selection; these hold in every tool. A finger pans and pinch-zooms, a tap follows a link or presses a button, and **a double tap on the page (not on a link) fits the page to the width, and a second double tap goes back to the zoom it came from**. (A single tap on empty page only clears the selection, which is instant, so detecting the double tap delays nothing; a tap on a link follows it at once.) *Not included, by decision:* Space+drag to pan, a rubber-band selection on empty page.
+Wheel scrolls everywhere; in the reader **Ctrl+wheel and Ctrl+`+`/`-` zoom, Ctrl+0 fits the width, PageUp/PageDown/Space/Home/End scroll** (a desktop has no zoom at all today), a **middle-button drag pans** (in the drawing tools the middle button stays the barrel button, a loop), Esc clears the selection. A finger pans and pinch-zooms, a tap follows a link or presses a button, and **a double tap on the page (not on a link) fits the page to the width, and a second double tap goes back to the zoom it came from**. (A single tap on empty page only clears the selection, which is instant, so detecting the double tap delays nothing; a tap on a link follows it at once.) *Not included, by decision:* Space+drag to pan, a rubber-band selection on empty page.
 
 **The drawing tools**
 
@@ -468,11 +468,11 @@ The barrel button, the eraser end and the mouse's right and middle buttons stay 
 
 | Step | Work | Done when |
 |---|---|---|
-| **I1** | `decide` and the table as a pure domain module (`input/rules.rs`), the exhaustive test, the missing Lasso and Eraser rows. No behaviour change. | Every (layer, mode, tool, device, target, gesture) has exactly one row; the policy table of the tools is read from it; goldens and storms unchanged. |
+| **I1** | `decide` and the table (`docs/INPUT.md` B1) as a pure domain module (`input/rules.rs`), the exhaustive test, the missing Lasso and Eraser rows. No behaviour change. | Every (layer, mode, tool, device, target, gesture) has exactly one row; the policy table of the tools is read from it; goldens and storms unchanged. |
 | **I2** | One click recogniser for finger, mouse and stylus, replacing `editor/touch.rs`'s tap path and `watch_link_click`; the constants in one file; double and triple click, **double tap = fit width and back**. | The old tests pass through it; new tests: the same click on every device, the 15 px wobble at dpr 2.6 and at 1, double tap toggles fit width and back and never delays a link tap, a drag from empty page pans. |
 | **I3** | Cursors on Windows and Linux: a `Platform`/shell call `set_cursor(CursorKind)` (winit's `CursorIcon`; custom hardware cursors for the eraser ring and the dot), the editor's `cursor_kind()` from `decide`, called only on change. | The cursor table above holds in tests (a fake platform records the calls); no call on the ink path. |
 | **I4** | Android pointer icons for a hovering stylus or a mouse (`View.setPointerIcon`, API 24; a finger has none), through the Java `Host`. | Written and compiled here; the owner tries it on a device. |
-| **I5** | The reader rules: I-beam and hand over text and links, Ctrl+wheel zoom, middle-drag pan, Esc, grab hand while panning, in every tool where they do not collide with drawing. | The Select-tool table above has a test per row. |
+| **I5** | The reader rules (`docs/INPUT.md` B5): I-beam and hand over text and links, grab hand and empty-page drag pans, middle-drag pans, Ctrl+wheel and Ctrl+`+`/`-`/0/1 zoom, PageUp/PageDown/Space/Home/End and arrows scroll, Esc; the page keys also in the drawing tools. | The Select-tool table above has a test per row. |
 | **I6** | The latency guard test, `ARCHITECTURE.md` (the rule table and the cursor table become the single source), the capability matrix extended, `CHANGELOG`, e2e. **Release 1.4.0.** | The latency check shows no change in the numbers of section 1. |
 
 *References for the design:* Buxton, *A Three-State Model of Graphical Input* (INTERACT 1990: hover is its own state); Hinckley et al., *Pen + Touch = New Tools* (UIST 2010: the pen acts, touch moves the view); Raskin, *The Humane Interface* (2000: held modifiers cannot be left on); Jota et al., *How Fast is Fast Enough?* (CHI 2013) and Annett et al., *How Low Should We Go?* (Graphics Interface 2014: why the ink path stays free of extra work).

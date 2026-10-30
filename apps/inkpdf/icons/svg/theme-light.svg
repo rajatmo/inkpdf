@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- Light: a sun. Written by hand (not from TikZ): absolute M L C Z only, like the others. -->
+<svg version='1.1' xmlns='http://www.w3.org/2000/svg' width='56.6929pt' height='56.6929pt' viewBox='0 0 56 56'>
+<g id='page1'>
+<path d='M35 28C35 31.866 31.866 35 28 35C24.134 35 21 31.866 21 28C21 24.134 24.134 21 28 21C31.866 21 35 24.134 35 28Z' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+<path d='M41 28 L47 28' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+<path d='M37.192 37.192 L41.435 41.435' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+<path d='M28 41 L28 47' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+<path d='M18.808 37.192 L14.565 41.435' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+<path d='M15 28 L9 28' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+<path d='M18.808 18.808 L14.565 14.565' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+<path d='M28 15 L28 9' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+<path d='M37.192 18.808 L41.435 14.565' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+</g>
+</svg>

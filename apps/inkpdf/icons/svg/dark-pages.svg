@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- Dark pages: a page with its lower half in shade. Written by hand (not from TikZ): absolute M L C Z only, like the others. -->
+<svg version='1.1' xmlns='http://www.w3.org/2000/svg' width='56.6929pt' height='56.6929pt' viewBox='0 0 56 56'>
+<g id='page1'>
+<path d='M14 8H34L42 16V48H14Z' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+<path d='M34 8V16H42' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+<path d='M20 38L36 22' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+<path d='M20 46L40 26' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+<path d='M28 46L40 34' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+</g>
+</svg>

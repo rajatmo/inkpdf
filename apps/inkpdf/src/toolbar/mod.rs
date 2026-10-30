@@ -21,6 +21,7 @@ mod tests;
 
 use crate::ink::rect_contains;
 use crate::input::Mode;
+use crate::settings::Appearance;
 #[cfg(test)]
 use crate::tool::{MAX_WIDTH, MIN_WIDTH};
 use crate::tool::{PALETTE, Tool, width_range};
@@ -80,6 +81,10 @@ pub enum Item {
     ModeSwitch,
     /// Fill the whole screen, or give it back.
     Fullscreen,
+    /// The look of the interface: the system's, light, dark (each press goes to the next).
+    Theme,
+    /// Whether the pages go dark when the look is dark.
+    DarkPages,
 }
 
 /// Everything the toolbars' look depends on.
@@ -93,6 +98,10 @@ pub struct State {
     pub fullscreen: bool,
     /// The mode the devices are used in, shown on its button.
     pub mode: Mode,
+    /// The look the user chose, whether the interface is dark now, and whether the pages follow it.
+    pub appearance: Appearance,
+    pub dark: bool,
+    pub dark_pages: bool,
     pub tool: Tool,
     /// The colours the pen and the shape tool write in, shown on their buttons.
     pub pen_colour: [u8; 4],
@@ -113,6 +122,9 @@ impl Default for State {
             unsaved: false,
             fullscreen: false,
             mode: Mode::default(),
+            appearance: Appearance::default(),
+            dark: false,
+            dark_pages: false,
             tool: Tool::Pen,
             pen_colour: PALETTE[0],
             shape_colour: PALETTE[1],
@@ -137,10 +149,10 @@ const LEFT: [Option<Item>; 9] = [
 ];
 const MIDDLE: [Option<Item>; 4] =
     [Some(Item::Tool(Tool::Pen)), Some(Item::Tool(Tool::Geometry)), Some(Item::Tool(Tool::Text)), Some(Item::Tool(Tool::Laser))];
-const RIGHT: [Option<Item>; 2] = [Some(Item::ModeSwitch), Some(Item::Fullscreen)];
+const RIGHT: [Option<Item>; 4] = [Some(Item::Theme), Some(Item::DarkPages), Some(Item::ModeSwitch), Some(Item::Fullscreen)];
 
 /// Buttons in all.
-pub const BUTTONS: usize = 13;
+pub const BUTTONS: usize = 15;
 
 pub struct Toolbar {
     /// The three pills, `[x0, y0, x1, y1]` in pixels: left, middle, right.
@@ -283,6 +295,23 @@ impl Toolbar {
                     Mode::Desktop => icons.desktop.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink),
                     Mode::Tablet => icons.tablet.draw(&mut ui.lines, cx, cy, half, line, ui.pal.accent),
                 },
+                Item::Theme => {
+                    let icon = match state.appearance {
+                        Appearance::System => &icons.theme_system,
+                        Appearance::Light => &icons.theme_light,
+                        Appearance::Dark => &icons.theme_dark,
+                    };
+                    icon.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink);
+                }
+                // In the accent colour when the pages go dark; dimmer while the look is light and it has nothing to do yet.
+                Item::DarkPages => {
+                    let colour = match (state.dark_pages, state.dark) {
+                        (true, _) => ui.pal.accent,
+                        (false, true) => ui.pal.ink,
+                        (false, false) => ui.pal.ink_dim,
+                    };
+                    icons.dark_pages.draw(&mut ui.lines, cx, cy, half, line, colour);
+                }
                 Item::Fullscreen => {
                     let icon = if state.fullscreen { &icons.exit_fullscreen } else { &icons.fullscreen };
                     icon.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink);

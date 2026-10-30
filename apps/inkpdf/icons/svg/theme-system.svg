@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- Follow the system: a circle half in shade. Written by hand (not from TikZ): absolute M L C Z only, like the others. -->
+<svg version='1.1' xmlns='http://www.w3.org/2000/svg' width='56.6929pt' height='56.6929pt' viewBox='0 0 56 56'>
+<g id='page1'>
+<path d='M46 28C46 37.941 37.941 46 28 46C18.059 46 10 37.941 10 28C10 18.059 18.059 10 28 10C37.941 10 46 18.059 46 28Z' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+<path d='M28 10V46' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+<path d='M28 18L42.967 18' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+<path d='M28 28L46 28' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+<path d='M28 38L42.967 38' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+</g>
+</svg>

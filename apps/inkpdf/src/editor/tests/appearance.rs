@@ -100,3 +100,48 @@ fn the_look_goes_through_the_settings_and_back() {
     fresh.step_view(0.016);
     assert_eq!(fresh.palette(), DARK, "a restored look is there from the first frame, not faded to");
 }
+
+fn pen_tap(ed: &mut Editor, at: [f32; 2]) {
+    pen_stroke(ed, TIP, &[at, at]);
+}
+
+#[test]
+fn the_theme_button_works_with_the_left_button_alone_and_with_the_tip_alone() {
+    let mut ed = editor();
+    let theme = ed.toolbar().centre_of(Item::Theme);
+    mouse_click_at(&mut ed, theme);
+    assert_eq!(ed.appearance(), Appearance::Light);
+    pen_tap(&mut ed, theme);
+    assert_eq!(ed.appearance(), Appearance::Dark);
+    mouse_click_at(&mut ed, theme);
+    assert_eq!(ed.appearance(), Appearance::System);
+    assert_eq!(ed.ink.len(), 0, "the presses drew nothing on the page");
+}
+
+#[test]
+fn the_dark_pages_button_switches_the_setting_with_either_device() {
+    let mut ed = editor();
+    let at = ed.toolbar().centre_of(Item::DarkPages);
+    mouse_click_at(&mut ed, at);
+    assert!(ed.dark_pages());
+    pen_tap(&mut ed, at);
+    assert!(!ed.dark_pages());
+    assert!(drain(&mut ed).contains(&Request::SettingsChanged));
+}
+
+#[test]
+fn the_buttons_show_the_choice_they_hold() {
+    let mut ed = editor();
+    let before = ed.toolbar_state();
+    assert_eq!((before.appearance, before.dark, before.dark_pages), (Appearance::System, false, false));
+    ed.set_appearance(Appearance::Dark);
+    ed.set_dark_pages(true);
+    let after = ed.toolbar_state();
+    assert_eq!((after.appearance, after.dark, after.dark_pages), (Appearance::Dark, true, true));
+    let draw = |state| {
+        let mut ui = crate::toolbar::Ui::default();
+        ed.toolbar().draw(&state, &mut ui);
+        format!("{:?}", ui.lines)
+    };
+    assert_ne!(draw(before), draw(after), "another icon, another colour");
+}

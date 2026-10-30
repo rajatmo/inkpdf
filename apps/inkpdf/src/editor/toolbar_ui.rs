@@ -210,6 +210,8 @@ impl Editor {
                 Item::Fullscreen => self.ws.requests.push(Request::Fullscreen),
                 // The other mode (the posture decides again when the machine is turned into a tablet or back).
                 Item::ModeSwitch => self.set_mode(if self.mode == Mode::Desktop { Mode::Tablet } else { Mode::Desktop }),
+                Item::Theme => self.cycle_appearance(),
+                Item::DarkPages => self.set_dark_pages(!self.dark_pages()),
                 Item::Close => self.ws.requests.push(Request::Close),
                 Item::AddPage => {
                     let page = self.ws.view.current_page(&self.ws.layout);

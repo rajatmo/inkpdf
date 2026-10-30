@@ -45,7 +45,6 @@ impl Appearance {
         }
     }
 
-    #[allow(dead_code, reason = "the theme button goes through them (T5)")]
     /// The next one, in the order the theme button goes through them.
     pub fn next(self) -> Appearance {
         match self {

@@ -43,6 +43,12 @@ pub(super) struct Icons {
     pub check: Icon,
     /// Arrows pointing left and right.
     pub earlier: Icon,
+    /// The look: the system's (a circle half in shade), light (a sun), dark (a moon).
+    pub theme_system: Icon,
+    pub theme_light: Icon,
+    pub theme_dark: Icon,
+    /// A page with part of it in shade: whether the pages go dark with the look.
+    pub dark_pages: Icon,
     pub later: Icon,
 }
 
@@ -75,6 +81,10 @@ static ICONS: LazyLock<Icons> = LazyLock::new(|| Icons {
     check: Icon::check(),
     earlier: Icon::arrow(-1.0),
     later: Icon::arrow(1.0),
+    theme_system: Icon::from_svg(include_str!("../../icons/svg/theme-system.svg")),
+    theme_light: Icon::from_svg(include_str!("../../icons/svg/theme-light.svg")),
+    theme_dark: Icon::from_svg(include_str!("../../icons/svg/theme-dark.svg")),
+    dark_pages: Icon::from_svg(include_str!("../../icons/svg/dark-pages.svg")),
 });
 
 pub(super) fn icons() -> &'static Icons {
@@ -383,6 +393,10 @@ mod tests {
             ("node-add", &all.node_add),
             ("node-smooth", &all.node_smooth),
             ("options", &all.options),
+            ("theme-system", &all.theme_system),
+            ("theme-light", &all.theme_light),
+            ("theme-dark", &all.theme_dark),
+            ("dark-pages", &all.dark_pages),
         ] {
             assert!(!icon.lines.is_empty(), "{name} has no strokes");
             for p in icon.lines.iter().flatten() {

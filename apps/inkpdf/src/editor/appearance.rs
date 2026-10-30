@@ -7,7 +7,6 @@ use crate::settings::Appearance;
 
 use super::Editor;
 
-#[allow(dead_code, reason = "the theme button and the dark pages drop-down use the rest (T5)")]
 impl Editor {
     /// The look the user chose.
     pub fn appearance(&self) -> Appearance {
@@ -41,6 +40,7 @@ impl Editor {
         self.theme_changed();
     }
 
+    #[allow(dead_code, reason = "the page renderer asks (T6)")]
     /// Whether the pages are drawn dark now: the setting is on and the look is dark.
     pub fn dark_pages_active(&self) -> bool {
         self.ws.dark_pages && self.scheme() == Scheme::Dark

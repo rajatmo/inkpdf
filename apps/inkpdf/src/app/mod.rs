@@ -277,6 +277,7 @@ impl State {
         if let Some(clipboard) = state.platform.clipboard(&*state.window) {
             state.ed.set_text_clipboard(clipboard);
         }
+        state.ed.set_can_open(state.platform.has_picker());
         state.set_mode(opts.mode.unwrap_or_else(|| state.platform.detect_mode()));
         if let Some(smoothing) = opts.smoothing {
             state.ed.set_smoothing(smoothing);
@@ -286,6 +287,8 @@ impl State {
             if state.session.doc.is_none() {
                 state.open_blank();
             }
+            // (A document another app handed this one is opened in its place.)
+            state.take_picked();
             if opts.select_all {
                 state.ed.select_all_on_page();
             }
@@ -320,6 +323,7 @@ impl State {
         self.gpu.resume(size.width, size.height);
         self.ed.set_viewport([size.width.max(1) as f32, size.height.max(1) as f32]);
         self.timing.suspended = false;
+        self.take_picked();
         self.window.request_redraw();
     }
 
@@ -344,6 +348,9 @@ impl State {
             WindowEvent::Focused(true) => {
                 self.ed.motions.set_prefs(self.platform.motion_prefs());
                 self.refresh_system_scheme();
+                // (Back from the system's file picker: what it answered is taken.)
+                self.take_picked();
+                self.window.request_redraw();
             }
             WindowEvent::ThemeChanged(_) => self.refresh_system_scheme(),
             WindowEvent::ModifiersChanged(m) => self.modifiers = m.state(),

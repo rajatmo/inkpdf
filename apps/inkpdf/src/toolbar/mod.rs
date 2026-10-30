@@ -84,6 +84,8 @@ pub enum Item {
     AddPage,
     /// Open the pages overview.
     Pages,
+    /// Ask the system's picker for a PDF to open (there only where the system has one).
+    Open,
     /// Open or close the search card.
     Search,
     Tool(Tool),
@@ -164,7 +166,7 @@ const LEFT: [Option<Item>; 10] = [
 const RIGHT: [Option<Item>; 4] = [Some(Item::Theme), Some(Item::DarkPages), Some(Item::ModeSwitch), Some(Item::Fullscreen)];
 
 /// Buttons at most: the left pill's, the right pill's and as many tools as a toolbar can hold. (A toolbar has the buttons of the tools there are.)
-pub const BUTTONS: usize = 8 + 4 + crate::tool::MAX_TOOLS;
+pub const BUTTONS: usize = 9 + 4 + crate::tool::MAX_TOOLS;
 
 pub struct Toolbar {
     /// The three pills, `[x0, y0, x1, y1]` in pixels: left, middle, right.
@@ -202,19 +204,31 @@ impl Toolbar {
             middle[i] = Some(Item::Tool(tool));
         }
         let middle = &middle[..tool_count];
+        // The left pill: the document's buttons (and one to open a PDF, where the system has a picker).
+        let mut left = [None; LEFT.len() + 1];
+        let mut left_len = 0;
+        for slot in LEFT {
+            if slot == Some(Item::Search) && registry.has_open_button() {
+                left[left_len] = Some(Item::Open);
+                left_len += 1;
+            }
+            left[left_len] = slot;
+            left_len += 1;
+        }
+        let left = &left[..left_len];
         // Shrink to fit narrow windows, never below something still tappable: the left pill (eight
         // buttons and two gaps) and half the middle one must fit in half the window.
-        let across = 8.0 + tool_count as f32 / 2.0;
+        let across = 8.0 + f32::from(registry.has_open_button()) + tool_count as f32 / 2.0;
         let unit = (38.0 * dpr).min(((viewport[0] / 2.0 - margin - 3.0 * pad - 3.0 * gap) / across).max(17.0 * dpr));
         let height = unit + 2.0 * pad;
         let width_of = |slots: &[Option<Item>]| slots.iter().map(|s| if s.is_some() { unit } else { gap }).sum::<f32>() + 2.0 * pad;
-        let (left_w, middle_w, right_w) = (width_of(&LEFT), width_of(middle), width_of(&RIGHT));
+        let (left_w, middle_w, right_w) = (width_of(left), width_of(middle), width_of(&RIGHT));
         let lefts = [margin, (viewport[0] - middle_w) / 2.0, (viewport[0] - margin - right_w).max(0.0)];
         let widths = [left_w, middle_w, right_w];
         let mut items = [(Item::Close, [0.0; 4]); BUTTONS];
         let mut placed = 0;
         let mut pills = [[0.0; 4]; 3];
-        for (i, slots) in [&LEFT[..], middle, &RIGHT[..]].into_iter().enumerate() {
+        for (i, slots) in [left, middle, &RIGHT[..]].into_iter().enumerate() {
             let mut x = lefts[i] + pad;
             for slot in slots {
                 match slot {
@@ -338,6 +352,7 @@ impl Toolbar {
                 Item::DeletePage => icons.trash.draw(&mut ui.lines, cx, cy, half, line, ink(look.enabled[slot])),
                 Item::AddPage => icons.plus.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink),
                 Item::Pages => icons.pages.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink),
+                Item::Open => icons.open.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink),
                 Item::Search => icons.search.draw(&mut ui.lines, cx, cy, half, line, if state.search { ui.pal.accent } else { ui.pal.ink }),
                 // The mode in use, drawn as the machine it is for; the tablet in the accent colour, as the one you chose
                 // to leave the desk for.

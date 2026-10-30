@@ -36,6 +36,22 @@ use crate::store::FileStore;
 /// Asks the event loop for a frame from any thread (a native input callback uses it to wake a sleeping loop).
 pub type Waker = Arc<dyn Fn() + Send + Sync>;
 
+/// What the system's file picker was asked for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pick {
+    /// A PDF to open.
+    Open,
+    /// A place and a name to save a document under.
+    Save,
+}
+
+/// What the person picked, or `None` if they gave up.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Picked {
+    pub kind: Pick,
+    pub id: Option<crate::store::DocId>,
+}
+
 /// What the shell asks of the operating system, as one object built once at start (see [`native`]). The window comes in as a
 /// raw handle, so nothing here names the windowing toolkit; a test builds its own `Platform`, and a new OS or backend is one
 /// `impl`. (Only [`PointerSource`] is on the pen's path, and it was already a trait object, so this costs the frame nothing.)
@@ -66,6 +82,21 @@ pub trait Platform {
     fn set_text_input(&self, active: bool);
     /// The system clipboard for the text of text boxes, if there is one.
     fn clipboard(&self, window: &dyn HasWindowHandle) -> Option<Box<dyn TextClipboard>>;
+    /// Whether the system has a picker of its own for files (Android's: the app cannot see the folders, it is handed the file): then it
+    /// opens and saves where the program's own dialog would.
+    fn has_picker(&self) -> bool {
+        false
+    }
+    /// Ask the system's picker for a file (see [`Platform::has_picker`]); the answer is taken with [`Platform::take_picked`].
+    fn pick(&self, _kind: Pick, _name: &str) {}
+    /// What the picker answered since this was last asked, if it has.
+    fn take_picked(&self) -> Option<Picked> {
+        None
+    }
+    /// A document another app handed this one ("Open with", a share) that has not been taken yet.
+    fn take_launched(&self) -> Option<crate::store::DocId> {
+        None
+    }
     /// Start the OS's own pen and touch reader for `window`. An `Err` is not fatal: the shell falls back to the basic mouse
     /// and touch the toolkit reports (no pressure, eraser or buttons for a pen), and says why on the terminal. `wake` asks
     /// the event loop for a frame.
@@ -79,6 +110,8 @@ pub(crate) mod fake;
 
 #[cfg(target_os = "android")]
 mod android;
+#[cfg_attr(not(target_os = "android"), allow(dead_code, reason = "Android's; tested everywhere"))]
+pub(crate) mod saf;
 #[cfg(not(windows))]
 mod stubs;
 #[cfg(not(windows))]
@@ -100,6 +133,17 @@ use windows as os;
 
 #[cfg(target_os = "android")]
 pub use os::{android_app_started, welcome_document};
+
+/// The bridge to the Java side of the app, on the platform that has one (Android): files the system hands out, the clipboard, links.
+#[cfg(target_os = "android")]
+fn bridge() -> Option<Arc<dyn saf::Bridge>> {
+    os::bridge()
+}
+
+#[cfg(not(target_os = "android"))]
+fn bridge() -> Option<Arc<dyn saf::Bridge>> {
+    None
+}
 pub use os::{attach_parent_console, report_fatal};
 
 /// This build's operating system as a [`Platform`]: each fact is the one the OS's own module names.
@@ -127,7 +171,10 @@ impl Platform for Native {
     }
 
     fn file_store(&self) -> Arc<dyn FileStore> {
-        Arc::new(PathStore)
+        match bridge() {
+            Some(bridge) => Arc::new(saf::SafStore::new(bridge)),
+            None => Arc::new(PathStore),
+        }
     }
 
     fn color_scheme(&self) -> Option<crate::palette::Scheme> {
@@ -139,7 +186,10 @@ impl Platform for Native {
     }
 
     fn open_url(&self, url: &str) {
-        os::open_url(url);
+        match bridge() {
+            Some(bridge) => bridge.open_url(url),
+            None => os::open_url(url),
+        }
     }
 
     fn error_box(&self, window: &dyn HasWindowHandle, text: &str) {
@@ -151,7 +201,28 @@ impl Platform for Native {
     }
 
     fn clipboard(&self, window: &dyn HasWindowHandle) -> Option<Box<dyn TextClipboard>> {
-        os::SystemClipboard::new(window).map(|c| Box::new(c) as Box<dyn TextClipboard>)
+        match bridge() {
+            Some(bridge) => Some(Box::new(saf::BridgeClipboard(bridge))),
+            None => os::SystemClipboard::new(window).map(|c| Box::new(c) as Box<dyn TextClipboard>),
+        }
+    }
+
+    fn has_picker(&self) -> bool {
+        bridge().is_some()
+    }
+
+    fn pick(&self, kind: Pick, name: &str) {
+        if let Some(bridge) = bridge() {
+            bridge.pick(kind, name);
+        }
+    }
+
+    fn take_picked(&self) -> Option<Picked> {
+        bridge()?.take_picked().as_deref().and_then(saf::parse_picked)
+    }
+
+    fn take_launched(&self) -> Option<crate::store::DocId> {
+        bridge()?.take_launch().filter(|u| !u.is_empty()).map(crate::store::DocId::Uri)
     }
 
     fn install_pointer(&self, window: &dyn HasWindowHandle, wake: Waker) -> Result<Box<dyn PointerSource>, String> {

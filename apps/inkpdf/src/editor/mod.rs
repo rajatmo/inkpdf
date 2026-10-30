@@ -284,6 +284,12 @@ impl Editor {
         }
     }
 
+    /// Whether the toolbar has a button to open a PDF (the shell says so at the start: where the system has a picker of its own).
+    pub fn set_can_open(&mut self, on: bool) {
+        self.registry = self.registry.clone().with_open_button(on);
+        self.ws.redraw = true;
+    }
+
     /// Time has passed: whether any extension's tool is still moving by itself (a trail fading), which keeps the frames coming.
     pub fn tick_tools(&mut self, now_ms: f64) -> bool {
         self.tools.tick(now_ms)

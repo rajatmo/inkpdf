@@ -13,5 +13,4 @@ You need the Rust target (`rustup target add aarch64-linux-android`), the NDK (r
 What works: pen with pressure, hover and the points between events; an S Pen's one button erases (a second button lassos, a real eraser end
 erases); finger pan, pinch and taps on the buttons; palm rejection while the pen is near; the soft keyboard for text and the file name;
 Save As. The app starts on a welcome PDF and saves into its own folder, `Android/data/app.inkpdf.test/files/Documents` (no permission
-needed); `adb pull` it from there. What does not work yet: opening PDFs from other apps or a file picker, the clipboard, opening links,
-system bars and cutouts (see `docs/PORTING.md`, steps A3 and A4).
+needed); `adb pull` it from there. The Java side (`java/app/inkpdf/test/Host.java`, a `NativeActivity` subclass named in the manifest) gives the system's file picker (open and save), "Open with", the clipboard and links (written in step A4 but **not yet tried on a device**). What does not work yet: system bars and cutouts, and a toolbar that fits a phone held upright (see `docs/PORTING.md`, step A3).

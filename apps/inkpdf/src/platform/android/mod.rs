@@ -7,6 +7,7 @@ use std::sync::OnceLock;
 use winit::platform::android::activity::AndroidApp;
 use winit::raw_window_handle::HasWindowHandle;
 
+mod host;
 mod reader;
 
 use super::unix_dirs::{existing_places, first_folder, home_dir};
@@ -16,12 +17,25 @@ use crate::input::Mode;
 
 pub use super::stubs::{SystemClipboard, attach_parent_console, color_scheme, error_box, motion_prefs, report_fatal, system_font};
 
+/// The Java side of the app (see `host`), made when the activity starts.
+static HOST: OnceLock<std::sync::Arc<host::Host>> = OnceLock::new();
+
 /// The activity, kept for what only it can say: where the app's own folders are, and the soft keyboard.
 static APP: OnceLock<AndroidApp> = OnceLock::new();
 
 /// The activity has started: `inkpdf::run_android` hands over its `AndroidApp` before anything else.
 pub fn android_app_started(app: AndroidApp) {
+    if let Some(host) = host::Host::new(app.vm_as_ptr(), app.activity_as_ptr()) {
+        let _ = HOST.set(std::sync::Arc::new(host));
+    } else {
+        eprintln!("the Java side of the app could not be reached: no file picker, clipboard or links");
+    }
     let _ = APP.set(app);
+}
+
+/// The Java side as the program's own bridge (files the system hands out, the clipboard, links), if it could be reached.
+pub fn bridge() -> Option<std::sync::Arc<dyn super::saf::Bridge>> {
+    HOST.get().map(|h| h.clone() as std::sync::Arc<dyn super::saf::Bridge>)
 }
 
 /// The app's own folder on the shared storage (`Android/data/<package>/files`): writable with no permission, and visible to a
@@ -87,9 +101,9 @@ pub fn detect_mode() -> Mode {
     Mode::Tablet
 }
 
-/// Opening a web address is an `Intent`, which needs the Java side; until then it is only said.
+/// Opening a web address is an `Intent`: the Java side does it (see `Native::open_url`, which asks the bridge first).
 pub fn open_url(url: &str) {
-    eprintln!("cannot open {url} on Android yet");
+    eprintln!("cannot open {url}: the Java side of the app is not there");
 }
 
 /// The pen, touch and key reader: it shares the activity's input queue with the toolkit and reads it first (see `reader`).

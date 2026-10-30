@@ -59,6 +59,8 @@ winit = { version = "0.30", default-features = false, features = ["rwh_06", "x11
 winit = { version = "0.30", default-features = false, features = ["rwh_06", "android-native-activity"] }
 # The monotonic clock the input events are stamped with (see `platform/android/reader.rs`).
 libc = "0.2"
+# The calls into the Java side of the app (the file picker, the clipboard, opening links): see `platform/android/host.rs`.
+jni = "0.21"
 
 [target.'cfg(windows)'.dependencies]
 # Pen and touch arrive as Windows pointer messages: winit reports only pressure and cannot tell a

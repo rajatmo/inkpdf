@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- InkPDF as a NativeActivity with no Java code: the activity loads libinkpdf_android.so and calls its android_main. -->
+<!-- InkPDF as a NativeActivity: `Host` (java/app/inkpdf/test/Host.java) is a NativeActivity that loads libinkpdf_android.so and calls its android_main, and does
+     the few things only Java can: the system's file picker, the clipboard, opening links. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="app.inkpdf.test">
     <!-- Vulkan 1.0: the only graphics API the app draws with on Android. -->
     <uses-feature android:name="android.hardware.vulkan.version" android:version="0x400003" android:required="true" />
@@ -7,11 +8,10 @@
 
     <application
         android:label="InkPDF"
-        android:hasCode="false"
         android:allowBackup="false"
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
         <activity
-            android:name="android.app.NativeActivity"
+            android:name="app.inkpdf.test.Host"
             android:label="InkPDF"
             android:exported="true"
             android:launchMode="singleTask"
@@ -21,6 +21,14 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- "Open with InkPDF" for a PDF from a file manager, a mail or a share. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" android:mimeType="application/pdf" />
+                <data android:scheme="file" android:mimeType="application/pdf" />
             </intent-filter>
         </activity>
     </application>

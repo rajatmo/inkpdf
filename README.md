@@ -23,7 +23,7 @@ just the page and your pen.
 |---|---|---|
 | **Windows 10/11** | the main platform: full pen support (pressure, eraser end, barrel button) | installer or portable zip |
 | **Linux** (X11, Wayland) | works; the pen is read as basic mouse/touch for now (no pressure yet) | portable tarball |
-| **Android** (arm64 tablets and phones) | test build: S Pen and finger work; it starts on a welcome PDF and saves into its own folder (no file picker yet) | APK |
+| **Android** (arm64 tablets and phones) | test build: S Pen and finger work; it starts on a welcome PDF; Open and Save use the system's file picker; copy, paste and links go through the system (written but not yet tried on a device) | APK |
 
 ## Get started
 
@@ -36,7 +36,7 @@ driver (`mesa-vulkan-drivers` on most distributions) and, on X11, `libxkbcommon-
 
 **Android.** Download the APK (the CI run's `inkpdf-android-test-apk` artifact, or build it with
 [tools/android](tools/android/README.md)) and install it. Documents are saved in the app's own folder
-(`Android/data/app.inkpdf.test/files/Documents`); there is no file picker yet.
+(`Android/data/app.inkpdf.test/files/Documents`). The folder button at the left of the toolbar opens a PDF through the system's file picker, Save As uses its "create document" screen, and "Open with InkPDF" from a file manager works.
 
 **Using it.**
 

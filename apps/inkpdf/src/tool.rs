@@ -47,6 +47,8 @@ impl Default for Tool {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Registry {
     tools: Vec<(Tool, Option<&'static str>)>,
+    /// Whether the toolbar has a button to open a PDF (where the system has a picker of its own: see `Platform::has_picker`).
+    open_button: bool,
 }
 
 /// The most tools a toolbar can hold.
@@ -55,7 +57,7 @@ pub const MAX_TOOLS: usize = 8;
 impl Registry {
     /// The program's own tools.
     pub fn builtin() -> Registry {
-        Registry { tools: [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Select].into_iter().map(|t| (t, None)).collect() }
+        Registry { tools: [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Select].into_iter().map(|t| (t, None)).collect(), open_button: false }
     }
 
     /// Add a tool of an extension, drawn on its button from the SVG `icon` (a name already there, or more tools than fit, is refused).
@@ -64,6 +66,17 @@ impl Registry {
             self.tools.push((tool, Some(icon)));
         }
         self
+    }
+
+    /// The same, with (or without) a button to open a PDF.
+    pub fn with_open_button(mut self, on: bool) -> Registry {
+        self.open_button = on;
+        self
+    }
+
+    /// Whether the toolbar has a button to open a PDF.
+    pub fn has_open_button(&self) -> bool {
+        self.open_button
     }
 
     /// The tools, in the toolbar's order.

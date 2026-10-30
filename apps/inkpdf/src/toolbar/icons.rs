@@ -52,6 +52,8 @@ pub(super) struct Icons {
     pub text_select: Icon,
     /// A magnifying glass: the search card.
     pub search: Icon,
+    /// A folder: open a PDF.
+    pub open: Icon,
     pub highlight: Icon,
     pub underline: Icon,
     pub strikeout: Icon,
@@ -92,6 +94,7 @@ static ICONS: LazyLock<Icons> = LazyLock::new(|| Icons {
     dark_pages: Icon::from_svg(include_str!("../../icons/svg/dark-pages.svg")),
     text_select: Icon::from_svg(include_str!("../../icons/svg/text-select.svg")),
     search: Icon::from_svg(include_str!("../../icons/svg/search.svg")),
+    open: Icon::from_svg(include_str!("../../icons/svg/open.svg")),
     highlight: Icon::from_svg(include_str!("../../icons/svg/highlight.svg")),
     underline: Icon::from_svg(include_str!("../../icons/svg/underline.svg")),
     strikeout: Icon::from_svg(include_str!("../../icons/svg/strikeout.svg")),
@@ -427,6 +430,7 @@ mod tests {
             ("dark-pages", &all.dark_pages),
             ("text-select", &all.text_select),
             ("search", &all.search),
+            ("open", &all.open),
             ("highlight", &all.highlight),
             ("underline", &all.underline),
             ("strikeout", &all.strikeout),

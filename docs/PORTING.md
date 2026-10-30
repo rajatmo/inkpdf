@@ -26,8 +26,8 @@ Linux and Android live on `main` beside Windows (merged 2026-10-29). Written 202
 | Pen pressure / eraser / barrel / hover / history | yes | **not yet** (L2): basic mouse and touch | yes (the S Pen's one button erases) |
 | Touch: pan, pinch, taps on the buttons | yes | basic | yes |
 | Palm rejection | touch is off while the pen is near | same rule (with basic input there is no hover) | yes |
-| Clipboard for text boxes | yes | in-memory only (L3) | in-memory only (A4) |
-| Save As | in-app card, opens on Documents | in-app card, opens on Documents (XDG) | in-app card, in the app's own folder; needs the SAF for other files (A4) |
+| Clipboard for text boxes | yes | in-memory only (L3) | the system's, through the Java side (A4; untried on a device) |
+| Save As | in-app card, opens on Documents | in-app card, opens on Documents (XDG) | the system's picker (Storage Access Framework; A4, untried on a device): `DocId::Uri` through `platform/saf.rs` |
 | Error box | yes | terminal | terminal |
 | Portable package | zip (`build-portable.ps1`, CI) | tarball (`tools/linux/build-portable.sh`, CI) | APK (CI artifact) |
 

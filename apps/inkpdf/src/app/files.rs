@@ -9,6 +9,7 @@ use crate::doc::{Doc, UNTITLED};
 use crate::editor::Request;
 use crate::ink::PageStroke;
 use crate::pages::PageEdit;
+use crate::platform::Pick;
 use crate::requests::Choice;
 use crate::store::DocId;
 
@@ -18,7 +19,7 @@ use super::{InkStamp, State, folders};
 #[derive(Debug, PartialEq)]
 pub(super) enum Then {
     Exit,
-    Open(PathBuf),
+    Open(DocId),
     Blank,
 }
 
@@ -54,7 +55,7 @@ impl State {
     fn run(&mut self, then: Then) {
         match then {
             Then::Exit => self.timing.exit = true,
-            Then::Open(path) => self.open_now(path),
+            Then::Open(id) => self.open_now(id),
             Then::Blank => self.open_blank(),
         }
     }
@@ -91,16 +92,39 @@ impl State {
 
     /// Open a PDF, after dealing with unsaved work.
     pub(super) fn open(&mut self, path: PathBuf) {
-        self.after_settling(Then::Open(path));
+        self.open_id(DocId::Path(path));
     }
 
-    fn open_now(&mut self, path: PathBuf) {
-        match Doc::open_from(&*self.session.files, &DocId::Path(path.clone())) {
+    /// Open a document by its id (a path, or an address the system's picker handed out), after dealing with unsaved work.
+    pub(super) fn open_id(&mut self, id: DocId) {
+        self.after_settling(Then::Open(id));
+    }
+
+    fn open_now(&mut self, id: DocId) {
+        match Doc::open_from(&*self.session.files, &id) {
             Ok((doc, strokes)) => self.install(doc, strokes),
             Err(e) => {
-                eprintln!("could not open {}: {e}", path.display());
-                self.platform.error_box(&*self.window, &format!("Could not open {}:\n{e}", path.display()));
+                eprintln!("could not open {id}: {e}");
+                self.platform.error_box(&*self.window, &format!("Could not open {}:\n{e}", id.name()));
             }
+        }
+    }
+
+    /// What the system's picker has answered, and a document another app has handed over (both come back when the app is brought to the front
+    /// again, or on any input): an opened file is opened, a place to save to is saved to, and giving up forgets what was waiting.
+    pub(super) fn take_picked(&mut self) {
+        while let Some(picked) = self.platform.take_picked() {
+            match (picked.kind, picked.id) {
+                (Pick::Open, Some(id)) => self.open_id(id),
+                (Pick::Save, Some(id)) => self.save_to(id),
+                (_, None) => {
+                    self.session.save_then = None;
+                    self.window.request_redraw();
+                }
+            }
+        }
+        if let Some(id) = self.platform.take_launched() {
+            self.open_id(id);
         }
     }
 
@@ -129,6 +153,13 @@ impl State {
         }
         self.ed.settle();
         self.session.save_then = then;
+        // A system with a picker of its own (Android) chooses the place and the name itself; what it answers is taken by `take_picked`.
+        if self.platform.has_picker() {
+            let name = self.session.doc.as_ref().map_or_else(|| format!("{UNTITLED}.pdf"), |d| d.name.clone());
+            let name = if name.to_lowercase().ends_with(".pdf") { name } else { format!("{name}.pdf") };
+            self.platform.pick(Pick::Save, &name);
+            return;
+        }
         let file = self.session.doc.as_ref().and_then(|d| d.path().map(Path::to_path_buf));
         let dir = file.as_deref().and_then(Path::parent).filter(|p| p.is_dir()).map_or_else(|| self.platform.documents_dir(), Path::to_path_buf);
         let name = file.as_deref().and_then(Path::file_name).map_or_else(|| format!("{UNTITLED}.pdf"), |n| n.to_string_lossy().into_owned());
@@ -154,7 +185,13 @@ impl State {
             }
             Err(e) => {
                 eprintln!("save failed: {e}");
-                self.ed.save_as_done(Err(format!("Could not save: {e}")));
+                // (With no dialog of our own to show it in, the system's picker was used: say it in a box.)
+                if self.ed.save_as_open() {
+                    self.ed.save_as_done(Err(format!("Could not save: {e}")));
+                } else {
+                    self.session.save_then = None;
+                    self.platform.error_box(&*self.window, &format!("Could not save:\n{e}"));
+                }
             }
         }
     }
@@ -247,6 +284,7 @@ impl State {
     /// Do what the editor asked for after an input event, in the order it asked.
     pub(super) fn service(&mut self) {
         self.take_listings();
+        self.take_picked();
         while let Some(request) = self.ed.requests().pop() {
             match request {
                 Request::Answer(choice) => self.answered(choice),
@@ -258,6 +296,10 @@ impl State {
                     self.save_now();
                 }
                 Request::SaveAs => self.begin_save_as(None),
+                Request::Open => {
+                    self.ed.settle();
+                    self.platform.pick(Pick::Open, "");
+                }
                 Request::ListFolder(dir) => folders::spawn(dir, self.session.files.clone(), self.window.clone(), self.session.listings.0.clone()),
                 Request::SaveTo(id) => self.save_to(id),
                 Request::SaveAsCancelled => {

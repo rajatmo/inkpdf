@@ -14,6 +14,7 @@ Extensions: a tool can be added without touching the program.
   suite and a latency cap run on every extension by themselves; an extension may depend on nothing but the API (a reviewed list) and touches
   no file, network or process.
 - Inside: the tests of the toolbar and the interface are written against a reference set of tools, so that adding an extension changes none.
+- **Android files, clipboard and links** (written, not yet tried on a device): the APK now has a small Java activity (`Host`) beside the Rust library. A folder button on the toolbar (where the system has a picker) opens a PDF through the system's file picker; Save As uses the system's "create document" screen and writes to the address it hands out; "Open with InkPDF" opens a PDF from a file manager; copy and paste use the system clipboard; links open in the browser. Inside: `platform/saf.rs` (the logic behind a `Bridge`, tested with a fake), `platform/android/host.rs` (JNI), `DocId::Uri` now used.
 
 Polish (the first part of milestone 1.3.0).
 

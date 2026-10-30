@@ -31,6 +31,8 @@ pub enum Request {
     SaveTo(DocId),
     /// The Save As dialog was put away without saving.
     SaveAsCancelled,
+    /// Ask the system's picker for a PDF to open.
+    Open,
     /// Switch between windowed and full screen.
     Fullscreen,
     /// Close this document and start a blank one.

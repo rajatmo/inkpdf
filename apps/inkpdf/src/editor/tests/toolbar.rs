@@ -327,3 +327,24 @@ fn the_mouse_lights_the_button_it_is_over_and_only_draws_again_when_that_changes
     ed.mouse_left();
     assert_eq!(ed.chrome.hover, None);
 }
+
+#[test]
+fn the_open_button_is_there_only_where_the_system_has_a_picker_and_asks_for_it_with_every_device() {
+    let mut ed = editor();
+    assert!(ed.toolbar().slot(Item::Open).is_none(), "no picker, no button: the program's own dialog is for saving");
+    ed.set_can_open(true);
+    let at = ed.toolbar().centre_of(Item::Open);
+    pen_stroke(&mut ed, TIP, &[at, at]);
+    assert!(ed.requests.take(&Request::Open), "the tip");
+    mouse_click_at(&mut ed, at);
+    assert!(ed.requests.take(&Request::Open), "the left button");
+    let mut finger = editor();
+    finger.set_can_open(true);
+    let at = finger.toolbar().centre_of(Item::Open);
+    finger.pointer_event(touch(1, Phase::Down, at, 8.0));
+    finger.pointer_event(touch(1, Phase::Up, at, 8.0));
+    assert!(finger.requests.take(&Request::Open), "a finger");
+    assert_eq!(ed.ink.len(), 0);
+    ed.set_can_open(false);
+    assert!(ed.toolbar().slot(Item::Open).is_none());
+}

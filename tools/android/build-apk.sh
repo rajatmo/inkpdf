@@ -6,7 +6,7 @@
 #       tools/android/build-apk.sh [release|debug] [out.apk]
 #
 # Needs: the Rust target (rustup target add aarch64-linux-android), the NDK (r27 or newer), the SDK's build-tools (aapt2,
-# zipalign, apksigner) and platform android.jar, a JDK (apksigner), and zip. On GitHub's Ubuntu runners the SDK and NDK are
+# zipalign, apksigner, d8) and platform android.jar, a JDK (javac, apksigner), and zip. On GitHub's Ubuntu runners the SDK and NDK are
 # already installed (see .github/workflows/ci.yml).
 set -euo pipefail
 
@@ -50,10 +50,16 @@ for abi in $abis; do
     cp "$so" "$work/lib/$abi/"
 done
 
-# The package: manifest and resource table by aapt2, the library added to it, aligned, signed.
+# The Java side (java/app/inkpdf/test/Host.java: the file picker, the clipboard, links): compiled for Java 8 and turned into classes.dex.
+mkdir -p "$work/classes"
+javac --release 8 -Xlint:-options -cp "$ANDROID_JAR" -d "$work/classes" "$here/java/app/inkpdf/test/Host.java"
+"$ANDROID_BUILD_TOOLS/d8" --min-api "$api" --lib "$ANDROID_JAR" --output "$work" $(find "$work/classes" -name '*.class')
+[ -f "$work/classes.dex" ] || { echo "no classes.dex"; exit 1; }
+
+# The package: manifest and resource table by aapt2, the library and the dex added to it, aligned, signed.
 "$ANDROID_BUILD_TOOLS/aapt2" link --manifest "$here/AndroidManifest.xml" -I "$ANDROID_JAR" -o "$work/base.apk" \
     --min-sdk-version "$api" --target-sdk-version 34 --version-code 1 --version-name "$version-$profile"
-(cd "$work" && zip -q -r base.apk lib)
+(cd "$work" && zip -q -r base.apk lib classes.dex)
 "$ANDROID_BUILD_TOOLS/zipalign" -f -p 4 "$work/base.apk" "$work/aligned.apk"
 [ -f "$here/debug.keystore" ] || keytool -genkeypair -keystore "$here/debug.keystore" -storepass android -keypass android \
     -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 36500 -dname "CN=InkPDF test build,O=InkPDF,C=XX"

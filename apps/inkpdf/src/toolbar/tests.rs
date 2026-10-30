@@ -245,3 +245,20 @@ fn the_mode_button_shows_which_mode_it_is_by_its_icon_and_the_tablet_in_the_acce
     let accent = |lines: &[String]| lines.iter().filter(|l| l.contains(&format!("{:?}", crate::palette::LIGHT.accent))).count();
     assert!(accent(&slate) > accent(&desk), "the tablet is drawn in the accent colour");
 }
+
+#[test]
+fn with_a_picker_the_left_pill_has_a_button_to_open_a_pdf_and_everything_still_fits() {
+    let reg = crate::tool::reference_registry().with_open_button(true);
+    // (A phone held upright, under about 600 points wide, has no room for it: the pills would meet. A tablet has.)
+    for (w, dpr) in [(1650.0, 1.5), (1100.0, 1.0), (800.0, 1.0), (620.0, 1.0)] {
+        let tb = Toolbar::layout_for(&reg, [w, 900.0], dpr);
+        let open = tb.button(Item::Open).expect("an open button");
+        assert!(rect_contains(tb.pills[0], [(open[0] + open[2]) / 2.0, (open[1] + open[3]) / 2.0]), "in the left pill at {w}");
+        assert!(tb.pills[0][2] < tb.pills[1][0] && tb.pills[1][2] < tb.pills[2][0], "three separate pills at {w}: {:?}", tb.pills);
+        assert_eq!(tb.hit([(open[0] + open[2]) / 2.0, (open[1] + open[3]) / 2.0]), Some(Item::Open));
+        // It is between the pages button and the search button.
+        let (pages, search) = (tb.button(Item::Pages).expect("pages"), tb.button(Item::Search).expect("search"));
+        assert!(pages[2] <= open[0] + 0.5 && open[2] <= search[0] + 0.5, "{w}");
+    }
+    assert!(Toolbar::layout([1100.0, 900.0], 1.0).button(Item::Open).is_none(), "and without one there is none");
+}

@@ -224,6 +224,7 @@ impl Editor {
                 }
                 Item::Pages => self.open_overview(),
                 Item::Search => self.toggle_search(),
+                Item::Open => self.ws.requests.push(Request::Open),
                 // The last page there is stays (a document has at least one: the edit is refused).
                 Item::DeletePage => {
                     self.delete_current_page();

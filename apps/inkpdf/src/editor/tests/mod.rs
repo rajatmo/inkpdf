@@ -6,6 +6,7 @@ mod capability;
 mod contract;
 mod delete_page;
 mod draft;
+mod golden;
 mod handle;
 mod inputs;
 mod laser;

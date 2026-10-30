@@ -9,7 +9,7 @@
 <g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(28.8 959.8)">
 <title>G</title>
 <polygon fill="white" stroke="transparent" points="-28.8,28.8 -28.8,-959.8 1875.95,-959.8 1875.95,28.8 -28.8,28.8"/>
-<text text-anchor="start" x="520.58" y="-910.4" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="22.00">InkPDF essential skeleton (transitive reduction: 66 of 139 edges)</text>
+<text text-anchor="start" x="520.58" y="-910.4" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="22.00">InkPDF essential skeleton (transitive reduction: 66 of 140 edges)</text>
 <g id="clust1" class="cluster">
 <title>cluster_Base</title>
 <path fill="#e8f1fb" fill-opacity="0.333333" stroke="#4a7fb5" d="M326,-210C326,-210 746,-210 746,-210 752,-210 758,-216 758,-222 758,-222 758,-879 758,-879 758,-885 752,-891 746,-891 746,-891 326,-891 326,-891 320,-891 314,-885 314,-879 314,-879 314,-222 314,-222 314,-216 320,-210 326,-210"/>

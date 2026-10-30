@@ -1,0 +1,15 @@
+toolbar, desktop, pen, nothing under way = 8ae19b6ca7abc1c8
+toolbar, tablet, text, hovering undo = f4b2493b3cdbcc88
+toolbar, one page, laser, fullscreen = 5bf12bc2888334a5
+panel, pen = 3b7a42b18b2643bc
+panel, shapes = 673fd1c354c06035
+panel, text = 29e2d0aed7ac1091
+panel, pen, the colour editor = b635c9e3bc4df669
+bar under the tools, with a selection = 6537a059e2623827
+toolbar, unsaved ink = 63485c632b57bd39
+the prompt = dcb591ecb4d3523e
+overview = 284ada8ff7aaccad
+overview, edit mode = 741fde45ab453507
+overview, edit mode, two pages chosen = 8c4e204b86f615de
+overview, hovering a page = b6b18bddd31adebf
+the Save As card = c6d0ba2b3a48d164

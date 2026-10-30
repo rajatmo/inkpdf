@@ -2,12 +2,49 @@
 
 use crate::ink::Restyle;
 use crate::input::{Device, Intent, Mode};
+use crate::scene::Xform;
 use crate::tool::Tool;
-use crate::toolbar::{Channel, Item, Slider};
+use crate::toolbar::{Channel, Item, PromptLayout, Slider, Ui};
 
 use super::{Act, Editor, Request};
 
 impl Editor {
+    /// Everything the interface over the page is made of, now: the toolbars with the bar under the tools and the tool's panel unfolded
+    /// from it (or the prompt, which takes the window and puts the toolbars out of the way), each as far in as its motion has come. (The
+    /// pages overview and the Save As card are drawn by [`Editor::draw_overview`] and [`Editor::draw_save_as`].)
+    pub fn draw_interface(&self, ui: &mut Ui) {
+        let (state, look) = (self.toolbar_state(), self.toolbar_look());
+        // The prompt takes over the window: the toolbars step out of the way.
+        if self.chrome.prompt.is_none() {
+            let bar = self.toolbar();
+            bar.draw_with(&state, &look, ui);
+            let coming = ui.mark();
+            let unfolded = self
+                .panel_look()
+                .and_then(|(view, amount)| Some((view, amount, bar.tool_panel(view.tool, self.ws.view.viewport[0], view.editing.is_some())?)));
+            // The bar under the tools; with the panel unfolded they are one card, drawn before the panel's contents. The card
+            // grows to hold the panel as the panel comes in, and the panel's contents appear when there is room for them.
+            if let (Some(context), Some(view)) = (self.context_bar(), &self.context_view()) {
+                let end = unfolded.as_ref().filter(|(_, amount, _)| *amount > 0.02).map(|(_, amount, panel)| {
+                    let full = context.card(panel.rect[3] + 0.2 * panel.unit())[3].max(panel.rect[3]);
+                    context.rect[3] + (full - context.rect[3]) * amount
+                });
+                context.draw(view, end, ui);
+            }
+            if let Some((view, amount, panel)) = &unfolded {
+                let contents = ui.mark();
+                panel.draw(view, ui);
+                ui.apply(contents, Xform::fade(((amount - 0.5) * 2.0).clamp(0.0, 1.0)));
+            }
+            // The bar comes down into place as it comes in.
+            let came = self.motions.bar_amount();
+            ui.apply(coming, Xform::slide([0.0, -(1.0 - came) * 8.0 * self.ws.dpr], came));
+        }
+        if let Some((view, amount)) = self.prompt_look() {
+            PromptLayout::new(self.ws.view.viewport, self.ws.dpr).draw_with(view, amount, ui);
+        }
+    }
+
     /// If the pointer pressed a toolbar button and is still over it, press it.
     pub(super) fn release_toolbar(&mut self, dev: Device, id: u32, pos: Option<[f32; 2]>) {
         let Act::Toolbar { dev: d, id: a, item: Some(item) } = self.chrome.act else { return };

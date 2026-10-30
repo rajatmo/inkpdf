@@ -87,6 +87,13 @@ pub trait Platform {
     fn set_text_input(&self, active: bool);
     /// The system clipboard for the text of text boxes, if there is one.
     fn clipboard(&self, window: &dyn HasWindowHandle) -> Option<Box<dyn TextClipboard>>;
+    /// Whether the system's bars (Android's status and navigation bars) are the platform's to show and hide, which is what the full-screen button
+    /// does there; where the window can fill the screen itself (a desktop) it is not, and the window is asked.
+    fn controls_system_bars(&self) -> bool {
+        false
+    }
+    /// Hide the system's bars, or show them again (see [`Platform::controls_system_bars`]).
+    fn set_system_bars_hidden(&self, _hidden: bool) {}
     /// Whether the system has a picker of its own for files (Android's: the app cannot see the folders, it is handed the file): then it
     /// opens and saves where the program's own dialog would.
     fn has_picker(&self) -> bool {
@@ -213,6 +220,16 @@ impl Platform for Native {
         match bridge() {
             Some(bridge) => Some(Box::new(saf::BridgeClipboard(bridge))),
             None => os::SystemClipboard::new(window).map(|c| Box::new(c) as Box<dyn TextClipboard>),
+        }
+    }
+
+    fn controls_system_bars(&self) -> bool {
+        bridge().is_some()
+    }
+
+    fn set_system_bars_hidden(&self, hidden: bool) {
+        if let Some(bridge) = bridge() {
+            bridge.set_bars_hidden(hidden);
         }
     }
 

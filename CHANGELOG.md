@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.4
+
+- **Android: the full-screen button hides and shows the system bars** (status and navigation). It did nothing there, as Android's window cannot be
+  made full screen; the button now asks the activity to hide the bars (a swipe from the edge shows them for a moment and they go away again,
+  and the window draws under a camera cut-out), and its icon shows which it is. The program starts with the bars shown. On the desktop the button is as it was.
+
 ## 1.3.3
 
 - The **Open button** (where the system has a file picker: Android) sits just left of Save, with the buttons that act on the document, not out among the page and search buttons.

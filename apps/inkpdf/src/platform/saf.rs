@@ -22,6 +22,8 @@ pub trait Bridge: Send + Sync {
     fn paste(&self) -> Option<String>;
     /// Open a web address in the system's program for it.
     fn open_url(&self, url: &str);
+    /// Hide the system's bars (status and navigation), or show them again.
+    fn set_bars_hidden(&self, hidden: bool);
     /// Ask the system's picker for a file to open, or for a place and name to save under (the answer comes by [`Bridge::take_picked`]).
     fn pick(&self, kind: Pick, name: &str);
     /// What the picker answered, if it has, as the Java side words it: the kind (`0` open, `1` save), a tab, and the address (none if the
@@ -104,9 +106,13 @@ mod tests {
         answer: Mutex<Option<String>>,
         launch: Mutex<Option<String>>,
         urls: Mutex<Vec<String>>,
+        bars_hidden: Mutex<bool>,
     }
 
     impl Bridge for Fake {
+        fn set_bars_hidden(&self, hidden: bool) {
+            *self.bars_hidden.lock().unwrap() = hidden;
+        }
         fn read(&self, uri: &str) -> Result<Vec<u8>, String> {
             self.files.lock().unwrap().iter().find(|(u, _)| u == uri).map(|(_, b)| b.clone()).ok_or_else(|| format!("no such file: {uri}"))
         }
@@ -207,5 +213,14 @@ mod tests {
         *bridge.launch.lock().unwrap() = Some("content://x/3".into());
         assert_eq!(bridge.take_launch().as_deref(), Some("content://x/3"));
         assert_eq!(bridge.take_launch(), None);
+    }
+
+    #[test]
+    fn the_bars_are_hidden_and_shown_through_the_bridge() {
+        let bridge = Fake::default();
+        bridge.set_bars_hidden(true);
+        assert!(*bridge.bars_hidden.lock().unwrap());
+        bridge.set_bars_hidden(false);
+        assert!(!*bridge.bars_hidden.lock().unwrap());
     }
 }

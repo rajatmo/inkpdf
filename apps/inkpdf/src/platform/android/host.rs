@@ -107,6 +107,14 @@ impl Bridge for Host {
         }
     }
 
+    fn set_bars_hidden(&self, hidden: bool) {
+        if let Ok(mut env) = self.env()
+            && let Err(why) = self.call(&mut env, "setBars", "(Z)V", &[JValue::Bool(hidden.into())])
+        {
+            eprintln!("could not show or hide the system bars: {why}");
+        }
+    }
+
     fn pick(&self, kind: Pick, name: &str) {
         if let Ok(mut env) = self.env()
             && let Ok(name) = env.new_string(name)

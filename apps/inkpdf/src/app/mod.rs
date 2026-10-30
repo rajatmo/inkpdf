@@ -340,7 +340,10 @@ impl State {
             WindowEvent::Resized(size) => {
                 self.gpu.resize(size.width, size.height);
                 self.feed(InputEvent::Resized([size.width as f32, size.height as f32]));
-                self.ed.chrome.fullscreen = self.window.fullscreen().is_some();
+                // (Where the bars are the platform's, the window never says it is full screen: the button's state is what was asked.)
+                if !self.platform.controls_system_bars() {
+                    self.ed.chrome.fullscreen = self.window.fullscreen().is_some();
+                }
             }
             WindowEvent::CursorLeft { .. } => self.feed(InputEvent::MouseLeft),
             WindowEvent::Focused(false) => self.feed(InputEvent::FocusLost),

@@ -268,9 +268,18 @@ impl State {
     /// Fill the whole screen, borderless and over the taskbar, as games do (or go back to the window).
     /// The swap chain is already a flip-model one, so this costs no extra latency; there is no mode
     /// switch, so it is instant and alt-tabbing is clean.
+    ///
+    /// Where the platform shows and hides the system's bars itself (Android, whose window cannot be made full screen), that is what this does.
     pub(super) fn toggle_fullscreen(&mut self) {
-        let on = self.window.fullscreen().is_none();
-        self.window.set_fullscreen(on.then_some(Fullscreen::Borderless(None)));
+        let on = if self.platform.controls_system_bars() {
+            let on = !self.ed.chrome.fullscreen;
+            self.platform.set_system_bars_hidden(on);
+            on
+        } else {
+            let on = self.window.fullscreen().is_none();
+            self.window.set_fullscreen(on.then_some(Fullscreen::Borderless(None)));
+            on
+        };
         self.ed.chrome.fullscreen = on;
         self.ed.want_redraw();
     }

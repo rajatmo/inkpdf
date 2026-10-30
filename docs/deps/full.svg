@@ -624,18 +624,18 @@
 <!-- toolbar&#45;&gt;scene -->
 <g id="edge131" class="edge">
 <title>toolbar&#45;&gt;scene</title>
-<g id="a_edge131"><a xlink:title="20 uses">
-<path fill="none" stroke="#a14a96" stroke-width="3" stroke-opacity="0.600000" d="M4399.66,-463.32C4288.72,-467.52 3929.98,-480.7 3633,-487 3568.73,-488.36 1377.54,-486.45 1319,-513 1307.03,-518.43 1296.98,-528.99 1289.62,-538.83"/>
-<polygon fill="#a14a96" fill-opacity="0.600000" stroke="#a14a96" stroke-width="3" stroke-opacity="0.600000" points="1287.8,-537.77 1286.02,-543.87 1291.22,-540.21 1287.8,-537.77"/>
+<g id="a_edge131"><a xlink:title="21 uses">
+<path fill="none" stroke="#a14a96" stroke-width="3.03" stroke-opacity="0.600000" d="M4399.66,-463.32C4288.72,-467.52 3929.98,-480.7 3633,-487 3568.73,-488.36 1377.54,-486.45 1319,-513 1307.03,-518.43 1296.98,-528.99 1289.62,-538.83"/>
+<polygon fill="#a14a96" fill-opacity="0.600000" stroke="#a14a96" stroke-width="3.03" stroke-opacity="0.600000" points="1287.8,-537.77 1286.02,-543.87 1291.22,-540.21 1287.8,-537.77"/>
 </a>
 </g>
 </g>
 <!-- toolbar&#45;&gt;text -->
 <g id="edge133" class="edge">
 <title>toolbar&#45;&gt;text</title>
-<g id="a_edge133"><a xlink:title="2 uses">
-<path fill="none" stroke="#a14a96" stroke-width="1.59" stroke-opacity="0.600000" d="M4399.66,-463.31C4288.72,-467.5 3929.97,-480.64 3633,-487 3570.93,-488.33 1454.07,-486.34 1398,-513 1386.49,-518.47 1377.12,-529.04 1370.35,-538.86"/>
-<polygon fill="#a14a96" fill-opacity="0.600000" stroke="#a14a96" stroke-width="1.59" stroke-opacity="0.600000" points="1368.57,-537.73 1367.04,-543.9 1372.09,-540.04 1368.57,-537.73"/>
+<g id="a_edge133"><a xlink:title="3 uses">
+<path fill="none" stroke="#a14a96" stroke-width="1.8" stroke-opacity="0.600000" d="M4399.66,-463.31C4288.72,-467.5 3929.97,-480.64 3633,-487 3570.93,-488.33 1454.07,-486.34 1398,-513 1386.49,-518.47 1377.12,-529.04 1370.35,-538.86"/>
+<polygon fill="#a14a96" fill-opacity="0.600000" stroke="#a14a96" stroke-width="1.8" stroke-opacity="0.600000" points="1368.57,-537.73 1367.04,-543.9 1372.09,-540.04 1368.57,-537.73"/>
 </a>
 </g>
 </g>
@@ -660,9 +660,9 @@
 <!-- toolbar&#45;&gt;ink -->
 <g id="edge126" class="edge">
 <title>toolbar&#45;&gt;ink</title>
-<g id="a_edge126"><a xlink:title="6 uses">
-<path fill="none" stroke="#a14a96" stroke-width="2.2" stroke-opacity="0.600000" d="M4402.77,-479.07C4395.79,-482.22 4388.29,-485.1 4381,-487 4217.17,-529.62 4168.75,-490.27 4001,-513 3835.59,-535.41 3797.73,-561.06 3633,-588 3301.08,-642.29 3216.45,-645.51 2882,-681 2555.89,-715.6 2465.15,-666.44 2147,-746 2144.74,-746.56 2142.45,-747.24 2140.17,-747.99"/>
-<polygon fill="#a14a96" fill-opacity="0.600000" stroke="#a14a96" stroke-width="2.2" stroke-opacity="0.600000" points="2139.1,-746.14 2134.15,-750.13 2140.51,-750.1 2139.1,-746.14"/>
+<g id="a_edge126"><a xlink:title="7 uses">
+<path fill="none" stroke="#a14a96" stroke-width="2.3" stroke-opacity="0.600000" d="M4402.77,-479.07C4395.79,-482.22 4388.29,-485.1 4381,-487 4217.17,-529.62 4168.75,-490.27 4001,-513 3835.59,-535.41 3797.73,-561.06 3633,-588 3301.08,-642.29 3216.45,-645.51 2882,-681 2555.89,-715.6 2465.15,-666.44 2147,-746 2144.74,-746.56 2142.45,-747.24 2140.17,-747.99"/>
+<polygon fill="#a14a96" fill-opacity="0.600000" stroke="#a14a96" stroke-width="2.3" stroke-opacity="0.600000" points="2139.1,-746.14 2134.15,-750.13 2140.51,-750.1 2139.1,-746.14"/>
 </a>
 </g>
 </g>
@@ -960,9 +960,9 @@
 <!-- editor&#45;&gt;pagetext -->
 <g id="edge47" class="edge">
 <title>editor&#45;&gt;pagetext</title>
-<g id="a_edge47"><a xlink:title="1 uses">
-<path fill="none" stroke="#6a5acd" stroke-width="1.3" stroke-opacity="0.600000" d="M3857.95,-161.66C3803.21,-167.16 3690.54,-181.69 3665,-210 3581.91,-302.09 3722.73,-403.52 3631,-487 3592.86,-521.71 2753.99,-505.24 2703,-513 2519.46,-540.93 2309.33,-612.25 2218.62,-645.04"/>
-<polygon fill="#6a5acd" fill-opacity="0.600000" stroke="#6a5acd" stroke-width="1.3" stroke-opacity="0.600000" points="2217.74,-643.13 2212.82,-647.15 2219.17,-647.08 2217.74,-643.13"/>
+<g id="a_edge47"><a xlink:title="2 uses">
+<path fill="none" stroke="#6a5acd" stroke-width="1.59" stroke-opacity="0.600000" d="M3857.95,-161.66C3803.21,-167.16 3690.54,-181.69 3665,-210 3581.91,-302.09 3722.73,-403.52 3631,-487 3592.86,-521.71 2753.99,-505.24 2703,-513 2519.46,-540.93 2309.33,-612.25 2218.62,-645.04"/>
+<polygon fill="#6a5acd" fill-opacity="0.600000" stroke="#6a5acd" stroke-width="1.59" stroke-opacity="0.600000" points="2217.74,-643.13 2212.82,-647.15 2219.17,-647.08 2217.74,-643.13"/>
 </a>
 </g>
 </g>
@@ -1032,18 +1032,18 @@
 <!-- editor&#45;&gt;toolbar -->
 <g id="edge54" class="edge">
 <title>editor&#45;&gt;toolbar</title>
-<g id="a_edge54"><a xlink:title="8 uses">
-<path fill="none" stroke="#6a5acd" stroke-width="2.38" stroke-opacity="0.600000" d="M3918.06,-159.65C3998.97,-161.89 4219.24,-171.46 4279,-210 4322.98,-238.36 4395.89,-381.56 4423.22,-437.53"/>
-<polygon fill="#6a5acd" fill-opacity="0.600000" stroke="#6a5acd" stroke-width="2.38" stroke-opacity="0.600000" points="4421.36,-438.51 4425.87,-442.98 4425.13,-436.67 4421.36,-438.51"/>
+<g id="a_edge54"><a xlink:title="12 uses">
+<path fill="none" stroke="#6a5acd" stroke-width="2.65" stroke-opacity="0.600000" d="M3918.06,-159.65C3998.97,-161.89 4219.24,-171.46 4279,-210 4322.98,-238.36 4395.89,-381.56 4423.22,-437.53"/>
+<polygon fill="#6a5acd" fill-opacity="0.600000" stroke="#6a5acd" stroke-width="2.65" stroke-opacity="0.600000" points="4421.36,-438.51 4425.87,-442.98 4425.13,-436.67 4421.36,-438.51"/>
 </a>
 </g>
 </g>
 <!-- editor&#45;&gt;tools -->
 <g id="edge55" class="edge">
 <title>editor&#45;&gt;tools</title>
-<g id="a_edge55"><a xlink:title="7 uses">
-<path fill="none" stroke="#6a5acd" stroke-width="2.3" stroke-opacity="0.600000" d="M3868.57,-176.02C3849.33,-192.88 3819.82,-218.73 3799.09,-236.89"/>
-<polygon fill="#6a5acd" fill-opacity="0.600000" stroke="#6a5acd" stroke-width="2.3" stroke-opacity="0.600000" points="3797.68,-235.34 3794.55,-240.87 3800.45,-238.5 3797.68,-235.34"/>
+<g id="a_edge55"><a xlink:title="8 uses">
+<path fill="none" stroke="#6a5acd" stroke-width="2.38" stroke-opacity="0.600000" d="M3868.57,-176.02C3849.33,-192.88 3819.82,-218.73 3799.09,-236.89"/>
+<polygon fill="#6a5acd" fill-opacity="0.600000" stroke="#6a5acd" stroke-width="2.38" stroke-opacity="0.600000" points="3797.68,-235.34 3794.55,-240.87 3800.45,-238.5 3797.68,-235.34"/>
 </a>
 </g>
 </g>
@@ -1173,9 +1173,9 @@
 <!-- app&#45;&gt;toolbar -->
 <g id="edge21" class="edge">
 <title>app&#45;&gt;toolbar</title>
-<g id="a_edge21"><a xlink:title="3 uses">
-<path fill="none" stroke="#555555" stroke-width="1.8" stroke-opacity="0.600000" d="M942.03,-58.11C1276.4,-59.49 4601.53,-74.05 4636,-109 4719.96,-194.12 4702.77,-278.83 4636,-378 4599.92,-431.59 4522.14,-450.17 4474.32,-456.6"/>
-<polygon fill="#555555" fill-opacity="0.600000" stroke="#555555" stroke-width="1.8" stroke-opacity="0.600000" points="4474.04,-454.52 4468.35,-457.37 4474.57,-458.69 4474.04,-454.52"/>
+<g id="a_edge21"><a xlink:title="4 uses">
+<path fill="none" stroke="#555555" stroke-width="1.96" stroke-opacity="0.600000" d="M942.03,-58.11C1276.4,-59.49 4601.53,-74.05 4636,-109 4719.96,-194.12 4702.77,-278.83 4636,-378 4599.92,-431.59 4522.14,-450.17 4474.32,-456.6"/>
+<polygon fill="#555555" fill-opacity="0.600000" stroke="#555555" stroke-width="1.96" stroke-opacity="0.600000" points="4474.04,-454.52 4468.35,-457.37 4474.57,-458.69 4474.04,-454.52"/>
 </a>
 </g>
 </g>

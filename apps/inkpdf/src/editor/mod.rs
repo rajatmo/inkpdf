@@ -38,6 +38,7 @@ mod pen;
 mod prompt;
 mod routing;
 mod save_as;
+mod search;
 mod select;
 mod text_pages;
 mod toolbar_ui;
@@ -91,6 +92,8 @@ pub struct Editor {
     grave: u64,
     /// What was kept by page and went with the pages of each deletion, until it is undone or the file is written.
     graves: HashMap<u64, pages::Grave>,
+    /// The search card: what was typed, what it found (see [`search`]).
+    pub search: search::Search,
     /// The tools that own their interaction (see [`crate::tools`]).
     pub tools: ToolSet,
     /// The window's own controls (see [`Chrome`]).
@@ -121,6 +124,7 @@ impl Editor {
             pull_fired: false,
             grave: 0,
             graves: HashMap::new(),
+            search: search::Search::default(),
             tools: ToolSet::new(),
             chrome: Chrome::default(),
             motions: motions::Motions::new(prefs),
@@ -143,6 +147,7 @@ impl Editor {
         self.ws.intent = crate::input::Intent::Draw;
         self.tools = ToolSet::new();
         self.ws.erasing.clear();
+        self.search.close();
         self.chrome.clear_press_and_prompt();
         self.mouse_press = None;
         self.ws.requests.clear_answer();
@@ -178,6 +183,7 @@ impl Editor {
             appearance: self.ws.appearance,
             dark: self.scheme() == crate::palette::Scheme::Dark,
             dark_pages: self.ws.dark_pages,
+            search: self.search.open,
             tool: self.ws.tool,
             pen_colour: self.colour_of(self.ws.pen),
             shape_colour: self.colour_of(self.ws.shape_style),
@@ -225,6 +231,8 @@ impl Editor {
     pub fn apply_settings(&mut self, settings: &crate::settings::Settings) {
         self.ws.appearance = settings.appearance;
         self.ws.dark_pages = settings.dark_pages;
+        self.search.case = settings.search_case;
+        self.search.words = settings.search_words;
         self.sync_theme();
         self.ws.palette = settings.palette;
         self.ws.tool = settings.tool;
@@ -243,6 +251,8 @@ impl Editor {
         crate::settings::Settings {
             appearance: self.ws.appearance,
             dark_pages: self.ws.dark_pages,
+            search_case: self.search.case,
+            search_words: self.search.words,
             palette: self.ws.palette,
             tool: self.ws.tool,
             pen: self.ws.pen,
@@ -272,6 +282,7 @@ impl Editor {
     pub fn step_view(&mut self, dt: f32) -> bool {
         let overview = self.step_overview(dt);
         let interface = self.step_motions(dt);
+        self.refresh_search();
         self.ws.theme = self.palette();
         self.ws.step_view(dt) || overview || interface
     }

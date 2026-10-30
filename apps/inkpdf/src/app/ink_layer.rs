@@ -99,6 +99,8 @@ pub(super) struct UiStamp {
     bar_in: u32,
     /// The colours it was drawn in (they move while the scheme fades).
     pal: Palette,
+    /// The search card, if it is open.
+    search: Option<crate::toolbar::SearchView>,
 }
 
 /// Line work drawn over the committed ink.
@@ -207,6 +209,7 @@ impl UiLayers {
             look: ed.toolbar_look(),
             bar_in: ed.motions.bar_amount().to_bits(),
             pal: ed.palette(),
+            search: ed.search_view(),
         };
         if self.ui_built.as_ref() == Some(&stamp) {
             return;
@@ -214,6 +217,8 @@ impl UiLayers {
         let mut ui = Ui::with_palette(ed.palette());
         ed.draw_interface(&mut ui);
         cx.gpu.set_ui(&ui.panels, &ui.lines);
+        // The interface has text now (the search card's): it is drawn as the overview's is, from bitmaps.
+        self.overview.set_interface_text(ui.labels);
         self.ui_built = Some(stamp);
     }
 }
@@ -225,6 +230,7 @@ pub(super) fn overlays(ed: &Editor, now_ms: f64, mut out: Overlays) -> Overlays 
     out.screen.clear();
     out.now_ms = now_ms;
     selection_overlay(ed, &mut out);
+    search_overlay(ed, &mut out);
     ed.tools.get(ed.tool).paint(ed, &mut out);
     pull_overlay(ed, &mut out);
     out
@@ -236,6 +242,30 @@ fn pixel_in_points(ed: &Editor) -> f32 {
 }
 
 /// The selection: its strokes (moving with the drag) and a box around them.
+/// The places the search found that are on screen, lit over the page: the current one stronger.
+fn search_overlay(ed: &Editor, out: &mut Overlays) {
+    if !ed.search_open() {
+        return;
+    }
+    let (top, bottom) = ed.view.visible_y();
+    let pages = ed.layout.pages_in(top, bottom);
+    let (hit, current) = (ed.theme.search_hit, ed.theme.search_current);
+    for (i, h) in ed.search.hits().iter().enumerate() {
+        if !pages.contains(&(h.page as usize)) {
+            continue;
+        }
+        let colour = if i == ed.search.current() { current } else { hit };
+        for q in &h.rects {
+            if q[3] < top || q[1] > bottom {
+                continue;
+            }
+            let height = q[3] - q[1];
+            let ends = (height / 2.0).min((q[2] - q[0]) / 2.0);
+            out.doc.push(Capsule::new([q[0] + ends, q[1] + height / 2.0], [q[2] - ends, q[1] + height / 2.0], height, colour));
+        }
+    }
+}
+
 fn selection_overlay(ed: &Editor, out: &mut Overlays) {
     if ed.selection.is_empty() {
         return;

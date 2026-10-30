@@ -204,6 +204,23 @@ impl View {
         }
     }
 
+    /// Glide so that `rect` (`[x0, y0, x1, y1]`, in document space) is in view, if it is not: a rectangle that is shown (below `top_px`
+    /// pixels of the window, which toolbars cover) is left where it is; one that is not is brought to about a third of the way down.
+    pub fn scroll_to_show(&mut self, layout: &Layout, rect: [f32; 4], top_px: f32) {
+        if !rect.iter().all(|v| v.is_finite()) {
+            return;
+        }
+        let (view_w, view_h) = (self.viewport[0] / self.zoom, self.viewport[1] / self.zoom);
+        let top = self.scroll_target[1] + top_px / self.zoom;
+        if rect[1] < top || rect[3] > self.scroll_target[1] + view_h {
+            self.scroll_target[1] = rect[1] - view_h * 0.33;
+        }
+        if rect[0] < self.scroll_target[0] || rect[2] > self.scroll_target[0] + view_w {
+            self.scroll_target[0] = (rect[0] + rect[2]) / 2.0 - view_w / 2.0;
+        }
+        self.clamp(layout);
+    }
+
     /// Glide the zoom to `zoom` about `anchor`.
     pub fn zoom_to(&mut self, zoom: f32, anchor: [f32; 2]) {
         if zoom.is_finite() {
@@ -314,6 +331,23 @@ mod tests {
         assert_eq!(l.pages_in(0.0, l.height()), 0..3);
         assert_eq!(l.pages_in(-500.0, -100.0), 0..0);
         assert_eq!(l.pages_in(l.height() + 10.0, l.height() + 50.0), 3..3);
+    }
+
+    #[test]
+    fn showing_a_rectangle_moves_the_view_only_when_it_is_not_in_view() {
+        let layout = three_pages();
+        let mut v = View::new([800.0, 600.0]);
+        v.scroll_to_show(&layout, [100.0, 100.0, 200.0, 120.0], 100.0);
+        assert!(!v.animating(), "a rectangle in view is left");
+        v.scroll_to_show(&layout, [100.0, 2000.0, 200.0, 2020.0], 100.0);
+        assert!(v.animating(), "one below is brought up");
+        for _ in 0..400 {
+            v.step(&layout, 0.016);
+        }
+        let on = v.doc_to_screen([150.0, 2010.0]);
+        assert!(on[1] > 100.0 && on[1] < 600.0, "it ends in view, below the toolbars: {on:?}");
+        v.scroll_to_show(&layout, [f32::NAN, 0.0, 1.0, 1.0], 100.0);
+        assert!(v.scroll.iter().all(|c| c.is_finite()));
     }
 
     #[test]

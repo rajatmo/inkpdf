@@ -13,6 +13,7 @@ mod look;
 mod overview;
 mod prompt;
 mod save_as;
+mod search_card;
 mod theme;
 mod tool_panel;
 
@@ -35,6 +36,7 @@ pub use overview::{
 };
 pub use prompt::{PromptLayout, PromptView};
 pub use save_as::{ListingView, SaveAsHit, SaveAsLayout, SaveAsView};
+pub use search_card::{ROWS as SEARCH_ROWS, SearchItem, SearchLayout, SearchRow, SearchView};
 pub use theme::{Align, Image, Label, Ui};
 #[cfg(test)]
 pub use tool_panel::ToolPanel;
@@ -76,6 +78,8 @@ pub enum Item {
     AddPage,
     /// Open the pages overview.
     Pages,
+    /// Open or close the search card.
+    Search,
     Tool(Tool),
     /// Switch between the desktop and the tablet mode (and show which it is).
     ModeSwitch,
@@ -102,6 +106,8 @@ pub struct State {
     pub appearance: Appearance,
     pub dark: bool,
     pub dark_pages: bool,
+    /// The search card is open.
+    pub search: bool,
     pub tool: Tool,
     /// The colours the pen and the shape tool write in, shown on their buttons.
     pub pen_colour: [u8; 4],
@@ -125,6 +131,7 @@ impl Default for State {
             appearance: Appearance::default(),
             dark: false,
             dark_pages: false,
+            search: false,
             tool: Tool::Pen,
             pen_colour: PALETTE[0],
             shape_colour: PALETTE[1],
@@ -136,7 +143,7 @@ impl Default for State {
 }
 
 /// What goes in each pill, left to right; `None` is a gap with a hairline in it.
-const LEFT: [Option<Item>; 9] = [
+const LEFT: [Option<Item>; 10] = [
     Some(Item::Close),
     None,
     Some(Item::Undo),
@@ -146,6 +153,7 @@ const LEFT: [Option<Item>; 9] = [
     Some(Item::DeletePage),
     Some(Item::AddPage),
     Some(Item::Pages),
+    Some(Item::Search),
 ];
 const MIDDLE: [Option<Item>; 5] = [
     Some(Item::Tool(Tool::Pen)),
@@ -157,7 +165,7 @@ const MIDDLE: [Option<Item>; 5] = [
 const RIGHT: [Option<Item>; 4] = [Some(Item::Theme), Some(Item::DarkPages), Some(Item::ModeSwitch), Some(Item::Fullscreen)];
 
 /// Buttons in all.
-pub const BUTTONS: usize = 16;
+pub const BUTTONS: usize = 17;
 
 pub struct Toolbar {
     /// The three pills, `[x0, y0, x1, y1]` in pixels: left, middle, right.
@@ -173,9 +181,9 @@ impl Toolbar {
     /// Along the top of a viewport of `viewport` pixels, sized for `dpr`.
     pub fn layout(viewport: [f32; 2], dpr: f32) -> Toolbar {
         let (gap, pad, margin) = (10.0 * dpr, 8.0 * dpr, 12.0 * dpr);
-        // Shrink to fit narrow windows, never below something still tappable: the left pill (seven
+        // Shrink to fit narrow windows, never below something still tappable: the left pill (eight
         // buttons and two gaps) and half the middle one must fit in half the window.
-        let unit = (38.0 * dpr).min(((viewport[0] / 2.0 - margin - 3.0 * pad - 3.0 * gap) / 9.5).max(17.0 * dpr));
+        let unit = (38.0 * dpr).min(((viewport[0] / 2.0 - margin - 3.0 * pad - 3.0 * gap) / 10.5).max(17.0 * dpr));
         let height = unit + 2.0 * pad;
         let width_of = |slots: &[Option<Item>]| slots.iter().map(|s| if s.is_some() { unit } else { gap }).sum::<f32>() + 2.0 * pad;
         let (left_w, middle_w, right_w) = (width_of(&LEFT), width_of(&MIDDLE), width_of(&RIGHT));
@@ -294,6 +302,7 @@ impl Toolbar {
                 Item::DeletePage => icons.trash.draw(&mut ui.lines, cx, cy, half, line, ink(look.enabled[slot])),
                 Item::AddPage => icons.plus.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink),
                 Item::Pages => icons.pages.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink),
+                Item::Search => icons.search.draw(&mut ui.lines, cx, cy, half, line, if state.search { ui.pal.accent } else { ui.pal.ink }),
                 // The mode in use, drawn as the machine it is for; the tablet in the accent colour, as the one you chose
                 // to leave the desk for.
                 Item::ModeSwitch => match state.mode {

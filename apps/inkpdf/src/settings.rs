@@ -72,6 +72,9 @@ pub struct Settings {
     /// The look of the interface, and whether the pages are drawn dark too (only in effect when the look is dark).
     pub appearance: Appearance,
     pub dark_pages: bool,
+    /// How the search card matches: with the case, and as whole words.
+    pub search_case: bool,
+    pub search_words: bool,
     pub palette: [[u8; 4]; 5],
     pub tool: Tool,
     pub pen: ToolStyle,
@@ -86,6 +89,8 @@ impl Default for Settings {
         Self {
             appearance: Appearance::System,
             dark_pages: false,
+            search_case: false,
+            search_words: false,
             palette: PALETTE,
             tool: Tool::Pen,
             pen: ToolStyle::PEN,
@@ -113,6 +118,8 @@ impl Settings {
                 }
                 ["appearance", name] => out.appearance = Appearance::from_name(name).unwrap_or(out.appearance),
                 ["dark-pages", value] => out.dark_pages = value == "on",
+                ["search-case", value] => out.search_case = value == "on",
+                ["search-words", value] => out.search_words = value == "on",
                 ["tool", name] => out.tool = Tool::from_name(name).unwrap_or(out.tool),
                 ["shape", name] => out.shape = Shape::from_name(name).unwrap_or(out.shape),
                 ["slot", slot] => {
@@ -171,6 +178,11 @@ impl Settings {
         text.push_str(&format!("shape {}\nshape-slot {}\nshape-width {:.2}\n", self.shape.name(), self.shape_style.colour, self.shape_style.width));
         text.push_str(&format!("text-slot {}\ntext-size {:.2}\n", self.text_style.colour, self.text_style.width));
         text.push_str(&format!("appearance {}\ndark-pages {}\n", self.appearance.name(), if self.dark_pages { "on" } else { "off" }));
+        text.push_str(&format!(
+            "search-case {}\nsearch-words {}\n",
+            if self.search_case { "on" } else { "off" },
+            if self.search_words { "on" } else { "off" }
+        ));
         text
     }
 }
@@ -199,7 +211,7 @@ mod tests {
     use crate::tool::DEFAULT_WIDTH;
 
     fn everything_changed() -> Settings {
-        let mut s = Settings { appearance: Appearance::Dark, dark_pages: true, ..Settings::default() };
+        let mut s = Settings { appearance: Appearance::Dark, dark_pages: true, search_case: true, search_words: true, ..Settings::default() };
         s.palette[2] = [12, 34, 255, 255];
         s.palette[4] = [0, 0, 0, 255];
         s.tool = Tool::Geometry;

@@ -43,12 +43,10 @@ pub trait PageTextView: Send + Sync {
     #[allow(dead_code, reason = "the search card reads it (X5)")]
     fn plain_text(&self) -> String;
 
-    #[allow(dead_code, reason = "the search card calls it (X5)")]
     /// Where `needle` is, as ranges of glyphs: at most `limit` of them, matched with or without case, and as whole words or not.
     fn find(&self, needle: &str, case_sensitive: bool, whole_words: bool, limit: usize) -> Vec<Range<usize>>;
 }
 
-#[allow(dead_code, reason = "the search card is its user (X5)")]
 /// A line of context round a hit, for a list of results: the text of the range with up to `context` glyphs on each side, on one line
 /// (line breaks become spaces), with the hit's own place in it (as character offsets, for drawing it stronger).
 pub fn snippet(view: &dyn PageTextView, hit: Range<usize>, context: usize) -> (String, Range<usize>) {

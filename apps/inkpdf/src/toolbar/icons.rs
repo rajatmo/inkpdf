@@ -51,6 +51,8 @@ pub(super) struct Icons {
     pub dark_pages: Icon,
     /// The text selection's tool (an I-beam beside a marked word) and its three marks.
     pub text_select: Icon,
+    /// A magnifying glass: the search card.
+    pub search: Icon,
     pub highlight: Icon,
     pub underline: Icon,
     pub strikeout: Icon,
@@ -91,6 +93,7 @@ static ICONS: LazyLock<Icons> = LazyLock::new(|| Icons {
     theme_dark: Icon::from_svg(include_str!("../../icons/svg/theme-dark.svg")),
     dark_pages: Icon::from_svg(include_str!("../../icons/svg/dark-pages.svg")),
     text_select: Icon::from_svg(include_str!("../../icons/svg/text-select.svg")),
+    search: Icon::from_svg(include_str!("../../icons/svg/search.svg")),
     highlight: Icon::from_svg(include_str!("../../icons/svg/highlight.svg")),
     underline: Icon::from_svg(include_str!("../../icons/svg/underline.svg")),
     strikeout: Icon::from_svg(include_str!("../../icons/svg/strikeout.svg")),
@@ -407,6 +410,7 @@ mod tests {
             ("theme-dark", &all.theme_dark),
             ("dark-pages", &all.dark_pages),
             ("text-select", &all.text_select),
+            ("search", &all.search),
             ("highlight", &all.highlight),
             ("underline", &all.underline),
             ("strikeout", &all.strikeout),

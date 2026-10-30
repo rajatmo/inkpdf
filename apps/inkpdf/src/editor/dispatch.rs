@@ -33,6 +33,7 @@ impl Editor {
         match &self.chrome.act {
             Act::Toolbar { dev: d, id: a, .. }
             | Act::Context { dev: d, id: a, .. }
+            | Act::Search { dev: d, id: a, .. }
             | Act::Slider { dev: d, id: a, .. }
             | Act::Swallow { dev: d, id: a } => *d == dev && *a == id,
             Act::Idle => false,

@@ -38,7 +38,10 @@ impl Editor {
             Phase::Move => {
                 // A finger on the toolbar or its slider is not panning the page.
                 if self.act_belongs_to(Device::Touch, ev.id)
-                    && matches!(self.chrome.act, Act::Toolbar { .. } | Act::Context { .. } | Act::Slider { .. } | Act::Swallow { .. })
+                    && matches!(
+                        self.chrome.act,
+                        Act::Toolbar { .. } | Act::Context { .. } | Act::Search { .. } | Act::Slider { .. } | Act::Swallow { .. }
+                    )
                 {
                     self.pointer_moved(Device::Touch, ev.id, &ev.samples);
                     return;
@@ -57,7 +60,8 @@ impl Editor {
                     self.chrome.act = Act::Idle;
                     return;
                 }
-                if matches!(self.chrome.act, Act::Context { dev: Device::Touch, id, .. } if id == ev.id) {
+                if matches!(self.chrome.act, Act::Context { dev: Device::Touch, id, .. } | Act::Search { dev: Device::Touch, id, .. } if id == ev.id)
+                {
                     self.release_context(Device::Touch, ev.id, lifted.then_some(last.pos));
                     self.chrome.act = Act::Idle;
                     return;
@@ -96,6 +100,7 @@ impl Editor {
             self.chrome.act,
             Act::Toolbar { dev: Device::Touch, .. }
                 | Act::Context { dev: Device::Touch, .. }
+                | Act::Search { dev: Device::Touch, .. }
                 | Act::Slider { dev: Device::Touch, .. }
                 | Act::Swallow { dev: Device::Touch, .. }
         ) {

@@ -26,6 +26,18 @@ pub(super) struct Shown {
     pub(super) keys: HashSet<u64>,
     /// The overview as it was drawn last, kept while it goes out over a moment after it is put away.
     ghost: Option<Ui>,
+    /// The labels are the interface's own (the search card's text), not the overview's or the Save As card's: they are kept while the
+    /// interface is not rebuilt, where the others go when the overview does.
+    interface_labels: bool,
+}
+
+impl Shown {
+    /// The text of the interface over the page (it is rebuilt only when it changes, and what it says is kept till then).
+    pub(super) fn set_interface_text(&mut self, labels: Vec<Label>) {
+        self.images.clear();
+        self.labels = labels;
+        self.interface_labels = true;
+    }
 }
 
 fn label_key(label: &Label) -> u64 {
@@ -49,11 +61,13 @@ impl UiLayers {
                 cx.gpu.set_ui(&ui.panels, &ui.lines);
                 self.overview.images = ui.images;
                 self.overview.labels = ui.labels;
+                self.overview.interface_labels = false;
                 self.ui_built = None;
                 return true;
             }
             self.overview.ghost = None;
-            if !self.overview.images.is_empty() || !self.overview.labels.is_empty() {
+            let stale_labels = !self.overview.labels.is_empty() && !self.overview.interface_labels;
+            if !self.overview.images.is_empty() || stale_labels {
                 self.overview.images.clear();
                 self.overview.labels.clear();
                 self.overview.keys.clear();
@@ -67,6 +81,7 @@ impl UiLayers {
         self.overview.ghost = Some(ui.clone());
         self.overview.images = ui.images;
         self.overview.labels = ui.labels;
+        self.overview.interface_labels = false;
         // What the interface was built from is gone from the GPU: it is built afresh when the overview leaves.
         self.ui_built = None;
         true
@@ -83,6 +98,7 @@ impl UiLayers {
         cx.gpu.set_ui(&ui.panels, &ui.lines);
         self.overview.images.clear();
         self.overview.labels = ui.labels;
+        self.overview.interface_labels = false;
         // What the interface was built from is gone from the GPU: it is built afresh when the dialog leaves.
         self.ui_built = None;
         true

@@ -39,6 +39,9 @@ impl Editor {
             // The bar comes down into place as it comes in.
             let came = self.motions.bar_amount();
             ui.apply(coming, Xform::slide([0.0, -(1.0 - came) * 8.0 * self.ws.dpr], came));
+            if let (Some(card), Some(view)) = (self.search_layout(), self.search_view()) {
+                card.draw(&view, ui);
+            }
         }
         if let Some((view, amount)) = self.prompt_look() {
             PromptLayout::new(self.ws.view.viewport, self.ws.dpr).draw_with(view, amount, ui);
@@ -218,6 +221,7 @@ impl Editor {
                     self.insert_page_after(page);
                 }
                 Item::Pages => self.open_overview(),
+                Item::Search => self.toggle_search(),
                 // The last page there is stays (a document has at least one: the edit is refused).
                 Item::DeletePage => {
                     self.delete_current_page();

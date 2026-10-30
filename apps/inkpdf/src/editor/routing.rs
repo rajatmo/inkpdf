@@ -76,7 +76,8 @@ impl Editor {
         match self.modal() {
             Some(Modal::SaveAs) => true,
             Some(Modal::Prompt) => false,
-            Some(Modal::Overview) | None => self.ws.tool == Tool::Text && self.tools.text.is_typing(),
+            Some(Modal::Overview) => false,
+            None => self.search.open || (self.ws.tool == Tool::Text && self.tools.text.is_typing()),
         }
     }
 
@@ -118,6 +119,10 @@ impl Editor {
             Some(Modal::SaveAs) => return self.save_as_key(key),
             Some(Modal::Overview) => return self.overview_key(key),
             None => {}
+        }
+        // The card of the search has the keyboard while it is open.
+        if self.search.open && self.search_key(key) {
+            return true;
         }
         let mode = self.mode;
         let tool = self.tools.get_mut(self.ws.tool);
@@ -183,6 +188,7 @@ impl Editor {
         match (letter.as_str(), shift) {
             ("z", false) => self.undo(),
             ("z", true) | ("y", _) => self.redo(),
+            ("f", _) => self.toggle_search(),
             ("s", true) => {
                 self.settle();
                 self.ws.requests.push(Request::SaveAs);
@@ -264,6 +270,7 @@ impl Editor {
         let bar = self.toolbar();
         bar.contains(p)
             || self.context_bar().is_some_and(|c| c.contains(p))
+            || self.search_layout().is_some_and(|c| c.contains(p))
             || self.drawer().is_some_and(|d| crate::ink::rect_contains(d, p))
             || self
                 .chrome

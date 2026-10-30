@@ -457,6 +457,7 @@ fn poke(ed: &mut Editor, rng: &mut Rng, hostile: bool) -> String {
                 Item::ModeSwitch,
                 Item::Theme,
                 Item::DarkPages,
+                Item::Search,
             ];
             let at = ed.toolbar().centre_of(rng.pick(&items));
             what = format!("tap the toolbar at {at:?}");

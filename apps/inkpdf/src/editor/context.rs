@@ -55,6 +55,12 @@ impl Editor {
 
     /// A press at `pos`: if it is on the bar, it is the bar's (and the button is pressed when it lets go).
     pub(super) fn press_context(&mut self, dev: Device, id: u32, pos: [f32; 2]) -> bool {
+        // (The search card floats over the page, under the bars: it takes the press first.)
+        if let Some(card) = self.search_layout().filter(|c| c.contains(pos)) {
+            self.chrome.act = Act::Search { dev, id, item: card.hit(pos) };
+            self.ws.redraw = true;
+            return true;
+        }
         let Some(bar) = self.context_bar().filter(|b| b.contains(pos)) else { return false };
         self.chrome.act = Act::Context { dev, id, item: bar.hit(pos) };
         self.ws.redraw = true;
@@ -63,6 +69,12 @@ impl Editor {
 
     /// If the pointer pressed a button of the bar and is still over it, press it.
     pub(super) fn release_context(&mut self, dev: Device, id: u32, pos: Option<[f32; 2]>) {
+        if let Act::Search { dev: d, id: a, item: Some(item) } = self.chrome.act {
+            if d == dev && a == id && pos.is_some_and(|p| self.search_layout().and_then(|c| c.hit(p)) == Some(item)) {
+                self.press_search_item(item);
+            }
+            return;
+        }
         let Act::Context { dev: d, id: a, item: Some(item) } = self.chrome.act else { return };
         if d != dev || a != id {
             return;

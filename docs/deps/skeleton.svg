@@ -480,7 +480,7 @@
 <!-- toolbar&#45;&gt;scene -->
 <g id="edge62" class="edge">
 <title>toolbar&#45;&gt;scene</title>
-<g id="a_edge62"><a xlink:title="20 uses">
+<g id="a_edge62"><a xlink:title="21 uses">
 <path fill="none" stroke="#a14a96" stroke-width="1.6" stroke-opacity="0.600000" d="M983.79,-471.39C961.99,-476.96 933.05,-483.57 907,-487 835.89,-496.36 326.88,-482.43 262,-513 250.28,-518.52 240.36,-528.87 233.02,-538.55"/>
 <polygon fill="#a14a96" fill-opacity="0.600000" stroke="#a14a96" stroke-width="1.6" stroke-opacity="0.600000" points="231.23,-537.43 229.41,-543.52 234.64,-539.9 231.23,-537.43"/>
 </a>
@@ -489,7 +489,7 @@
 <!-- toolbar&#45;&gt;text -->
 <g id="edge64" class="edge">
 <title>toolbar&#45;&gt;text</title>
-<g id="a_edge64"><a xlink:title="2 uses">
+<g id="a_edge64"><a xlink:title="3 uses">
 <path fill="none" stroke="#a14a96" stroke-width="1.6" stroke-opacity="0.600000" d="M983.78,-471.34C961.98,-476.89 933.04,-483.5 907,-487 844.61,-495.39 397.38,-485 341,-513 329.85,-518.54 320.66,-528.75 313.91,-538.34"/>
 <polygon fill="#a14a96" fill-opacity="0.600000" stroke="#a14a96" stroke-width="1.6" stroke-opacity="0.600000" points="312.01,-537.42 310.42,-543.57 315.5,-539.75 312.01,-537.42"/>
 </a>
@@ -591,7 +591,7 @@
 <!-- editor&#45;&gt;toolbar -->
 <g id="edge14" class="edge">
 <title>editor&#45;&gt;toolbar</title>
-<g id="a_edge14"><a xlink:title="8 uses">
+<g id="a_edge14"><a xlink:title="12 uses">
 <path fill="none" stroke="#6a5acd" stroke-width="1.6" stroke-opacity="0.600000" d="M1007.62,-176.05C1009.48,-226.94 1015,-377.88 1017.14,-436.42"/>
 <polygon fill="#6a5acd" fill-opacity="0.600000" stroke="#6a5acd" stroke-width="1.6" stroke-opacity="0.600000" points="1015.05,-436.85 1017.37,-442.77 1019.25,-436.7 1015.05,-436.85"/>
 </a>
@@ -600,7 +600,7 @@
 <!-- editor&#45;&gt;tools -->
 <g id="edge15" class="edge">
 <title>editor&#45;&gt;tools</title>
-<g id="a_edge15"><a xlink:title="7 uses">
+<g id="a_edge15"><a xlink:title="8 uses">
 <path fill="none" stroke="#6a5acd" stroke-width="1.6" stroke-opacity="0.600000" d="M1031.24,-176.02C1055.45,-193.02 1092.7,-219.17 1118.59,-237.35"/>
 <polygon fill="#6a5acd" fill-opacity="0.600000" stroke="#6a5acd" stroke-width="1.6" stroke-opacity="0.600000" points="1117.49,-239.14 1123.61,-240.87 1119.9,-235.71 1117.49,-239.14"/>
 </a>

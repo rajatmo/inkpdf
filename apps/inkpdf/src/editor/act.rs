@@ -3,7 +3,7 @@
 //! the tools' own: see [`crate::tools`].)
 
 use crate::input::Device;
-use crate::toolbar::{ContextItem, Item, Slider};
+use crate::toolbar::{ContextItem, Item, SearchItem, Slider};
 
 #[derive(Clone, Debug, Default)]
 pub(crate) enum Act {
@@ -19,6 +19,12 @@ pub(crate) enum Act {
         dev: Device,
         id: u32,
         item: Option<ContextItem>,
+    },
+    /// A press on a part of the search card (see [`crate::toolbar::SearchLayout`]).
+    Search {
+        dev: Device,
+        id: u32,
+        item: Option<SearchItem>,
     },
     /// Dragging one of the sliders in the pen panel.
     Slider {

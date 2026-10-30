@@ -7,6 +7,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.util.Log;
+import android.widget.Toast;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -108,10 +110,18 @@ public class Host extends NativeActivity {
                     ClipboardManager clipboard = (ClipboardManager) host.getSystemService(Context.CLIPBOARD_SERVICE);
                     clipboard.setPrimaryClip(ClipData.newPlainText("InkPDF", text == null ? "" : text));
                 } else {
-                    host.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(text)));
+                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(text));
+                    intent.addCategory(Intent.CATEGORY_BROWSABLE);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    host.startActivity(intent);
                 }
             } catch (Exception e) {
                 host.lastError = String.valueOf(e);
+                Log.e("inkpdf", "could not do it (" + what + "): " + e);
+                if (what == URL) {
+                    // (Said on the screen too: a link that does nothing is the worst of it.)
+                    Toast.makeText(host, "Could not open the link: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                }
             }
         }
     }

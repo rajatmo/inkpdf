@@ -21,12 +21,6 @@ pub fn env_scheme() -> Option<crate::palette::Scheme> {
     }
 }
 
-/// Where the toolkit does not say what the system's look is and nothing else does yet: not known.
-#[cfg(target_os = "android")]
-pub fn color_scheme() -> Option<crate::palette::Scheme> {
-    env_scheme()
-}
-
 /// Report a problem before there is a window: on the terminal.
 pub fn report_fatal(text: &str) {
     eprintln!("{text}");

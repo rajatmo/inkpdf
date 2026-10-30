@@ -870,7 +870,7 @@
 <!-- platform&#45;&gt;palette -->
 <g id="edge42" class="edge">
 <title>platform&#45;&gt;palette</title>
-<g id="a_edge42"><a xlink:title="11 uses">
+<g id="a_edge42"><a xlink:title="13 uses">
 <path fill="none" stroke="#555555" stroke-width="1.6" stroke-opacity="0.600000" d="M885.39,-479.03C881.81,-506.67 870.53,-560.9 836,-588 697.49,-696.68 614.77,-602.17 444,-645 441.76,-645.56 439.49,-646.19 437.2,-646.86"/>
 <polygon fill="#555555" fill-opacity="0.600000" stroke="#555555" stroke-width="1.6" stroke-opacity="0.600000" points="436.25,-644.96 431.15,-648.74 437.5,-648.97 436.25,-644.96"/>
 </a>

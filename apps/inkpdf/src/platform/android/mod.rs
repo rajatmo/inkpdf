@@ -15,7 +15,21 @@ use super::{PointerSource, Waker};
 use crate::browse::Place;
 use crate::input::Mode;
 
-pub use super::stubs::{SystemClipboard, attach_parent_console, color_scheme, error_box, motion_prefs, report_fatal, system_font};
+pub use super::stubs::{SystemClipboard, attach_parent_console, error_box, motion_prefs, report_fatal, system_font};
+
+/// What the system says its look is: the configuration's night mode (the activity keeps it current as the user switches the system between light and
+/// dark), unless `INKPDF_THEME` says otherwise for a run. `None` when the system does not say.
+pub fn color_scheme() -> Option<crate::palette::Scheme> {
+    use winit::platform::android::activity::ndk::configuration::UiModeNight;
+    if let Some(scheme) = super::stubs::env_scheme() {
+        return Some(scheme);
+    }
+    match APP.get()?.config().ui_mode_night() {
+        UiModeNight::Yes => Some(crate::palette::Scheme::Dark),
+        UiModeNight::No => Some(crate::palette::Scheme::Light),
+        _ => None,
+    }
+}
 
 /// The Java side of the app (see `host`), made when the activity starts.
 static HOST: OnceLock<std::sync::Arc<host::Host>> = OnceLock::new();

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.2
+
+- **Android follows the system's light and dark look** (set "system" with the theme button): the program reads the activity's night mode, and
+  looks again each time its loop wakes, so switching the system theme while the app is open is followed.
+- Android links: a link that cannot be opened is now said on the screen (a message) and in the log (`adb logcat -s inkpdf`), and the request
+  carries the browsable category and a new task, as a browser expects. (If links still do nothing, the message says why.)
+
 ## 1.3.1
 
 - The **Select tool** is the first button of the tools and the one the program starts on (a settings file that names another tool keeps it).

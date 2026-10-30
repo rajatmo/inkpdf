@@ -101,8 +101,9 @@ impl Bridge for Host {
     fn open_url(&self, url: &str) {
         if let Ok(mut env) = self.env()
             && let Ok(url) = env.new_string(url)
+            && let Err(why) = self.call(&mut env, "openUrl", "(Ljava/lang/String;)V", &[JValue::Object(&url)])
         {
-            let _ = self.call(&mut env, "openUrl", "(Ljava/lang/String;)V", &[JValue::Object(&url)]);
+            eprintln!("could not hand the link to the system: {why}");
         }
     }
 

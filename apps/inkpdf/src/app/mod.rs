@@ -444,6 +444,14 @@ impl State {
             self.redraw();
             self.service();
         }
+        // (Where nothing says the system's look changed, look again: a change is one call, and nothing else.)
+        if self.platform.watches_color_scheme() {
+            let before = self.ed.scheme();
+            self.refresh_system_scheme();
+            if self.ed.scheme() != before {
+                self.window.request_redraw();
+            }
+        }
         // A convertible was turned into a tablet, or back.
         if self.pointer.as_mut().is_some_and(|p| p.take_posture_change()) && !self.mode_forced {
             self.set_mode(self.platform.detect_mode());

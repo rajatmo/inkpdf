@@ -69,6 +69,11 @@ pub trait Platform {
     /// What the system says its look is (light or dark), for where the windowing toolkit cannot say: it can on Windows (the shell asks
     /// the window), not on X11, nor Android. `INKPDF_THEME=light|dark` says it for a run. `None` when it is not known (taken as light).
     fn color_scheme(&self) -> Option<crate::palette::Scheme>;
+    /// Whether the system's look can change while the program is in front of the person, with nothing the program is told of (Android: the
+    /// quick settings switch it): the shell then looks again each time its loop wakes.
+    fn watches_color_scheme(&self) -> bool {
+        false
+    }
     /// Where this platform keeps files: by path on the file system, or in whatever its own picker hands out.
     fn file_store(&self) -> Arc<dyn FileStore>;
     /// The bytes of the font the system draws text in, if its widths are the ones PDF readers use (Arial). Without one the program's
@@ -168,6 +173,10 @@ impl Platform for Native {
 
     fn motion_prefs(&self) -> Prefs {
         os::motion_prefs()
+    }
+
+    fn watches_color_scheme(&self) -> bool {
+        cfg!(target_os = "android")
     }
 
     fn file_store(&self) -> Arc<dyn FileStore> {

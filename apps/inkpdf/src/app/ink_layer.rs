@@ -23,11 +23,13 @@ pub(super) struct InkStamp {
     strokes: usize,
     selection: u64,
     erasing: u64,
+    /// Whether the pages are dark: the ink is drawn in other colours then.
+    dark: bool,
 }
 
 impl InkStamp {
     /// Matches no real state, so the first sync always builds.
-    pub const NEVER: InkStamp = InkStamp { revision: u64::MAX, strokes: 0, selection: 0, erasing: 0 };
+    pub const NEVER: InkStamp = InkStamp { revision: u64::MAX, strokes: 0, selection: 0, erasing: 0, dark: false };
 
     fn of(ed: &Editor) -> Self {
         Self {
@@ -36,6 +38,7 @@ impl InkStamp {
             // (With the pages overview up the document is not seen, and its pictures show every stroke: none is hidden.)
             selection: if ed.overview_open() { 0 } else { hash_ids(ed.selection.iter(), 0x9E37_79B9_7F4A_7C15) },
             erasing: if ed.overview_open() { 0 } else { hash_ids(ed.erasing.iter(), 0xC2B2_AE3D_27D4_EB4F) },
+            dark: ed.dark_pages_active(),
         }
     }
 }
@@ -61,7 +64,7 @@ fn plan_refresh(built: &InkStamp, now: &InkStamp, ink: &InkStore, ranges: usize)
     if built == now {
         return Refresh::Current;
     }
-    let hidden_unchanged = built.selection == now.selection && built.erasing == now.erasing;
+    let hidden_unchanged = built.selection == now.selection && built.erasing == now.erasing && built.dark == now.dark;
     let appended = *built != InkStamp::NEVER && ink.only_appended_since(built.revision) && built.strokes <= now.strokes;
     if hidden_unchanged && appended && ranges < MAX_RANGES { Refresh::Append { from: built.strokes } } else { Refresh::Rebuild }
 }
@@ -145,7 +148,7 @@ impl UiLayers {
         let mut ranges: Vec<(u32, Range<u32>)> = Vec::new();
         for s in new {
             let start = base + capsules.len() as u32;
-            stroke_capsules(s, [0.0, 0.0], &mut capsules);
+            stroke_capsules(s, [0.0, 0.0], cx.ed.on_page(s.style.rgba), &mut capsules);
             push_range(&mut ranges, s.page, start..base + capsules.len() as u32);
         }
         if !cx.gpu.append_committed(&capsules) {
@@ -168,7 +171,7 @@ impl UiLayers {
         self.ink_pages.clear();
         for s in shown {
             let start = all.len() as u32;
-            stroke_capsules(s, [0.0, 0.0], &mut all);
+            stroke_capsules(s, [0.0, 0.0], ed.on_page(s.style.rgba), &mut all);
             push_range(&mut self.ink_pages, s.page, start..all.len() as u32);
         }
         cx.gpu.set_committed(&all);
@@ -245,8 +248,8 @@ fn selection_overlay(ed: &Editor, out: &mut Overlays) {
     for s in ed.ink.strokes().iter().filter(|s| selected.contains(&s.id)) {
         match &live {
             // (Exactly as it is: a shape is never smoothed, so its straight segments stay straight.)
-            Some((id, pts)) if *id == s.id => push_polyline(&mut out.doc, pts, s.style.width, s.style.rgba),
-            _ => stroke_capsules(s, offset, &mut out.doc),
+            Some((id, pts)) if *id == s.id => push_polyline(&mut out.doc, pts, s.style.width, ed.on_page(s.style.rgba)),
+            _ => stroke_capsules(s, offset, ed.on_page(s.style.rgba), &mut out.doc),
         }
     }
     // A single shape is shown by its anchors instead of a box, and a text box being typed into by
@@ -302,7 +305,7 @@ fn pull_overlay(ed: &Editor, out: &mut Overlays) {
 /// shape exactly as its points are (they are already as fine as the shape needs, and smoothing would
 /// bend its straight segments). A text box has none: its points are only the outline, and its text
 /// is drawn from a bitmap.
-fn stroke_capsules(s: &Stroke, offset: [f32; 2], out: &mut Vec<Capsule>) {
+fn stroke_capsules(s: &Stroke, offset: [f32; 2], colour: [u8; 4], out: &mut Vec<Capsule>) {
     if s.text.is_some() {
         return;
     }
@@ -310,8 +313,8 @@ fn stroke_capsules(s: &Stroke, offset: [f32; 2], out: &mut Vec<Capsule>) {
     let curve = if s.figure.is_some() { s.pts.clone() } else { curve_through(&s.pts, CURVE_STEP) };
     match curve.as_slice() {
         [] => {}
-        [p] => out.push(Capsule::new(at(p), at(p), s.style.width, s.style.rgba)),
-        pts => out.extend(pts.windows(2).map(|w| Capsule::new(at(&w[0]), at(&w[1]), s.style.width, s.style.rgba))),
+        [p] => out.push(Capsule::new(at(p), at(p), s.style.width, colour)),
+        pts => out.extend(pts.windows(2).map(|w| Capsule::new(at(&w[0]), at(&w[1]), s.style.width, colour))),
     }
 }
 
@@ -337,7 +340,7 @@ mod tests {
     const PEN: Style = Style { rgba: [0, 0, 0, 255], width: 2.0 };
 
     fn stamp(ink: &InkStore) -> InkStamp {
-        InkStamp { revision: ink.revision(), strokes: ink.strokes().len(), selection: 0, erasing: 0 }
+        InkStamp { revision: ink.revision(), strokes: ink.strokes().len(), selection: 0, erasing: 0, dark: false }
     }
 
     fn drawn(ink: &mut InkStore, n: usize) {
@@ -354,15 +357,24 @@ mod tests {
         ink.add(0, PEN, pts.clone());
         ink.add_figure(0, PEN, crate::figure::Figure::Poly { points: pts.clone(), closed: false });
         let (mut hand, mut shape) = (Vec::new(), Vec::new());
-        stroke_capsules(&ink.strokes()[0], [0.0, 0.0], &mut hand);
-        stroke_capsules(&ink.strokes()[1], [0.0, 0.0], &mut shape);
+        stroke_capsules(&ink.strokes()[0], [0.0, 0.0], PEN.rgba, &mut hand);
+        stroke_capsules(&ink.strokes()[1], [0.0, 0.0], PEN.rgba, &mut shape);
         assert!(hand.len() > 20, "handwriting is drawn along a smooth curve ({} pieces)", hand.len());
         assert_eq!(shape.len(), 2, "a shape's straight segments are drawn as they are");
         assert_eq!((shape[0].a, shape[0].b, shape[1].a, shape[1].b), (pts[0], pts[1], pts[1], pts[2]));
         // Moved with a drag, the same.
         let mut moved = Vec::new();
-        stroke_capsules(&ink.strokes()[1], [5.0, -2.0], &mut moved);
+        stroke_capsules(&ink.strokes()[1], [5.0, -2.0], PEN.rgba, &mut moved);
         assert_eq!((moved[0].a, moved[1].b), ([5.0, -2.0], [205.0, -2.0]));
+    }
+
+    #[test]
+    fn a_change_of_the_pages_look_rebuilds_the_ink_because_it_is_drawn_in_other_colours() {
+        let mut ink = InkStore::new();
+        drawn(&mut ink, 3);
+        let dark = InkStamp { dark: true, ..stamp(&ink) };
+        assert_eq!(plan_refresh(&stamp(&ink), &dark, &ink, 1), Refresh::Rebuild);
+        assert_eq!(plan_refresh(&dark, &dark, &ink, 1), Refresh::Current);
     }
 
     #[test]

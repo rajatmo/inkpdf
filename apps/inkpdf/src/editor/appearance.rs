@@ -1,7 +1,7 @@
 //! The look of the interface: which scheme it has (the user's choice, or what the system says), the fade between two, and the colours
 //! the tools paint their handles in. The pages stay as the document has them unless dark pages is on and the scheme is dark.
 
-use crate::palette::{DARK, LIGHT, Palette, Scheme};
+use crate::palette::{DARK, DARK_PAPER, LIGHT, Palette, Scheme};
 use crate::requests::Request;
 use crate::settings::Appearance;
 
@@ -40,10 +40,9 @@ impl Editor {
         self.theme_changed();
     }
 
-    #[allow(dead_code, reason = "the page renderer asks (T6)")]
     /// Whether the pages are drawn dark now: the setting is on and the look is dark.
     pub fn dark_pages_active(&self) -> bool {
-        self.ws.dark_pages && self.scheme() == Scheme::Dark
+        self.ws.dark_pages_active()
     }
 
     /// What the system says its look is (the shell tells it at the start and when it changes).
@@ -61,7 +60,12 @@ impl Editor {
 
     /// The colours the interface is drawn in now: those of the look it is heading for, or a mix of the two while it fades.
     pub fn palette(&self) -> Palette {
-        Palette::mix(&LIGHT, &DARK, self.motions.theme_amount())
+        let mut palette = Palette::mix(&LIGHT, &DARK, self.motions.theme_amount());
+        // (The paper the overview draws behind each page's picture is the page's: dark when the pages are.)
+        if self.ws.dark_pages_active() {
+            palette.paper = [DARK_PAPER[0], DARK_PAPER[1], DARK_PAPER[2], 255];
+        }
+        palette
     }
 
     /// The tools paint in what the interface is drawn in; this brings the workspace's copy up to date.

@@ -90,7 +90,7 @@ impl UiLayers {
                 continue;
             }
             let moved = if ed.selection.contains(&s.id) { shift } else { [0.0, 0.0] };
-            let key = ensure(cx.gpu, &block.text, block.size, s.style.rgba, level);
+            let key = ensure(cx.gpu, &block.text, block.size, ed.on_page(s.style.rgba), level);
             used.insert(key);
             self.text_draws.push(TextDraw {
                 page: s.page,
@@ -102,7 +102,7 @@ impl UiLayers {
         if let Some(edit) = ed.text_edit()
             && visible.contains(&(edit.page as usize))
         {
-            let key = ensure(cx.gpu, &edit.text, edit.size, edit.rgba, level);
+            let key = ensure(cx.gpu, &edit.text, edit.size, ed.on_page(edit.rgba), level);
             used.insert(key);
             self.text_draws.push(TextDraw { page: edit.page, key, top_left: edit.top_left, size: text::measure(&edit.text, edit.size) });
         }
@@ -142,7 +142,7 @@ impl UiLayers {
             if s.page != page {
                 continue;
             }
-            let key = ensure(cx.gpu, &block.text, block.size, s.style.rgba, level);
+            let key = ensure(cx.gpu, &block.text, block.size, cx.ed.on_page(s.style.rgba), level);
             keys.insert(key);
             let Some(size) = cx.gpu.text_size(key) else { continue };
             let map = |p: P| [origin[0] + (p[0] - at[0]) * scale, origin[1] + (p[1] - at[1]) * scale];

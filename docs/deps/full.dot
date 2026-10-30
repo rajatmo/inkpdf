@@ -1,6 +1,6 @@
 digraph G {
 rankdir=BT; newrank=true; compound=true; splines=true; nodesep=0.35; ranksep=0.9; pad=0.4;
-label=<<b>InkPDF module dependencies (all 148 edges; arrows point at what is used; line weight = uses)</b>>; labelloc=t; fontsize=22; fontname="Helvetica";
+label=<<b>InkPDF module dependencies (all 150 edges; arrows point at what is used; line weight = uses)</b>>; labelloc=t; fontsize=22; fontname="Helvetica";
 node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=13, margin="0.14,0.07", color="#888888"];
 edge [arrowsize=0.6];
 subgraph cluster_Base { label="base — plain data and arithmetic"; labeljust=l; fontname="Helvetica"; fontsize=14; style="rounded,filled"; fillcolor="#e8f1fb55"; color="#4a7fb5";
@@ -67,7 +67,8 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "app" -> "input" [color="#55555599", penwidth=2.20, tooltip="6 uses"];
 "app" -> "links" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "app" -> "pages" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
-"app" -> "palette" [color="#55555599", penwidth=1.59, tooltip="2 uses"];
+"app" -> "palette" [color="#55555599", penwidth=1.80, tooltip="3 uses"];
+"app" -> "pdf" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "app" -> "platform" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "app" -> "requests" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "app" -> "scene" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
@@ -139,6 +140,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "path_store" -> "store" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "pdf" -> "coords" [color="#55555599", penwidth=1.59, tooltip="2 uses"];
 "pdf" -> "pagetext" [color="#55555599", penwidth=1.59, tooltip="2 uses"];
+"pdf" -> "palette" [color="#55555599", penwidth=1.59, tooltip="2 uses"];
 "pdf_read" -> "coords" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "pdf_read" -> "links" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "pdf_read" -> "outline" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
@@ -200,7 +202,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "workspace" -> "geometry" [color="#b8860b99", penwidth=1.30, tooltip="1 uses"];
 "workspace" -> "ink" [color="#b8860b99", penwidth=1.80, tooltip="3 uses"];
 "workspace" -> "input" [color="#b8860b99", penwidth=1.30, tooltip="1 uses"];
-"workspace" -> "palette" [color="#b8860b99", penwidth=1.30, tooltip="1 uses"];
+"workspace" -> "palette" [color="#b8860b99", penwidth=1.80, tooltip="3 uses"];
 "workspace" -> "requests" [color="#b8860b99", penwidth=1.30, tooltip="1 uses"];
 "workspace" -> "settings" [color="#b8860b99", penwidth=1.30, tooltip="1 uses"];
 "workspace" -> "smooth" [color="#b8860b99", penwidth=1.30, tooltip="1 uses"];

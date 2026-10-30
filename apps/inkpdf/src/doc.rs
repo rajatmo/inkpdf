@@ -14,7 +14,7 @@ use crate::page_table::PageTable;
 use crate::pages::PageEdit;
 #[cfg(test)]
 use crate::path_store::PathStore;
-use crate::pdf::{self, RenderPool, RenderRequest, Rendered};
+use crate::pdf::{self, PageLook, RenderPool, RenderRequest, Rendered};
 use crate::store::{DocId, FileStore};
 use crate::tiles::{self, Key};
 use crate::view::Layout;
@@ -41,6 +41,9 @@ pub struct Doc {
     render_sizes: Vec<[f32; 2]>,
     pool: Box<dyn RenderPool>,
     queued: Vec<RenderRequest>,
+    /// What the renderer draws from (the file without the ink this program keeps itself), and how it draws it.
+    render_bytes: Arc<Vec<u8>>,
+    look: PageLook,
 }
 
 impl Doc {
@@ -90,7 +93,7 @@ impl Doc {
         // (In a damaged file the outline and the links can name pages the renderer does not show.)
         crate::outline::limit_to(&mut outline, sizes.len());
         crate::links::limit_to(&mut links, sizes.len());
-        let pool = pdf::native().render_pool(render_bytes.clone(), render_threads());
+        let pool = pdf::native().render_pool(render_bytes.clone(), render_threads(), PageLook::Plain);
         let sizes_of_file = sizes.clone();
         let doc = Doc {
             id,
@@ -103,6 +106,8 @@ impl Doc {
             render_sizes: sizes_of_file,
             pool,
             queued: Vec::new(),
+            render_bytes,
+            look: PageLook::Plain,
         };
         Ok((doc, strokes))
     }
@@ -177,6 +182,24 @@ impl Doc {
             self.pool.set_queue(requests.clone());
             self.queued = requests;
         }
+    }
+
+    /// How the pages are drawn now.
+    #[cfg(test)]
+    pub fn look(&self) -> PageLook {
+        self.look
+    }
+
+    /// Draw the pages in another look: a new pool takes over (what the old one had under way is dropped with it) and everything must be
+    /// asked for again. `false` if it already is that look.
+    pub fn set_look(&mut self, look: PageLook) -> bool {
+        if self.look == look {
+            return false;
+        }
+        self.pool = pdf::native().render_pool(self.render_bytes.clone(), render_threads(), look);
+        self.queued.clear();
+        self.look = look;
+        true
     }
 
     pub fn try_recv(&self) -> Option<Rendered> {
@@ -498,6 +521,45 @@ mod tests {
         let (_, strokes) = Doc::open(&path).expect("reopen");
         assert_eq!(strokes.len(), 2, "the old stroke and the new one, each once");
         assert!(strokes.iter().all(|s| s.0 == last + 1));
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_dark_look_draws_the_pages_dark_and_leaves_what_is_saved_as_it_is() {
+        let dir = temp_dir("dark-look");
+        let (plain, dark) = (dir.join("plain.pdf"), dir.join("dark.pdf"));
+        for (path, look) in [(&plain, pdf::PageLook::Plain), (&dark, pdf::PageLook::Dark)] {
+            fs::write(path, sample_pdf()).expect("write");
+            let (mut doc, _) = Doc::open(path).expect("open");
+            assert_eq!(doc.look(), pdf::PageLook::Plain);
+            assert_eq!(doc.set_look(look), look == pdf::PageLook::Dark, "a change is reported, no change is not");
+            assert!(!doc.set_look(look));
+            doc.set_queue(&[Key::Preview { page: 0 }]);
+            let started = Instant::now();
+            let page = loop {
+                if let Some(page) = doc.try_recv() {
+                    break page;
+                }
+                assert!(started.elapsed().as_secs() < 20, "the page was never rendered");
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            };
+            let pixels = page.rgba.as_slice();
+            let mean = pixels.chunks(4).map(|p| u64::from(p[0]) + u64::from(p[1]) + u64::from(p[2])).sum::<u64>() / (pixels.len() as u64 / 4) / 3;
+            assert_eq!(mean < 100, look == pdf::PageLook::Dark, "the page is drawn {look:?}: its mean is {mean}");
+            let mut store = InkStore::new();
+            store.mark_dirty(0);
+            let at = doc.layout().page(0).expect("page");
+            store.add(0, RED, vec![[at.x + 40.0, at.y + 40.0], [at.x + 140.0, at.y + 60.0]]);
+            doc.save(&store).expect("save");
+        }
+        // (The annotation names carry a clock, so the bytes are compared by what they say: the same size, the same ink read back.)
+        let (a, b) = (fs::read(&plain).expect("plain"), fs::read(&dark).expect("dark"));
+        assert_eq!(a.len(), b.len(), "the look is display only: the saved files are the same size");
+        let strokes = |path: &Path| {
+            Doc::open(path).expect("reopen").1.into_iter().map(|(page, style, pts, _, _)| (page, style.rgba, pts.len())).collect::<Vec<_>>()
+        };
+        assert_eq!(strokes(&plain), strokes(&dark), "with the same ink in them");
+        assert_eq!(strokes(&dark).len(), 1);
         let _ = fs::remove_dir_all(dir);
     }
 

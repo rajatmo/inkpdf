@@ -98,7 +98,13 @@ fn the_look_goes_through_the_settings_and_back() {
     assert_eq!(fresh.appearance(), Appearance::Dark);
     assert!(fresh.dark_pages());
     fresh.step_view(0.016);
-    assert_eq!(fresh.palette(), DARK, "a restored look is there from the first frame, not faded to");
+    let mut dark = DARK;
+    dark.paper = [crate::palette::DARK_PAPER[0], crate::palette::DARK_PAPER[1], crate::palette::DARK_PAPER[2], 255];
+    assert_eq!(
+        fresh.palette(),
+        dark,
+        "a restored look is there from the first frame, not faded to (and the overview's paper is dark with the pages)"
+    );
 }
 
 fn pen_tap(ed: &mut Editor, at: [f32; 2]) {
@@ -144,4 +150,33 @@ fn the_buttons_show_the_choice_they_hold() {
         format!("{:?}", ui.lines)
     };
     assert_ne!(draw(before), draw(after), "another icon, another colour");
+}
+
+#[test]
+fn ink_is_shown_turned_over_on_dark_pages_and_what_is_kept_is_the_colour_chosen() {
+    let mut ed = editor();
+    let black = [28, 30, 36, 255];
+    assert_eq!(ed.on_page(black), black, "light pages show the colour as it is");
+    ed.set_appearance(Appearance::Dark);
+    assert_eq!(ed.on_page(black), black, "a dark look alone does not touch the pages");
+    ed.set_dark_pages(true);
+    let shown = ed.on_page(black);
+    assert!(shown[0] > 200 && shown[1] > 200 && shown[2] > 200, "black ink is light on a dark page: {shown:?}");
+    let pts: Vec<[f32; 2]> = (0..20).map(|i| on_page(&ed, 100.0 + i as f32 * 8.0, 200.0 + (i as f32 * 0.5).sin() * 20.0)).collect();
+    pen_stroke(&mut ed, TIP, &pts);
+    assert_eq!(ed.ink.strokes()[0].style.rgba, black, "the stroke keeps the colour chosen");
+    ed.set_appearance(Appearance::Light);
+    assert_eq!(ed.on_page(black), black, "and it is as it was when the look is light again");
+}
+
+#[test]
+fn the_overviews_paper_follows_the_pages() {
+    let mut ed = editor();
+    ed.step_view(0.016);
+    assert_eq!(ed.palette().paper, LIGHT.paper);
+    ed.set_appearance(Appearance::Dark);
+    ed.set_dark_pages(true);
+    ed.step_view(0.016);
+    let paper = ed.palette().paper;
+    assert_eq!([paper[0], paper[1], paper[2]], crate::palette::DARK_PAPER);
 }

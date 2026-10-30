@@ -26,6 +26,13 @@ impl UiLayers {
         let level = tiles::level_for(zoom);
         let (top, bottom) = view.visible_y();
         let resident: HashSet<Key> = cx.gpu.keys().collect();
+        // (The paper under a page that has not been drawn yet, and under a page that was added: white, or the dark paper.)
+        let paper = if cx.ed.dark_pages_active() {
+            let [r, g, b] = crate::palette::DARK_PAPER.map(|v| f32::from(v) / 255.0);
+            [r, g, b, 1.0]
+        } else {
+            [1.0; 4]
+        };
         for page in cx.ed.layout.pages_in(top, bottom) {
             let Some(r) = cx.ed.layout.page(page) else { continue };
             // Snap the page to whole pixels: its edges stay sharp, and a tile rendered at the
@@ -37,7 +44,7 @@ impl UiLayers {
             for (grow, alpha) in [(6.0, 0.025), (3.5, 0.035), (1.5, 0.05)] {
                 scene.quads.push(Quad::solid([ox - grow, oy - grow + 2.0, ox + w + grow, oy + h + grow + 2.0], [0.0, 0.0, 0.0, alpha]));
             }
-            scene.quads.push(Quad::solid([ox, oy, ox + w, oy + h], [1.0; 4]));
+            scene.quads.push(Quad::solid([ox, oy, ox + w, oy + h], paper));
             let mut showing = false;
             // When sharp tiles cover everything of this page that is on screen, nothing beneath
             // them is visible: skip the preview and the other zoom levels (less to draw, less

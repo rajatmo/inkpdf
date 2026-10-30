@@ -8,12 +8,13 @@ use pdfcraft_annot::{Meta, NewAnnotation as AnnotNew, Shape, Style as AnnotStyle
 use pdfcraft_cos::{Dict, Document, ObjRef, Object, SaveOptions, pdf_date, write_full, write_incremental};
 use pdfcraft_organize::{OrganizeError as OrgError, bookmarks, delete_pages, duplicate_pages, insert_blank_page, move_pages, page_count};
 use pdfcraft_render::{
-    PageRenderer, PageText, RenderConfig, RenderPool as Pool, RenderRequest as Request, RenderedPage, Tile as PdfTile, text::TextFilter,
+    PageRenderer, PageText, ReadingColors, ReadingParams, RenderConfig, RenderPool as Pool, RenderRequest as Request, RenderedPage, Tile as PdfTile,
+    text::TextFilter,
 };
 
 use super::{
-    AnnotKind, Annotation, NewAnnotation, NewShape, OrganizeError, PdfBackend, PdfDocument, Pixels, RawLink, RawOutlineItem, RawTarget, RenderPool,
-    RenderRequest, Rendered,
+    AnnotKind, Annotation, NewAnnotation, NewShape, OrganizeError, PageLook, PdfBackend, PdfDocument, Pixels, RawLink, RawOutlineItem, RawTarget,
+    RenderPool, RenderRequest, Rendered,
 };
 use crate::coords::PageGeom;
 use crate::pagetext::PageTextView;
@@ -39,6 +40,25 @@ pub fn effective_scale(width_pt: f32, height_pt: f32, scale: f32) -> f32 {
 }
 
 pub struct Pdfcraft;
+
+/// What a look asks of pdfcraft: its reading colours, with the dark paper as the background and light text (near-black paints go to the
+/// text colour, light ones to the paper; photographs keep their colours).
+fn config_of(look: PageLook) -> RenderConfig {
+    match look {
+        PageLook::Plain => RenderConfig::default(),
+        PageLook::Dark => RenderConfig {
+            reading_colors: ReadingColors {
+                params: Some(ReadingParams {
+                    text: crate::palette::DARK_TEXT,
+                    background: crate::palette::DARK_PAPER,
+                    only_black: false,
+                    line_art: true,
+                }),
+            },
+            ..RenderConfig::default()
+        },
+    }
+}
 
 fn request_of(r: &RenderRequest) -> Request {
     debug_assert_eq!(r.tag & PRINT_TAG, 0, "bit 60 of a tag is pdfcraft's (a print preview): keep it clear");
@@ -90,8 +110,8 @@ impl PdfBackend for Pdfcraft {
         Ok(Box::new(PdfcraftDoc { doc: Document::open(bytes.clone()).map_err(|e| e.to_string())? }))
     }
 
-    fn render_pool(&self, bytes: Arc<Vec<u8>>, threads: usize) -> Box<dyn RenderPool> {
-        Box::new(PdfcraftPool(Pool::new(bytes, threads, RenderConfig::default())))
+    fn render_pool(&self, bytes: Arc<Vec<u8>>, threads: usize, look: PageLook) -> Box<dyn RenderPool> {
+        Box::new(PdfcraftPool(Pool::new(bytes, threads, config_of(look))))
     }
 
     fn render_now(&self, bytes: Arc<Vec<u8>>, request: &RenderRequest) -> Rendered {

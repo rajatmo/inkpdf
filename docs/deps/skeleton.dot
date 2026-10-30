@@ -1,6 +1,6 @@
 digraph G {
 rankdir=BT; newrank=true; compound=true; splines=true; nodesep=0.35; ranksep=0.9; pad=0.4;
-label=<<b>InkPDF essential skeleton (transitive reduction: 66 of 148 edges)</b>>; labelloc=t; fontsize=22; fontname="Helvetica";
+label=<<b>InkPDF essential skeleton (transitive reduction: 67 of 150 edges)</b>>; labelloc=t; fontsize=22; fontname="Helvetica";
 node [shape=box, style="rounded,filled", fontname="Helvetica", fontsize=13, margin="0.14,0.07", color="#888888"];
 edge [arrowsize=0.6];
 subgraph cluster_Base { label="base — plain data and arithmetic"; labeljust=l; fontname="Helvetica"; fontsize=14; style="rounded,filled"; fillcolor="#e8f1fb55"; color="#4a7fb5";
@@ -88,6 +88,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "path_store" -> "store" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "pdf" -> "coords" [color="#55555599", penwidth=1.60, tooltip="2 uses"];
 "pdf" -> "pagetext" [color="#55555599", penwidth=1.60, tooltip="2 uses"];
+"pdf" -> "palette" [color="#55555599", penwidth=1.60, tooltip="2 uses"];
 "pdf_read" -> "links" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "pdf_read" -> "outline" [color="#55555599", penwidth=1.60, tooltip="1 uses"];
 "pdf_read" -> "pdf" [color="#55555599", penwidth=1.60, tooltip="1 uses"];

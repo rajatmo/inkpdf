@@ -3,7 +3,7 @@
 //! ([`Palette::mix`]). Plain data and arithmetic: nothing here knows what a toolbar is.
 //!
 //! The page itself (the paper, the ink the user chose) is not part of the interface's scheme: it stays as the document has it, unless the
-//! user turns on dark pages, which is its own setting (see `Workspace::display_colour`).
+//! user turns on dark pages, which is its own setting (see `Workspace::on_page`).
 
 /// Which look.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
@@ -212,6 +212,76 @@ pub const DARK: Palette = Palette {
     press_rgb: [255, 255, 255],
 };
 
+/// The paper of a dark page, and the colour text on it is drawn in (what the PDF engine maps white and black to).
+pub const DARK_PAPER: [u8; 3] = [36, 39, 47];
+pub const DARK_TEXT: [u8; 3] = [226, 229, 236];
+
+/// How much brighter than the paper ink must be to be read on it (WCAG's AA for text).
+const INK_CONTRAST: f64 = 4.5;
+
+/// WCAG relative luminance of an opaque colour.
+fn luminance(c: Rgba) -> f64 {
+    let channel = |v: u8| {
+        let v = f64::from(v) / 255.0;
+        if v <= 0.03928 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+    };
+    0.2126 * channel(c[0]) + 0.7152 * channel(c[1]) + 0.0722 * channel(c[2])
+}
+
+/// The contrast ratio of two colours (1 to 21), the lighter over the darker.
+fn contrast(a: Rgba, b: Rgba) -> f64 {
+    let (x, y) = (luminance(a), luminance(b));
+    (x.max(y) + 0.05) / (x.min(y) + 0.05)
+}
+
+/// Red, green, blue (0 to 255) as hue (0 to 6), saturation and lightness (0 to 1).
+fn to_hsl(c: Rgba) -> [f64; 3] {
+    let [r, g, b] = [c[0], c[1], c[2]].map(|v| f64::from(v) / 255.0);
+    let (max, min) = (r.max(g).max(b), r.min(g).min(b));
+    let l = (max + min) / 2.0;
+    let d = max - min;
+    if d == 0.0 {
+        return [0.0, 0.0, l];
+    }
+    let s = d / (1.0 - (2.0 * l - 1.0).abs());
+    let h = if max == r {
+        ((g - b) / d).rem_euclid(6.0)
+    } else if max == g {
+        (b - r) / d + 2.0
+    } else {
+        (r - g) / d + 4.0
+    };
+    [h, s, l]
+}
+
+fn from_hsl([h, s, l]: [f64; 3], alpha: u8) -> Rgba {
+    let chroma = (1.0 - (2.0 * l - 1.0).abs()) * s;
+    let x = chroma * (1.0 - (h.rem_euclid(6.0) % 2.0 - 1.0).abs());
+    let (r, g, b) = match h.rem_euclid(6.0) as u32 {
+        0 => (chroma, x, 0.0),
+        1 => (x, chroma, 0.0),
+        2 => (0.0, chroma, x),
+        3 => (0.0, x, chroma),
+        4 => (x, 0.0, chroma),
+        _ => (chroma, 0.0, x),
+    };
+    let m = l - chroma / 2.0;
+    let byte = |v: f64| ((v + m) * 255.0).round().clamp(0.0, 255.0) as u8;
+    [byte(r), byte(g), byte(b), alpha]
+}
+
+/// How a colour the user chose for ink looks on a dark page: its lightness turned over (black ink becomes white), its hue and strength
+/// kept, then lifted until it can be read on the paper. Display only: what is saved keeps the colour that was chosen.
+pub fn on_dark_page(c: Rgba) -> Rgba {
+    let [h, s, l] = to_hsl(c);
+    let paper = [DARK_PAPER[0], DARK_PAPER[1], DARK_PAPER[2], 255];
+    let mut l = 1.0 - l;
+    while l < 1.0 && contrast(from_hsl([h, s, l], 255), paper) < INK_CONTRAST {
+        l = (l + 0.01).min(1.0);
+    }
+    from_hsl([h, s, l], c[3])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -232,21 +302,6 @@ mod tests {
         assert_eq!(Palette::mix(&a, &b, 9.0), b, "beyond its end is its end");
         let (x, y) = (Palette { ink: [0, 100, 200, 255], ..a }, Palette { ink: [100, 200, 0, 255], ..a });
         assert_eq!(Palette::mix(&x, &y, 0.5).ink, [50, 150, 100, 255]);
-    }
-
-    /// WCAG relative luminance of an opaque colour.
-    fn luminance(c: Rgba) -> f64 {
-        let channel = |v: u8| {
-            let v = f64::from(v) / 255.0;
-            if v <= 0.03928 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
-        };
-        0.2126 * channel(c[0]) + 0.7152 * channel(c[1]) + 0.0722 * channel(c[2])
-    }
-
-    /// The contrast ratio of two colours (1 to 21), the lighter over the darker.
-    fn contrast(a: Rgba, b: Rgba) -> f64 {
-        let (x, y) = (luminance(a), luminance(b));
-        (x.max(y) + 0.05) / (x.min(y) + 0.05)
     }
 
     /// What lies under a translucent colour, flattened onto the panel.
@@ -358,5 +413,37 @@ mod tests {
         assert_eq!(p.wash(10), [20, 24, 40, 10]);
         assert_eq!(p.press(44), [0, 0, 0, 44]);
         assert_eq!(p.white_a(200), [255, 255, 255, 200]);
+    }
+
+    #[test]
+    fn ink_on_a_dark_page_is_turned_over_keeps_its_hue_and_can_be_read() {
+        assert_eq!(on_dark_page([0, 0, 0, 255]), [255, 255, 255, 255], "black ink becomes white");
+        assert_eq!(on_dark_page([10, 20, 30, 77])[3], 77, "its opacity is kept");
+        let paper = [DARK_PAPER[0], DARK_PAPER[1], DARK_PAPER[2], 255];
+        for colour in crate::tool::PALETTE.iter().chain(&[
+            [255, 255, 255, 255],
+            [255, 0, 0, 255],
+            [0, 0, 255, 255],
+            [0, 255, 0, 255],
+            [128, 128, 128, 255],
+            [0, 0, 0, 255],
+            [40, 40, 50, 255],
+        ]) {
+            let shown = on_dark_page(*colour);
+            assert!(contrast(shown, paper) >= INK_CONTRAST - 0.05, "{colour:?} shows as {shown:?}, too close to the paper");
+            if colour[0] != colour[1] || colour[1] != colour[2] {
+                // The hue stays (within what rounding bytes allows).
+                let (a, b) = (to_hsl(*colour)[0], to_hsl(shown)[0]);
+                let apart = (a - b).abs().min(6.0 - (a - b).abs());
+                assert!(apart < 0.15, "{colour:?} -> {shown:?}: the hue moved by {apart}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_dark_paper_and_its_text_read_well_together() {
+        let paper = [DARK_PAPER[0], DARK_PAPER[1], DARK_PAPER[2], 255];
+        let text = [DARK_TEXT[0], DARK_TEXT[1], DARK_TEXT[2], 255];
+        assert!(contrast(text, paper) >= 10.0, "text on the dark paper: {}", contrast(text, paper));
     }
 }

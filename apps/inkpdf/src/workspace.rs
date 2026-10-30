@@ -147,6 +147,17 @@ impl Workspace {
         self.palette[style.colour % self.palette.len()]
     }
 
+    /// Whether pages are drawn dark now: the setting is on and the look is dark.
+    pub fn dark_pages_active(&self) -> bool {
+        self.dark_pages && self.appearance.resolve(self.system_scheme) == crate::palette::Scheme::Dark
+    }
+
+    /// A colour of the page's own (ink, text) as it is shown: turned over on a dark page, as it is on a light one. What is saved is
+    /// the colour chosen.
+    pub fn on_page(&self, rgba: [u8; 4]) -> [u8; 4] {
+        if self.dark_pages_active() { crate::palette::on_dark_page(rgba) } else { rgba }
+    }
+
     /// The colour and width new strokes get.
     pub fn current_style(&self) -> ([u8; 4], f32) {
         let style = self.style();

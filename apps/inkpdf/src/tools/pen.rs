@@ -106,6 +106,7 @@ impl Draw {
             return;
         }
         let (rgba, width) = ws.current_style();
+        let rgba = ws.on_page(rgba);
         if self.stable > 0 {
             polyline(out, &self.curve, width, rgba);
         }

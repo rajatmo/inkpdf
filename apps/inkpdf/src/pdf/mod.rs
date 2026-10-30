@@ -25,6 +25,15 @@ pub fn native() -> &'static dyn PdfBackend {
     BACKEND.get_or_init(|| pdfcraft::Pdfcraft)
 }
 
+/// How pages are drawn: as the file has them, or on a dark paper with light text (what the program's dark pages are). Display only: the
+/// file is never changed, and what the pages hold (ink, annotations) is saved as it was.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PageLook {
+    #[default]
+    Plain,
+    Dark,
+}
+
 /// A region of a page to render, in device pixels at the request's scale.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Tile {
@@ -208,8 +217,8 @@ pub trait PdfBackend: Send + Sync {
     /// The bytes of a new document of one blank page of this size (points).
     fn blank(&self, size: [f32; 2]) -> Result<Vec<u8>, String>;
     fn open(&self, bytes: &Arc<Vec<u8>>) -> Result<Box<dyn PdfDocument>, String>;
-    /// A pool of `threads` threads rendering pages of this file.
-    fn render_pool(&self, bytes: Arc<Vec<u8>>, threads: usize) -> Box<dyn RenderPool>;
+    /// A pool of `threads` threads rendering pages of this file, in this look.
+    fn render_pool(&self, bytes: Arc<Vec<u8>>, threads: usize, look: PageLook) -> Box<dyn RenderPool>;
     /// One render on this thread, now (a thumbnail of a file that is not open).
     fn render_now(&self, bytes: Arc<Vec<u8>>, request: &RenderRequest) -> Rendered;
     /// The text of one page.

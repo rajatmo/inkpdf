@@ -518,6 +518,6 @@ impl Tool for TextTool {
         let caret = text::caret_at(&edit.text, edit.size, edit.caret);
         let x = left + caret[0] + px;
         let top = top_edge + caret[1];
-        out.doc_line([x, top], [x, top + edit.size * text::LINE_HEIGHT], 1.4 * px, edit.rgba);
+        out.doc_line([x, top], [x, top + edit.size * text::LINE_HEIGHT], 1.4 * px, ws.on_page(edit.rgba));
     }
 }

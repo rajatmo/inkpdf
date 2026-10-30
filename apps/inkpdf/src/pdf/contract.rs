@@ -305,7 +305,7 @@ pub(super) fn check_render(b: &dyn PdfBackend) {
 }
 
 pub(super) fn check_pool(b: &dyn PdfBackend) {
-    let pool = b.render_pool(red_box(), 2);
+    let pool = b.render_pool(red_box(), 2, PageLook::Plain);
     let want = |page, tag| RenderRequest { page, scale: 0.5, tag, ..RenderRequest::default() };
     pool.set_queue(vec![want(0, 11), want(0, 12)]);
     let mut tags = Vec::new();
@@ -323,6 +323,40 @@ pub(super) fn check_pool(b: &dyn PdfBackend) {
     tags.sort_unstable();
     assert_eq!(tags, [11, 12], "every request comes back once, with its own tag");
     assert!(pool.try_recv().is_none(), "and nothing more");
+}
+
+/// A pool renders in the look it was made with: the plain look leaves a blank page white, the dark one draws it on the program's dark
+/// paper, and a page with writing on it keeps its writing readable (lighter than the paper) rather than going all dark.
+pub(super) fn check_look(b: &dyn PdfBackend) {
+    let first = |bytes: Arc<Vec<u8>>, look| {
+        let pool = b.render_pool(bytes, 1, look);
+        pool.set_queue(vec![RenderRequest { page: 0, scale: 0.5, tag: 1, ..RenderRequest::default() }]);
+        let started = std::time::Instant::now();
+        loop {
+            if let Some(r) = pool.try_recv() {
+                assert!(r.error.is_none(), "{:?}", r.error);
+                return r;
+            }
+            assert!(started.elapsed() < std::time::Duration::from_secs(20), "the page was never rendered");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+    };
+    let pixel = |r: &Rendered, x: u32, y: u32| {
+        let at = ((y * r.width + x) * 4) as usize;
+        [r.rgba.as_slice()[at], r.rgba.as_slice()[at + 1], r.rgba.as_slice()[at + 2]]
+    };
+    let blank = arc(b.blank([200.0, 200.0]).expect("a blank page"));
+    let plain = first(blank.clone(), PageLook::Plain);
+    assert_eq!(pixel(&plain, 50, 50), [255, 255, 255], "a plain page is white");
+    let dark = first(blank, PageLook::Dark);
+    let near = |a: [u8; 3], b: [u8; 3]| a.iter().zip(b).all(|(x, y)| x.abs_diff(y) <= 2);
+    assert!(near(pixel(&dark, 50, 50), crate::palette::DARK_PAPER), "a dark page is the dark paper: {:?}", pixel(&dark, 50, 50));
+    // A page with writing: the writing is light on the dark paper, and the look changes nothing but the pictures.
+    let written = first(arc(sample_pdf()), PageLook::Dark);
+    let light = |p: [u8; 3]| p.iter().map(|&v| u32::from(v)).sum::<u32>() > 3 * 150;
+    let bright = (0..written.height).flat_map(|y| (0..written.width).map(move |x| (x, y))).filter(|&(x, y)| light(pixel(&written, x, y))).count();
+    let all = (written.width * written.height) as usize;
+    assert!(bright > 0 && bright < all / 2, "light writing on a dark page, not a light page: {bright} of {all} pixels are light");
 }
 
 pub(super) fn check_hostile(b: &dyn PdfBackend) {
@@ -367,6 +401,7 @@ pub(super) fn backend_contract(b: &dyn PdfBackend) {
     check_organize(b);
     check_render(b);
     check_pool(b);
+    check_look(b);
     check_hostile(b);
 }
 
@@ -418,6 +453,11 @@ fn pdfcraft_renders_in_a_pool_behind_the_frame() {
 }
 
 #[test]
+fn pdfcraft_renders_pages_in_the_dark_look() {
+    check_look(native());
+}
+
+#[test]
 fn pdfcraft_survives_damaged_files() {
     check_hostile(native());
 }
@@ -442,8 +482,8 @@ impl PdfBackend for Wrong<'_> {
         self.0.open(bytes)
     }
 
-    fn render_pool(&self, bytes: Arc<Vec<u8>>, threads: usize) -> Box<dyn RenderPool> {
-        self.0.render_pool(bytes, threads)
+    fn render_pool(&self, bytes: Arc<Vec<u8>>, threads: usize, look: PageLook) -> Box<dyn RenderPool> {
+        self.0.render_pool(bytes, threads, look)
     }
 
     fn render_now(&self, bytes: Arc<Vec<u8>>, request: &RenderRequest) -> Rendered {
@@ -509,7 +549,7 @@ fn measure_the_backend() {
             requests.push(RenderRequest { tag, ..r });
         }
     }
-    let pool = b.render_pool(bytes.clone(), 1);
+    let pool = b.render_pool(bytes.clone(), 1, PageLook::Plain);
     let (mut per, mut last) = (Vec::new(), Instant::now());
     pool.set_queue(requests.clone());
     let started = Instant::now();

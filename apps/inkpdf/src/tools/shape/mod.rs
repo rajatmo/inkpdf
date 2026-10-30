@@ -330,7 +330,7 @@ impl Tool for ShapeTool {
             Gesture::Drag { shape, start, end, .. } => {
                 // Exactly what will be stored, drawn the way it will be drawn.
                 let (rgba, width) = ws.current_style();
-                polyline(out, &shape_points(*shape, *start, *end), width, rgba);
+                polyline(out, &shape_points(*shape, *start, *end), width, ws.on_page(rgba));
             }
             Gesture::Pick(p) => p.paint(ws, out),
             _ => {}

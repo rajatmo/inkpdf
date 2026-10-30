@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 
 use crate::gpu::{Drawn, InkScene};
 use crate::input::InputEvent;
+use crate::pdf::PageLook;
 use crate::tiles::{self, Key};
 
 use super::bench::FrameParts;
@@ -172,6 +173,12 @@ impl State {
     /// Returns how many tiles are still wanted.
     fn stream_tiles(&mut self, settled: bool) -> usize {
         let Some(doc) = &mut self.session.doc else { return 0 };
+        // The pages are drawn in the look the user has chosen: when it changes, the old pictures are dropped and everything is asked for again.
+        let look = if self.ed.dark_pages_active() { PageLook::Dark } else { PageLook::Plain };
+        if doc.set_look(look) {
+            self.gpu.clear_textures();
+            self.session.failed.clear();
+        }
         let mut pending = 0;
         // Ask for what the view needs, unless the zoom is still moving: its level would change
         // every frame.

@@ -170,7 +170,7 @@ impl ShapeTool {
         let Some((outline, nodes)) = self.draft_preview() else { return };
         let px = ws.dpr / ws.view.zoom;
         let (rgba, width) = ws.current_style();
-        polyline(out, &outline, width, rgba);
+        polyline(out, &outline, width, ws.on_page(rgba));
         for &n in &nodes {
             fill_square(out, n, 5.0 * px, px, ws.theme.selection);
             fill_square(out, n, 3.2 * px, px, ws.theme.white);

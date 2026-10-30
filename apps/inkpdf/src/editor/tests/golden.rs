@@ -103,15 +103,14 @@ fn scenarios(pal: Palette) -> Vec<(&'static str, Ui)> {
     ed.selection = vec![id];
     all.push(("bar under the tools, with a selection", interface(&ed, pal)));
 
-    // The card under the theme button.
+    // The round button under the theme button.
     let mut ed = base(2);
     let theme = ed.toolbar().centre_of(crate::toolbar::Item::Theme);
     ed.mouse_moved(theme);
     ed.mouse_button(crate::input::ButtonState::Pressed, crate::input::MouseButton::Left);
     ed.mouse_button(crate::input::ButtonState::Released, crate::input::MouseButton::Left);
     ed.set_appearance(crate::settings::Appearance::System);
-    all.push(("the theme button's card", interface(&ed, pal)));
-
+    all.push(("the theme button's round button", interface(&ed, pal)));
     // The unsaved-changes prompt, and a document with ink to save.
     let mut ed = base(2);
     ed.ink.add(0, Style { rgba: [0, 0, 0, 255], width: 2.0 }, vec![[100.0, 100.0], [200.0, 150.0]]);

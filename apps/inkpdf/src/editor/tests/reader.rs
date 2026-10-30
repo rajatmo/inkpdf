@@ -221,23 +221,18 @@ fn the_new_events_survive_a_recording() {
 }
 
 /// One finger taps at `at`, quickly.
-fn tap_finger(ed: &mut Editor, at: [f32; 2]) {
-    ed.pointer_event(touch(5, Phase::Down, at, 30.0));
-    ed.pointer_event(touch(5, Phase::Up, at, 30.0));
-}
-
 #[test]
 fn a_double_tap_fits_the_page_to_the_width_and_the_next_one_goes_back_and_a_single_tap_does_nothing_more() {
     let mut ed = editor();
     ed.pan_px(0.0, -300.0);
     let (zoom, scroll) = (ed.view.zoom, ed.view.scroll);
     let at = [600.0, 450.0];
-    tap_finger(&mut ed, at);
+    finger_tap(&mut ed, at);
     assert!(!ed.fit_mode && ed.view.zoom == zoom, "one tap fits nothing: it never waits for a second");
-    tap_finger(&mut ed, at);
+    finger_tap(&mut ed, at);
     assert!(ed.fit_mode && (ed.view.zoom - ed.view.fit_width_zoom(&ed.layout)).abs() < 1e-3, "two fit the width: {}", ed.view.zoom);
-    tap_finger(&mut ed, at);
-    tap_finger(&mut ed, at);
+    finger_tap(&mut ed, at);
+    finger_tap(&mut ed, at);
     assert!(!ed.fit_mode && (ed.view.zoom - zoom).abs() < 1e-3, "the next two go back: {}", ed.view.zoom);
     assert!((ed.view.scroll[1] - scroll[1]).abs() < 1.0, "to the place it was: {:?} {:?}", ed.view.scroll, scroll);
 }
@@ -246,17 +241,17 @@ fn a_double_tap_fits_the_page_to_the_width_and_the_next_one_goes_back_and_a_sing
 fn a_pinch_in_between_makes_the_remembered_view_forgotten_and_a_far_second_tap_is_not_a_double() {
     let mut ed = editor();
     let at = [600.0, 450.0];
-    tap_finger(&mut ed, at);
-    tap_finger(&mut ed, at);
+    finger_tap(&mut ed, at);
+    finger_tap(&mut ed, at);
     assert!(ed.fit_mode);
     ed.fit_mode = false;
     ed.view.zoom = 3.0;
-    tap_finger(&mut ed, at);
-    tap_finger(&mut ed, at);
+    finger_tap(&mut ed, at);
+    finger_tap(&mut ed, at);
     assert!(ed.fit_mode, "after a pinch a double tap fits again, it does not go back to a zoom that was left");
     // Two taps far apart are two taps.
     let mut ed = editor();
-    tap_finger(&mut ed, at);
-    tap_finger(&mut ed, [900.0, 700.0]);
+    finger_tap(&mut ed, at);
+    finger_tap(&mut ed, [900.0, 700.0]);
     assert!(!ed.fit_mode);
 }

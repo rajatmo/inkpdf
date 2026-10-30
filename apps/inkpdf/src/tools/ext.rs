@@ -18,7 +18,7 @@ struct Cx<'a>(&'a mut Workspace);
 struct CxRef<'a>(&'a Workspace);
 
 fn theme_of(ws: &Workspace) -> api::Theme {
-    let t = &ws.theme;
+    let t = &ws.look.theme;
     api::Theme { ink: t.ink, accent: t.accent, selection: t.selection, danger: t.danger, white: t.white }
 }
 

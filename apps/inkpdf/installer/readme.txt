@@ -84,8 +84,8 @@ page after the one you are looking at; the four small pages open the pages overv
 (a tool's button only chooses it; its settings are in the bar under the tools); a monitor or a tablet, which shows the
 mode in use (the tablet in blue) and switches to the other when pressed; full screen. Left of the mode button is
 the look: each press goes from the system's look to light to dark and round (a sun beside a moon, a sun, a moon) and drops a
-card down with a page half in shade and one switch, which turns the pages dark too, with light text on a dark paper, when the look
-is dark (a press elsewhere, or Esc, puts the card away; your file is not changed, and ink you drew in a dark colour is shown light on a dark page). (Under the tools:
+round button down from it (a moon on a page), which turns the pages dark too, with light text on a dark paper, when the look
+is dark (a press elsewhere, or Esc, puts the button away; your file is not changed, and ink you drew in a dark colour is shown light on a dark page). (Under the tools:
 the bar described above.)
 In a window too narrow for the three groups of buttons (a phone held upright), the document's group folds into one round button, a page,
 and so does the look's group, sliders; the tools stay. Press a round button and its group unfolds over the others; it folds again when

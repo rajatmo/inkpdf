@@ -3,6 +3,8 @@
 //! is on top, so that every route (mouse, pen and touch, wheel, keys) agrees, and a new layer is added here and in
 //! [`Editor::modal`] alone.
 
+use crate::input::{Device, Phase};
+
 use super::Editor;
 
 /// A layer that takes the input meant for the page and the toolbar.
@@ -15,6 +17,14 @@ pub(super) enum Modal {
 }
 
 impl Editor {
+    /// A pointer's press, move or release at pos, for the layer modal.
+    pub(super) fn modal_pointer(&mut self, modal: Modal, dev: Device, id: u32, phase: Phase, pos: [f32; 2]) {
+        match modal {
+            Modal::Prompt => self.prompt_pointer(dev, id, phase, pos),
+            Modal::Overview => self.overview_pointer(dev, id, phase, pos),
+        }
+    }
+
     /// The layer on top, if there is one. A prompt is above the overview.
     pub(super) fn modal(&self) -> Option<Modal> {
         if self.chrome.prompt.is_some() {

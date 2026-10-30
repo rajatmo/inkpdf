@@ -8,7 +8,7 @@ use crate::geometry::Shape;
 fn drawing(shape: Shape) -> Editor {
     let mut ed = editor();
     ed.set_tool(Tool::Geometry);
-    ed.shape = shape;
+    ed.styles.shape = shape;
     ed.chrome.panel = None;
     ed
 }

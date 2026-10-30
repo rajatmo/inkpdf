@@ -1,4 +1,4 @@
-﻿use super::*;
+use super::*;
 use crate::links::{Link, Target};
 
 /// A link over a band of page 0, 100 to 300 points across and 190 to 210 down (below the bars at the top of the window).
@@ -6,17 +6,12 @@ fn with_links(ed: &mut Editor, target: Target) {
     ed.links = vec![Link { rect: [112.0, 202.0, 312.0, 222.0], target }];
 }
 
-fn tap_with_finger(ed: &mut Editor, at: [f32; 2]) {
-    ed.pointer_event(touch(1, Phase::Down, at, 30.0));
-    ed.pointer_event(touch(1, Phase::Up, at, 30.0));
-}
-
 #[test]
 fn a_finger_tap_on_a_web_link_asks_to_open_it() {
     let mut ed = editor();
     with_links(&mut ed, Target::Url("https://example.com/".into()));
     let on = on_page(&ed, 150.0, 200.0);
-    tap_with_finger(&mut ed, on);
+    finger_tap(&mut ed, on);
     assert_eq!(ed.requests.url(), Some("https://example.com/"));
 }
 
@@ -26,7 +21,7 @@ fn a_finger_tap_on_a_page_link_glides_to_that_page() {
     with_links(&mut ed, Target::Page(1));
     assert!(ed.view.scroll[1] < 100.0);
     let on = on_page(&ed, 150.0, 200.0);
-    tap_with_finger(&mut ed, on);
+    finger_tap(&mut ed, on);
     settle(&mut ed);
     let page = ed.layout.page(1).expect("page 1");
     // As near the top of the window as the end of the document allows.
@@ -40,7 +35,7 @@ fn a_tap_off_the_link_does_nothing() {
     let mut ed = editor();
     with_links(&mut ed, Target::Url("https://example.com/".into()));
     let off = on_page(&ed, 150.0, 300.0);
-    tap_with_finger(&mut ed, off);
+    finger_tap(&mut ed, off);
     assert!(ed.requests.url().is_none());
 }
 

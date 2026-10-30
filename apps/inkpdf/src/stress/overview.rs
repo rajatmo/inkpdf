@@ -7,11 +7,11 @@ fn stress_the_pages_overview_under_hostile_input_keeps_the_pages_the_selection_a
     let dir = temp_dir("overview");
     let path = dir.join("outline.pdf");
     std::fs::write(&path, crate::testutil::pdf_with_outline()).expect("write");
-    let (mut doc, _) = Doc::open(&path).expect("open");
+    let (mut doc, contents) = Doc::open_contents(&path).expect("open");
     let mut ed = Editor::reference([1280.0, 800.0], 1.25, crate::motion::Prefs::REDUCED);
     ed.load(doc.layout(), vec![]);
-    ed.outline = doc.take_outline();
-    ed.links = doc.take_links();
+    ed.outline = contents.outline;
+    ed.links = contents.links;
     let mut rng = Rng::new(808);
     // (With motion on, and frames of any length in between: what moves must stay a number and within its ends.)
     ed.motions.set_prefs(crate::motion::Prefs::FULL);

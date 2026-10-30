@@ -27,12 +27,12 @@ impl Editor {
         }
     }
 
-    /// A press is beginning at `pos`: the open pill folds unless the press is on it, or on the card of the look that hangs from it.
+    /// A press is beginning at `pos`: the open pill folds unless the press is on it, or on the round button of the look that hangs from it.
     pub(super) fn dismiss_pill(&mut self, pos: [f32; 2]) {
         let Some(open) = self.chrome.pill else { return };
         let on_pill = crate::ink::rect_contains(self.toolbar().pills[open.index()], pos);
-        let on_card = self.theme_layout().is_some_and(|c| c.contains(pos));
-        if !on_pill && !on_card {
+        let on_button = self.theme_layout().is_some_and(|c| c.contains(pos));
+        if !on_pill && !on_button {
             self.fold_pill();
         }
     }

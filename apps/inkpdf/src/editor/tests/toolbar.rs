@@ -1,10 +1,6 @@
 use super::*;
 
 /// A tap on a toolbar button by the pen.
-fn pen_tap(ed: &mut Editor, at: [f32; 2]) {
-    pen_stroke(ed, TIP, &[at, at]);
-}
-
 /// The pen panel as it is laid out now.
 fn panel(ed: &Editor) -> crate::toolbar::ToolPanel {
     ed.toolbar().tool_panel(ed.tool, ed.view.viewport[0], ed.chrome.panel.is_some_and(|p| p.editing.is_some())).expect("tool panel")
@@ -36,7 +32,7 @@ fn open_editor(ed: &mut Editor, slot: usize) {
     }
     let swatch = panel(ed).swatch_centre(slot);
     pen_tap(ed, swatch);
-    if ed.pen.colour != slot || ed.chrome.panel.and_then(|p| p.editing) != Some(slot) {
+    if ed.styles.pen.colour != slot || ed.chrome.panel.and_then(|p| p.editing) != Some(slot) {
         pen_tap(ed, swatch);
     }
     assert_eq!(ed.chrome.panel.and_then(|p| p.editing), Some(slot));
@@ -97,7 +93,7 @@ fn tapping_the_colour_in_use_opens_the_colour_editor_and_its_sliders_change_it()
     tap_pen_button(&mut ed);
     let red = panel(&ed).swatch_centre(2);
     pen_tap(&mut ed, red);
-    assert_eq!((ed.pen.colour, ed.chrome.panel), (2, Some(PanelState::default())), "the first tap only selects it");
+    assert_eq!((ed.styles.pen.colour, ed.chrome.panel), (2, Some(PanelState::default())), "the first tap only selects it");
     pen_tap(&mut ed, red);
     assert_eq!(ed.chrome.panel, Some(PanelState { editing: Some(2) }), "the second tap on the colour in use opens the editor");
     // The editor starts from the slot's colour.
@@ -106,8 +102,8 @@ fn tapping_the_colour_in_use_opens_the_colour_editor_and_its_sliders_change_it()
 
     // Drag the hue slider a third of the way along: a green.
     drag_slider(&mut ed, Slider::Channel(Channel::Hue), 0.0, 1.0 / 3.0);
-    let [r, g, b, a] = ed.palette[2];
-    assert!(g > r && g > b && a == 255, "a third of the way round the rainbow is green: {:?}", ed.palette[2]);
+    let [r, g, b, a] = ed.styles.palette[2];
+    assert!(g > r && g > b && a == 255, "a third of the way round the rainbow is green: {:?}", ed.styles.palette[2]);
     assert!(ed.requests.has(&Request::SettingsChanged), "the colour is to be remembered");
     assert_eq!(ed.chrome.panel, Some(PanelState { editing: Some(2) }), "the editor stays open for the next slider");
     assert_eq!(ed.ink.len(), 0, "using it drew nothing");
@@ -116,11 +112,11 @@ fn tapping_the_colour_in_use_opens_the_colour_editor_and_its_sliders_change_it()
     let low = panel(&ed).point_on(Slider::Channel(Channel::Value), 0.0);
     ed.pointer_event(pen(Phase::Down, TIP, &[low]));
     ed.pointer_event(pen(Phase::Up, TIP, &[low]));
-    assert_eq!(ed.palette[2], [0, 0, 0, 255]);
+    assert_eq!(ed.styles.palette[2], [0, 0, 0, 255]);
     let high = panel(&ed).point_on(Slider::Channel(Channel::Value), 1.0);
     ed.pointer_event(pen(Phase::Down, TIP, &[high]));
     ed.pointer_event(pen(Phase::Up, TIP, &[high]));
-    let chosen = ed.palette[2];
+    let chosen = ed.styles.palette[2];
     assert!(chosen[1] > chosen[0], "back to full brightness the hue is still green: {chosen:?}");
     let path = [on_page(&ed, 10.0, 400.0), on_page(&ed, 40.0, 420.0), on_page(&ed, 70.0, 400.0)];
     pen_stroke(&mut ed, TIP, &path);
@@ -143,7 +139,7 @@ fn tapping_the_colour_in_use_again_closes_the_editor_and_another_colour_takes_it
     // Another colour, with the editor open: it is picked and the editor follows it.
     let blue = panel(&ed).swatch_centre(1);
     pen_tap(&mut ed, blue);
-    assert_eq!((ed.pen.colour, ed.chrome.panel), (1, Some(PanelState { editing: Some(1) })));
+    assert_eq!((ed.styles.pen.colour, ed.chrome.panel), (1, Some(PanelState { editing: Some(1) })));
     let [hue, _, _] = ed.chrome.colour_hsv;
     assert!((200.0..260.0).contains(&hue), "the editor now holds the blue: {hue}");
 }
@@ -156,13 +152,13 @@ fn a_grey_keeps_its_hue_while_the_saturation_slider_passes_through_zero() {
     let low = panel(&ed).point_on(Slider::Channel(Channel::Saturation), 0.0);
     ed.pointer_event(pen(Phase::Down, TIP, &[low]));
     ed.pointer_event(pen(Phase::Up, TIP, &[low]));
-    let [r, g, b, _] = ed.palette[2];
-    assert!(r == g && g == b, "no saturation is a grey: {:?}", ed.palette[2]);
+    let [r, g, b, _] = ed.styles.palette[2];
+    assert!(r == g && g == b, "no saturation is a grey: {:?}", ed.styles.palette[2]);
     let high = panel(&ed).point_on(Slider::Channel(Channel::Saturation), 1.0);
     ed.pointer_event(pen(Phase::Down, TIP, &[high]));
     ed.pointer_event(pen(Phase::Up, TIP, &[high]));
     assert!((ed.chrome.colour_hsv[0] - hue_before).abs() < 1e-3, "the hue was kept while it was grey");
-    assert!(ed.palette[2][0] > ed.palette[2][1], "and it is red again");
+    assert!(ed.styles.palette[2][0] > ed.styles.palette[2][1], "and it is red again");
 }
 
 #[test]
@@ -172,7 +168,7 @@ fn a_colour_slot_that_does_not_exist_is_ignored_and_so_is_a_colour_with_no_edito
     ed.set_editing(Some(99));
     assert_eq!(ed.chrome.panel, Some(PanelState::default()));
     ed.set_channel(Channel::Hue, 100.0);
-    assert_eq!(ed.palette, crate::tool::PALETTE);
+    assert_eq!(ed.styles.palette, crate::tool::PALETTE);
     assert!(!ed.requests.has(&Request::SettingsChanged));
 }
 
@@ -181,12 +177,12 @@ fn dragging_the_thickness_slider_sets_the_width_for_new_strokes_and_the_panel_st
     let mut ed = editor();
     tap_pen_button(&mut ed);
     drag_slider(&mut ed, Slider::Width, 0.0, 1.0);
-    assert!((ed.pen.width - crate::tool::MAX_WIDTH).abs() < 0.01, "the thick end: {}", ed.pen.width);
+    assert!((ed.styles.pen.width - crate::tool::MAX_WIDTH).abs() < 0.01, "the thick end: {}", ed.styles.pen.width);
     assert!(ed.chrome.panel.is_some(), "the panel stays for the next setting");
     assert!(ed.requests.has(&Request::SettingsChanged));
     assert_eq!(ed.ink.len(), 0, "using the slider drew nothing");
     drag_slider(&mut ed, Slider::Width, 0.5, 0.0);
-    assert!((ed.pen.width - crate::tool::MIN_WIDTH).abs() < 0.01, "the thin end: {}", ed.pen.width);
+    assert!((ed.styles.pen.width - crate::tool::MIN_WIDTH).abs() < 0.01, "the thin end: {}", ed.styles.pen.width);
     // The next stroke is that thin (after the press that puts the panel away).
     let path = [on_page(&ed, 10.0, 300.0), on_page(&ed, 40.0, 320.0), on_page(&ed, 70.0, 300.0)];
     pen_stroke(&mut ed, TIP, &path);
@@ -199,11 +195,11 @@ fn dragging_the_smoothing_slider_sets_how_much_the_pen_is_steadied() {
     let mut ed = editor();
     tap_pen_button(&mut ed);
     drag_slider(&mut ed, Slider::Smoothing, 0.5, 1.0);
-    assert_eq!(ed.smoothing, 1.0);
+    assert_eq!(ed.styles.smoothing, 1.0);
     drag_slider(&mut ed, Slider::Smoothing, 0.5, 0.0);
-    assert_eq!(ed.smoothing, 0.0);
+    assert_eq!(ed.styles.smoothing, 0.0);
     drag_slider(&mut ed, Slider::Smoothing, 0.0, 0.25);
-    assert!((ed.smoothing - 0.25).abs() < 1e-3);
+    assert!((ed.styles.smoothing - 0.25).abs() < 1e-3);
     assert!(ed.requests.has(&Request::SettingsChanged));
     // And a stroke drawn now follows the pen with that much steadying: none at 0.
     drag_slider(&mut ed, Slider::Smoothing, 0.5, 0.0);
@@ -248,7 +244,7 @@ fn the_sliders_work_with_the_mouse_and_with_touch() {
     ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
     ed.mouse_moved(right);
     ed.mouse_button(ButtonState::Released, MouseButton::Left);
-    assert!((ed.pen.width - crate::tool::MAX_WIDTH).abs() < 0.01);
+    assert!((ed.styles.pen.width - crate::tool::MAX_WIDTH).abs() < 0.01);
     assert!(ed.chrome.panel.is_some());
 
     // Touch: dragging on the slider must not pan the page.
@@ -262,7 +258,7 @@ fn the_sliders_work_with_the_mouse_and_with_touch() {
     ed.pointer_event(touch(2, Phase::Down, left, 30.0));
     ed.pointer_event(touch(2, Phase::Move, right, 30.0));
     ed.pointer_event(touch(2, Phase::Up, right, 30.0));
-    assert_eq!(ed.smoothing, 1.0);
+    assert_eq!(ed.styles.smoothing, 1.0);
     assert_eq!(ed.view.scroll, before, "the page did not move");
 }
 

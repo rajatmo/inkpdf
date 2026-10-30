@@ -34,9 +34,7 @@ impl Editor {
     pub(super) fn act_belongs_to(&self, dev: Device, id: u32) -> bool {
         match &self.chrome.act {
             Act::Toolbar { dev: d, id: a, .. }
-            | Act::Context { dev: d, id: a, .. }
-            | Act::Search { dev: d, id: a, .. }
-            | Act::Theme { dev: d, id: a, .. }
+            | Act::Card { dev: d, id: a, .. }
             | Act::Slider { dev: d, id: a, .. }
             | Act::Swallow { dev: d, id: a } => *d == dev && *a == id,
             Act::Idle => false,

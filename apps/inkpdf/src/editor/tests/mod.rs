@@ -144,6 +144,33 @@ fn open_settings(ed: &mut Editor) {
     pen_stroke(ed, TIP, &[at, at]);
 }
 
+/// A tap of the stylus's tip at `at`.
+fn pen_tap(ed: &mut Editor, at: [f32; 2]) {
+    pen_stroke(ed, TIP, &[at, at]);
+}
+
+/// A tap of a finger at `at`.
+fn finger_tap(ed: &mut Editor, at: [f32; 2]) {
+    ed.pointer_event(touch(1, Phase::Down, at, 30.0));
+    ed.pointer_event(touch(1, Phase::Up, at, 30.0));
+}
+
+/// A click of the left button at (`x`, `y`) of page 0.
+fn click_on_page(ed: &mut Editor, x: f32, y: f32) {
+    let at = on_page(ed, x, y);
+    mouse_click_at(ed, at);
+}
+
+/// The left button pressed at the first point, dragged through the rest and let go.
+fn mouse_drag(ed: &mut Editor, path: &[[f32; 2]]) {
+    ed.mouse_moved(path[0]);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
+    for &p in &path[1..] {
+        ed.mouse_moved(p);
+    }
+    ed.mouse_button(ButtonState::Released, MouseButton::Left);
+}
+
 fn mouse_click_at(ed: &mut Editor, pos: [f32; 2]) {
     ed.mouse_moved(pos);
     ed.mouse_button(ButtonState::Pressed, MouseButton::Left);

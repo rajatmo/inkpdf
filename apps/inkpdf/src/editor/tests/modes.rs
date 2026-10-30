@@ -61,7 +61,7 @@ fn at_a_desk_the_mouse_draws_with_the_pen_tool_erases_with_the_right_button_and_
 #[test]
 fn at_a_desk_the_mouse_makes_shapes_and_moves_the_selection_with_the_shape_tool() {
     let mut ed = with(Tool::Geometry, Mode::Desktop);
-    ed.shape = Shape::Rectangle;
+    ed.styles.shape = Shape::Rectangle;
     let corners = [on_page(&ed, 100.0, 200.0), on_page(&ed, 250.0, 320.0)];
     mouse_drag(&mut ed, MouseButton::Left, &corners);
     assert_eq!(ed.ink.len(), 1);

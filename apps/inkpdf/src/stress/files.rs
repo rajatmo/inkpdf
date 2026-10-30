@@ -229,12 +229,12 @@ fn stress_hostile_outlines_and_page_trees_open_or_are_refused_and_what_opens_edi
     for (i, bytes) in files.iter().enumerate() {
         let path = dir.join(format!("h{i}.pdf"));
         std::fs::write(&path, bytes).expect("write");
-        let Ok((mut doc, strokes)) = Doc::open(&path) else {
+        let Ok((mut doc, contents)) = Doc::open_contents(&path) else {
             refused += 1;
             continue;
         };
         opened += 1;
-        let items = doc.take_outline();
+        let items = contents.outline;
         assert!(items.len() <= 20_000, "file {i}: {} outline entries", items.len());
         for entry in &items {
             assert!(entry.depth <= 40, "file {i}: an entry {} deep", entry.depth);
@@ -242,9 +242,9 @@ fn stress_hostile_outlines_and_page_trees_open_or_are_refused_and_what_opens_edi
             assert!(entry.page.is_none_or(|p| p < doc.page_count()), "file {i}: an entry goes to page {:?} of {}", entry.page, doc.page_count());
         }
         let mut ed = Editor::reference([1100.0, 800.0], 1.0, crate::motion::Prefs::REDUCED);
-        ed.load(doc.layout(), strokes);
+        ed.load(doc.layout(), contents.strokes);
         ed.outline = items;
-        ed.links = doc.take_links();
+        ed.links = contents.links;
         ed.open_overview();
         for _ in 0..10 {
             let n = ed.layout.len();

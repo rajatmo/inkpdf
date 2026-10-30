@@ -28,6 +28,8 @@ impl Editor {
                 let bar = self.toolbar();
                 if first_finger && bar.contains(first.pos) {
                     self.chrome.act = Act::Toolbar { dev: Device::Touch, id: ev.id, item: bar.hit(first.pos) };
+                    // (The button is shown pressed.)
+                    self.ws.redraw = true;
                     return;
                 }
                 if first_finger && self.press_context(Device::Touch, ev.id, first.pos) {
@@ -43,10 +45,7 @@ impl Editor {
             Phase::Move => {
                 // A finger on the toolbar or its slider is not panning the page.
                 if self.act_belongs_to(Device::Touch, ev.id)
-                    && matches!(
-                        self.chrome.act,
-                        Act::Toolbar { .. } | Act::Context { .. } | Act::Search { .. } | Act::Theme { .. } | Act::Slider { .. } | Act::Swallow { .. }
-                    )
+                    && matches!(self.chrome.act, Act::Toolbar { .. } | Act::Card { .. } | Act::Slider { .. } | Act::Swallow { .. })
                 {
                     self.pointer_moved(Device::Touch, ev.id, &ev.samples);
                     return;
@@ -64,12 +63,13 @@ impl Editor {
                 if matches!(self.chrome.act, Act::Toolbar { dev: Device::Touch, id, .. } if id == ev.id) {
                     self.release_toolbar(Device::Touch, ev.id, lifted.then_some(last.pos));
                     self.chrome.act = Act::Idle;
+                    self.ws.redraw = true;
                     return;
                 }
-                if matches!(self.chrome.act, Act::Context { dev: Device::Touch, id, .. } | Act::Search { dev: Device::Touch, id, .. } | Act::Theme { dev: Device::Touch, id, .. } if id == ev.id)
-                {
+                if matches!(self.chrome.act, Act::Card { dev: Device::Touch, id, .. } if id == ev.id) {
                     self.release_context(Device::Touch, ev.id, lifted.then_some(last.pos));
                     self.chrome.act = Act::Idle;
+                    self.ws.redraw = true;
                     return;
                 }
                 if matches!(self.chrome.act, Act::Slider { dev: Device::Touch, id, .. } | Act::Swallow { dev: Device::Touch, id } if id == ev.id) {
@@ -107,9 +107,7 @@ impl Editor {
         if matches!(
             self.chrome.act,
             Act::Toolbar { dev: Device::Touch, .. }
-                | Act::Context { dev: Device::Touch, .. }
-                | Act::Search { dev: Device::Touch, .. }
-                | Act::Theme { dev: Device::Touch, .. }
+                | Act::Card { dev: Device::Touch, .. }
                 | Act::Slider { dev: Device::Touch, .. }
                 | Act::Swallow { dev: Device::Touch, .. }
         ) {

@@ -8,7 +8,7 @@ use crate::editor::Editor;
 use crate::form::Kind;
 use crate::ink::{InkStore, MarkupKind, P, Stroke};
 use crate::palette::Palette;
-use crate::scene::Capsule;
+use crate::scene::{Capsule, LineSink};
 use crate::smooth::curve_through;
 use crate::toolbar::{self, ContextState, Look, PanelView, PromptView, Ui};
 use crate::tools::Painter;
@@ -250,7 +250,7 @@ fn search_overlay(ed: &Editor, out: &mut Overlays) {
     }
     let (top, bottom) = ed.view.visible_y();
     let pages = ed.layout.pages_in(top, bottom);
-    let (hit, current) = (ed.theme.search_hit, ed.theme.search_current);
+    let (hit, current) = (ed.look.theme.search_hit, ed.look.theme.search_current);
     for (i, h) in ed.search.hits().iter().enumerate() {
         if !pages.contains(&(h.page as usize)) {
             continue;
@@ -278,7 +278,7 @@ fn form_overlay(ed: &Editor, out: &mut Overlays) {
     for b in ed.form_boxes(&ed.layout.pages_in(top, bottom)) {
         let [x0, y0, x1, y1] = b.rect;
         if let Some(c) = b.caret {
-            push_rect(&mut out.doc, b.rect, 1.5 * px, ed.theme.selection);
+            out.doc.rect_outline(b.rect, 1.5 * px, ed.look.theme.selection);
             out.doc.push(Capsule::new([c[0], c[1]], [c[2], c[3]], 1.2 * px, ink));
             continue;
         }
@@ -296,10 +296,10 @@ fn form_overlay(ed: &Editor, out: &mut Overlays) {
                 out.doc.push(Capsule::new([cx, cy], [cx, cy], side * 0.45, ink));
             }
         } else {
-            push_rect(&mut out.doc, [cx - side / 2.0, cy - side / 2.0, cx + side / 2.0, cy + side / 2.0], line, ink);
+            out.doc.rect_outline([cx - side / 2.0, cy - side / 2.0, cx + side / 2.0, cy + side / 2.0], line, ink);
             if b.on {
                 let p = |fx: f32, fy: f32| [cx + (fx - 0.5) * side, cy + (fy - 0.5) * side];
-                push_polyline(&mut out.doc, &[p(0.22, 0.52), p(0.42, 0.74), p(0.80, 0.26)], 1.6 * line, ink);
+                out.doc.polyline(&[p(0.22, 0.52), p(0.42, 0.74), p(0.80, 0.26)], 1.6 * line, ink);
             }
         }
     }
@@ -317,7 +317,7 @@ fn selection_overlay(ed: &Editor, out: &mut Overlays) {
     for s in ed.ink.strokes().iter().filter(|s| selected.contains(&s.id)) {
         match &live {
             // (Exactly as it is: a shape is never smoothed, so its straight segments stay straight.)
-            Some((id, pts)) if *id == s.id => push_polyline(&mut out.doc, pts, s.style.width, ed.on_page(s.style.rgba)),
+            Some((id, pts)) if *id == s.id => out.doc.polyline(pts, s.style.width, ed.on_page(s.style.rgba)),
             _ => stroke_capsules(s, offset, ed.on_page(s.style.rgba), &mut out.doc),
         }
     }
@@ -328,11 +328,10 @@ fn selection_overlay(ed: &Editor, out: &mut Overlays) {
     }
     if let Some(b) = ed.ink.bounds_of(&ed.selection) {
         let pad = 5.0 * px;
-        push_rect(
-            &mut out.doc,
+        out.doc.rect_outline(
             [b[0] + offset[0] - pad, b[1] + offset[1] - pad, b[2] + offset[0] + pad, b[3] + offset[1] + pad],
             1.5 * px,
-            ed.theme.selection,
+            ed.look.theme.selection,
         );
     }
 }
@@ -360,7 +359,7 @@ fn pull_overlay(ed: &Editor, out: &mut Overlays) {
     for i in 0..steps {
         let (a, b) = (start + sweep * i as f32 / steps as f32, start + sweep * (i + 1) as f32 / steps as f32);
         out.screen.push(Capsule::new(point(a), point(b), 3.0 * dpr, {
-            let a = ed.theme.selection;
+            let a = ed.look.theme.selection;
             [a[0], a[1], a[2], alpha]
         }));
     }
@@ -416,20 +415,6 @@ fn markup_capsules(kind: MarkupKind, q: [f32; 4], colour: [u8; 4], out: &mut Vec
             out.extend((0..n).map(|i| Capsule::new(point(i), point(i + 1), thin, colour)));
         }
     }
-}
-
-fn push_polyline(out: &mut Vec<Capsule>, pts: &[P], width: f32, color: [u8; 4]) {
-    match pts {
-        [] => {}
-        [p] => out.push(Capsule::new(*p, *p, width, color)),
-        _ => out.extend(pts.windows(2).map(|w| Capsule::new(w[0], w[1], width, color))),
-    }
-}
-
-/// The outline of `r` (`x0, y0, x1, y1`).
-fn push_rect(out: &mut Vec<Capsule>, r: [f32; 4], width: f32, color: [u8; 4]) {
-    let corners = [[r[0], r[1]], [r[2], r[1]], [r[2], r[3]], [r[0], r[3]], [r[0], r[1]]];
-    out.extend(corners.windows(2).map(|w| Capsule::new(w[0], w[1], width, color)));
 }
 
 #[cfg(test)]

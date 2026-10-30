@@ -39,11 +39,8 @@ fn box_at(ed: &Editor, n: usize) -> [f32; 2] {
 /// A press on the box with each way there is: a finger (with any tool), and the stylus's tip and the left mouse button (with the Select tool).
 fn press_with(ed: &mut Editor, how: &str, at: [f32; 2]) {
     match how {
-        "finger" => {
-            ed.pointer_event(touch(1, Phase::Down, at, 30.0));
-            ed.pointer_event(touch(1, Phase::Up, at, 30.0));
-        }
-        "stylus" => pen_stroke(ed, TIP, &[at, at]),
+        "finger" => finger_tap(ed, at),
+        "stylus" => pen_tap(ed, at),
         _ => mouse_click_at(ed, at),
     }
 }
@@ -136,6 +133,27 @@ fn a_text_field_is_typed_into_until_enter_escape_or_a_press_elsewhere() {
         assert!(!ed.is_typing(), "{how}: a press elsewhere");
         assert_eq!(ed.form.fields[0].shown(), "Ada Lovelace");
     }
+}
+
+#[test]
+fn a_field_is_edited_as_any_text_is_with_the_caret_and_the_selection_and_the_clipboard() {
+    let mut ed = editor();
+    with_form(&mut ed);
+    ed.ws.tool = Tool::Select;
+    press_box(&mut ed, "mouse", 0);
+    ed.type_text("abc");
+    ed.press(Key::Arrow(crate::input::Dir::Left, false));
+    ed.type_text("X");
+    assert_eq!(ed.form.fields[0].shown(), "abXc", "typed where the caret is");
+    ed.shortcut("a", false);
+    ed.shortcut("c", false);
+    ed.type_text("new");
+    assert_eq!(ed.form.fields[0].shown(), "new", "select all, and what is typed replaces it");
+    ed.shortcut("v", false);
+    assert_eq!(ed.form.fields[0].shown(), "newabXc", "the clipboard has what was copied");
+    ed.press(Key::Home(true));
+    ed.press(Key::Backspace);
+    assert_eq!(ed.form.fields[0].shown(), "", "Shift and Home select to the start, and Backspace takes it away");
 }
 
 #[test]

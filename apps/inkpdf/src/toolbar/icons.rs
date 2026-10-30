@@ -12,114 +12,87 @@ pub(super) struct Icon {
     lines: Vec<Vec<[f32; 2]>>,
 }
 
-pub(super) struct Icons {
-    pub undo: Icon,
-    pub redo: Icon,
-    pub save: Icon,
-    pub fullscreen: Icon,
-    pub exit_fullscreen: Icon,
-    pub close: Icon,
-    pub trash: Icon,
-    pub back: Icon,
-    pub pen: Icon,
-    pub geometry: Icon,
-    pub plus: Icon,
-    pub text: Icon,
-    pub desktop: Icon,
-    pub tablet: Icon,
-    pub select: Icon,
-    pub erase: Icon,
-    pub duplicate: Icon,
-    pub copy: Icon,
-    pub paste: Icon,
-    pub node_remove: Icon,
-    pub node_add: Icon,
-    pub node_smooth: Icon,
-    pub options: Icon,
-    /// Four small pages: the pages overview.
-    pub pages: Icon,
-    /// A tick in a circle.
-    pub check: Icon,
-    /// Arrows pointing left and right.
-    pub earlier: Icon,
-    /// The look: the system's (a sun and a moon), light (a sun), dark (a moon).
-    pub theme_system: Icon,
-    pub theme_light: Icon,
-    pub theme_dark: Icon,
-    /// A page with part of it in shade: whether the pages go dark with the look.
-    pub dark_pages: Icon,
-    /// The text selection's tool (an I-beam beside a marked word) and its three marks.
-    pub text_select: Icon,
-    /// A magnifying glass: the search card.
-    pub search: Icon,
-    /// A folder: open a PDF.
-    pub open: Icon,
-    /// A page with its corner folded: the document's pill, folded into its round button.
-    pub document: Icon,
-    pub highlight: Icon,
-    pub underline: Icon,
-    pub strikeout: Icon,
-    pub later: Icon,
-    /// What the search matches: the case ("Aa") and whole words.
-    pub match_case: Icon,
-    pub whole_word: Icon,
-    /// Choosing every page of the overview, and none: a box with a tick, a box with a dash.
-    pub select_all: Icon,
-    pub select_none: Icon,
-    /// A new page before a page, and after it.
-    pub add_before: Icon,
-    pub add_after: Icon,
-    /// A bookmark: the flag of a page.
-    pub flag: Icon,
+/// Declares the icons: for each, its field (with its comment) and the file of `icons/svg` it is made from, which is also the name the
+/// tests give it. One list makes the struct, the loading and `named`.
+macro_rules! icons {
+    ($($(#[$doc:meta])* $field:ident = $file:literal,)*) => {
+        pub(super) struct Icons {
+            $($(#[$doc])* pub $field: Icon,)*
+        }
+
+        static ICONS: LazyLock<Icons> = LazyLock::new(|| Icons {
+            $($field: Icon::from_svg(include_str!(concat!("../../icons/svg/", $file, ".svg"))),)*
+        });
+
+        impl Icons {
+            /// Every icon with its name (the tests look at each).
+            #[cfg(test)]
+            fn named(&self) -> Vec<(&'static str, &Icon)> {
+                vec![$(($file, &self.$field),)*]
+            }
+        }
+    };
 }
 
-static ICONS: LazyLock<Icons> = LazyLock::new(|| Icons {
-    undo: Icon::from_svg(include_str!("../../icons/svg/undo.svg")),
-    redo: Icon::from_svg(include_str!("../../icons/svg/redo.svg")),
-    save: Icon::from_svg(include_str!("../../icons/svg/save.svg")),
-    fullscreen: Icon::from_svg(include_str!("../../icons/svg/fullscreen.svg")),
-    exit_fullscreen: Icon::from_svg(include_str!("../../icons/svg/exit-fullscreen.svg")),
-    close: Icon::from_svg(include_str!("../../icons/svg/close.svg")),
-    trash: Icon::from_svg(include_str!("../../icons/svg/trash.svg")),
-    back: Icon::from_svg(include_str!("../../icons/svg/back.svg")),
-    pen: Icon::from_svg(include_str!("../../icons/svg/pen.svg")),
-    geometry: Icon::from_svg(include_str!("../../icons/svg/geometry.svg")),
-    plus: Icon::from_svg(include_str!("../../icons/svg/plus.svg")),
-    text: Icon::from_svg(include_str!("../../icons/svg/text.svg")),
-    desktop: Icon::from_svg(include_str!("../../icons/svg/desktop.svg")),
-    tablet: Icon::from_svg(include_str!("../../icons/svg/tablet.svg")),
-    select: Icon::from_svg(include_str!("../../icons/svg/select.svg")),
-    erase: Icon::from_svg(include_str!("../../icons/svg/erase.svg")),
-    duplicate: Icon::from_svg(include_str!("../../icons/svg/duplicate.svg")),
-    copy: Icon::from_svg(include_str!("../../icons/svg/copy.svg")),
-    paste: Icon::from_svg(include_str!("../../icons/svg/paste.svg")),
-    node_remove: Icon::from_svg(include_str!("../../icons/svg/node-remove.svg")),
-    node_add: Icon::from_svg(include_str!("../../icons/svg/node-add.svg")),
-    node_smooth: Icon::from_svg(include_str!("../../icons/svg/node-smooth.svg")),
-    options: Icon::from_svg(include_str!("../../icons/svg/options.svg")),
-    pages: Icon::from_svg(include_str!("../../icons/svg/pages.svg")),
-    check: Icon::from_svg(include_str!("../../icons/svg/check.svg")),
-    earlier: Icon::from_svg(include_str!("../../icons/svg/earlier.svg")),
-    later: Icon::from_svg(include_str!("../../icons/svg/later.svg")),
-    match_case: Icon::from_svg(include_str!("../../icons/svg/match-case.svg")),
-    whole_word: Icon::from_svg(include_str!("../../icons/svg/whole-word.svg")),
-    select_all: Icon::from_svg(include_str!("../../icons/svg/select-all.svg")),
-    select_none: Icon::from_svg(include_str!("../../icons/svg/select-none.svg")),
-    add_before: Icon::from_svg(include_str!("../../icons/svg/add-before.svg")),
-    add_after: Icon::from_svg(include_str!("../../icons/svg/add-after.svg")),
-    flag: Icon::from_svg(include_str!("../../icons/svg/flag.svg")),
-    theme_system: Icon::from_svg(include_str!("../../icons/svg/theme-system.svg")),
-    theme_light: Icon::from_svg(include_str!("../../icons/svg/theme-light.svg")),
-    theme_dark: Icon::from_svg(include_str!("../../icons/svg/theme-dark.svg")),
-    dark_pages: Icon::from_svg(include_str!("../../icons/svg/dark-pages.svg")),
-    text_select: Icon::from_svg(include_str!("../../icons/svg/text-select.svg")),
-    search: Icon::from_svg(include_str!("../../icons/svg/search.svg")),
-    open: Icon::from_svg(include_str!("../../icons/svg/open.svg")),
-    document: Icon::from_svg(include_str!("../../icons/svg/document.svg")),
-    highlight: Icon::from_svg(include_str!("../../icons/svg/highlight.svg")),
-    underline: Icon::from_svg(include_str!("../../icons/svg/underline.svg")),
-    strikeout: Icon::from_svg(include_str!("../../icons/svg/strikeout.svg")),
-});
+icons! {
+    undo = "undo",
+    redo = "redo",
+    save = "save",
+    fullscreen = "fullscreen",
+    exit_fullscreen = "exit-fullscreen",
+    close = "close",
+    trash = "trash",
+    back = "back",
+    pen = "pen",
+    geometry = "geometry",
+    plus = "plus",
+    text = "text",
+    desktop = "desktop",
+    tablet = "tablet",
+    select = "select",
+    erase = "erase",
+    duplicate = "duplicate",
+    copy = "copy",
+    paste = "paste",
+    node_remove = "node-remove",
+    node_add = "node-add",
+    node_smooth = "node-smooth",
+    options = "options",
+    /// Four small pages: the pages overview.
+    pages = "pages",
+    /// A tick in a circle.
+    check = "check",
+    /// Arrows pointing left and right.
+    earlier = "earlier",
+    later = "later",
+    /// The look: the system's (a sun and a moon), light (a sun), dark (a moon).
+    theme_system = "theme-system",
+    theme_light = "theme-light",
+    theme_dark = "theme-dark",
+    /// A moon on a page: whether the pages go dark with the look.
+    dark_pages = "dark-pages",
+    /// The text selection's tool (an I-beam beside a marked word) and its three marks.
+    text_select = "text-select",
+    highlight = "highlight",
+    underline = "underline",
+    strikeout = "strikeout",
+    /// A magnifying glass: the search card, and what it matches: the case ("Aa") and whole words.
+    search = "search",
+    match_case = "match-case",
+    whole_word = "whole-word",
+    /// A folder: open a PDF.
+    open = "open",
+    /// A page with its corner folded: the document's pill, folded into its round button.
+    document = "document",
+    /// Choosing every page of the overview, and none: a box with a tick, a box with a dash.
+    select_all = "select-all",
+    select_none = "select-none",
+    /// A new page before a page, and after it.
+    add_before = "add-before",
+    add_after = "add-after",
+    /// A bookmark: the flag of a page.
+    flag = "flag",
+}
 
 /// Whether the SVG makes an icon that draws something and keeps inside its box.
 #[cfg(test)]
@@ -399,53 +372,7 @@ mod tests {
     #[test]
     fn every_embedded_icon_has_strokes_inside_its_box() {
         let all = icons();
-        for (name, icon) in [
-            ("undo", &all.undo),
-            ("redo", &all.redo),
-            ("save", &all.save),
-            ("fullscreen", &all.fullscreen),
-            ("exit-fullscreen", &all.exit_fullscreen),
-            ("close", &all.close),
-            ("trash", &all.trash),
-            ("back", &all.back),
-            ("pen", &all.pen),
-            ("geometry", &all.geometry),
-            ("plus", &all.plus),
-            ("text", &all.text),
-            ("desktop", &all.desktop),
-            ("tablet", &all.tablet),
-            ("select", &all.select),
-            ("erase", &all.erase),
-            ("duplicate", &all.duplicate),
-            ("copy", &all.copy),
-            ("paste", &all.paste),
-            ("node-remove", &all.node_remove),
-            ("node-add", &all.node_add),
-            ("node-smooth", &all.node_smooth),
-            ("options", &all.options),
-            ("theme-system", &all.theme_system),
-            ("theme-light", &all.theme_light),
-            ("theme-dark", &all.theme_dark),
-            ("dark-pages", &all.dark_pages),
-            ("text-select", &all.text_select),
-            ("search", &all.search),
-            ("open", &all.open),
-            ("document", &all.document),
-            ("highlight", &all.highlight),
-            ("underline", &all.underline),
-            ("strikeout", &all.strikeout),
-            ("pages", &all.pages),
-            ("check", &all.check),
-            ("earlier", &all.earlier),
-            ("later", &all.later),
-            ("match-case", &all.match_case),
-            ("whole-word", &all.whole_word),
-            ("select-all", &all.select_all),
-            ("select-none", &all.select_none),
-            ("add-before", &all.add_before),
-            ("add-after", &all.add_after),
-            ("flag", &all.flag),
-        ] {
+        for (name, icon) in all.named() {
             assert!(!icon.lines.is_empty(), "{name} has no strokes");
             for p in icon.lines.iter().flatten() {
                 assert!(p[0].abs() <= 1.0 + 1e-3 && p[1].abs() <= 1.0 + 1e-3, "{name} leaves its box at {p:?}");

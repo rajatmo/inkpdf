@@ -130,31 +130,21 @@ impl Field {
         true
     }
 
-    /// Type `typed` at the end of a text (a new line only in a field that has several lines, and no more than the field takes).
-    pub fn type_text(&mut self, typed: &str) -> bool {
-        if self.kind != Kind::Text {
+    /// What a text field takes, for the keyboard that types into it (see [`crate::field`]): no more characters than the field's limit, and a new
+    /// line only if it has several lines.
+    pub fn rules(&self) -> (usize, bool) {
+        (self.max_len.unwrap_or(MAX_CHARS).min(MAX_CHARS), self.multiline)
+    }
+
+    /// A text field now holds `text` (what was typed into it): `false` if it did already, or is not a text.
+    pub fn set_text(&mut self, text: String) -> bool {
+        if self.kind != Kind::Text || self.text == text {
             return false;
         }
-        let limit = self.max_len.unwrap_or(MAX_CHARS).min(MAX_CHARS);
-        let mut changed = false;
-        for c in crate::text::clean(typed).chars() {
-            if (c == '\n' && !self.multiline) || self.text.chars().count() >= limit {
-                continue;
-            }
-            self.text.push(c);
-            changed = true;
-        }
-        self.changed |= changed;
-        changed
+        self.text = text;
+        self.changed = true;
+        true
     }
-
-    /// Take the last character of a text away.
-    pub fn backspace(&mut self) -> bool {
-        let gone = self.kind == Kind::Text && self.text.pop().is_some();
-        self.changed |= gone;
-        gone
-    }
-
     /// What to write into the file for the field.
     fn value(&self) -> Value {
         match self.kind {
@@ -194,19 +184,16 @@ mod tests {
     }
 
     #[test]
-    fn a_text_takes_typed_text_at_its_end_within_its_limit_and_one_line_unless_it_has_several() {
+    fn a_text_holds_what_was_typed_into_it_within_a_limit_that_the_keyboard_is_given() {
         let mut one = Field::new(Kind::Text, Spec { max_len: Some(5), ..spec("a", &["ab"], &[None], &[]) });
-        assert!(one.type_text("c\nd\te"));
-        assert_eq!(one.shown(), "abcd ", "a new line is left out of a field of one line, a tab is a space, and no more than the field takes");
-        assert!(!one.type_text("x"), "and a full field takes nothing");
-        let mut many = Field::new(Kind::Text, Spec { multiline: true, ..spec("b", &[""], &[None], &[]) });
-        many.type_text("x\ny");
-        assert_eq!(many.shown(), "x\ny");
-        assert!(many.backspace() && many.backspace() && many.backspace() && !many.backspace(), "a character at a time, a new line whole");
-        assert_eq!(many.shown(), "");
-        assert!(many.changed());
+        assert_eq!((one.shown().as_str(), one.rules()), ("ab", (5, false)));
+        assert!(one.set_text("abcde".into()) && one.changed());
+        assert!(!one.set_text("abcde".into()), "the same text is no change");
+        let many = Field::new(Kind::Text, Spec { multiline: true, ..spec("b", &[""], &[None], &[]) });
+        assert_eq!(many.rules(), (2_000, true));
+        let mut check = Field::new(Kind::Check, spec("c", &[], &[Some("Yes")], &[]));
+        assert!(!check.set_text("x".into()), "only a text is typed into");
     }
-
     #[test]
     fn a_check_box_turns_on_and_off_and_a_radio_group_has_one_button_on_that_stays_on() {
         let mut check = Field::new(Kind::Check, spec("c", &[], &[Some("Yes")], &[]));

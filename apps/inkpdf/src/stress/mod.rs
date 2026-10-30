@@ -29,6 +29,7 @@ mod files;
 mod ink;
 mod overview;
 mod pages;
+mod redraw;
 mod shapes;
 
 /// A small, fast, seedable random source (xorshift64*).
@@ -439,7 +440,7 @@ fn poke(ed: &mut Editor, rng: &mut Rng, hostile: bool) -> String {
             // Words arrive on the system clipboard from another program.
             let words = rng.pick(&["from elsewhere", "two\nlines", "tab\there", "   ", ""]);
             what = format!("clipboard words {words:?}");
-            ed.text_clipboard.set(words);
+            ed.clip.text.set(words);
         }
         29 | 30 => what = anchor_poke(ed, rng),
         31 => what = text_poke(ed, rng),
@@ -747,18 +748,20 @@ fn check_editor(ed: &Editor, what: &str) {
     for id in &ed.selection {
         assert!(ed.ink.get(*id).is_some(), "{what}: selected stroke {id} does not exist");
     }
-    for style in [ed.pen, ed.shape_style] {
+    for style in [ed.styles.pen, ed.styles.shape_style] {
         assert!(
-            style.width.is_finite() && (MIN_WIDTH..=MAX_WIDTH).contains(&style.width) && style.colour < ed.palette.len(),
+            style.width.is_finite() && (MIN_WIDTH..=MAX_WIDTH).contains(&style.width) && style.colour < ed.styles.palette.len(),
             "{what}: style {style:?}"
         );
     }
-    let text = ed.text_style;
+    let text = ed.styles.text_style;
     assert!(
-        text.width.is_finite() && (crate::tool::TEXT_SIZES.0..=crate::tool::TEXT_SIZES.1).contains(&text.width) && text.colour < ed.palette.len(),
+        text.width.is_finite()
+            && (crate::tool::TEXT_SIZES.0..=crate::tool::TEXT_SIZES.1).contains(&text.width)
+            && text.colour < ed.styles.palette.len(),
         "{what}: text style {text:?}"
     );
-    assert!((0.0..=1.0).contains(&ed.smoothing), "{what}: smoothing {}", ed.smoothing);
+    assert!((0.0..=1.0).contains(&ed.styles.smoothing), "{what}: smoothing {}", ed.styles.smoothing);
     assert!(ed.chrome.colour_hsv.iter().all(|c| c.is_finite()), "{what}: hsv {:?}", ed.chrome.colour_hsv);
     assert!(ed.tool != crate::tool::Tool::named("laser") || ed.chrome.panel.is_none(), "{what}: a panel is open with the laser chosen");
     for s in ed.ink.strokes() {
@@ -1045,10 +1048,10 @@ fn every_tool_together(seed: u64, rounds: usize) {
             }
             7 | 8 => {
                 use_tool(&mut ed, Tool::Geometry);
-                ed.shape = rng.pick(&crate::geometry::SHAPES);
+                ed.styles.shape = rng.pick(&crate::geometry::SHAPES);
                 let (a, b) = (spot(&mut rng), spot(&mut rng));
                 let before = ed.ink.len();
-                if matches!(ed.shape, Shape::Line | Shape::Curve) && rng.chance(0.6) {
+                if matches!(ed.styles.shape, Shape::Line | Shape::Curve) && rng.chance(0.6) {
                     // A polyline or spline by taps, ended by a double tap (near the first node, now and then).
                     let nodes: Vec<[f32; 2]> = std::iter::once(a).chain((0..2 + rng.below(4)).map(|_| spot(&mut rng))).collect();
                     for (i, &n) in nodes.iter().enumerate() {

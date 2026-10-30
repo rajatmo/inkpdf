@@ -54,7 +54,7 @@ fn worst_wobble(ed: &Editor) -> f32 {
 fn a_shaky_hand_comes_out_steadier() {
     let mut steady = editor();
     let mut off = editor();
-    off.smoothing = 0.0;
+    off.styles.smoothing = 0.0;
     let path = shaky_line(&steady);
     pen_stroke(&mut steady, TIP, &path);
     pen_stroke(&mut off, TIP, &path);
@@ -192,7 +192,7 @@ fn the_pen_presses_toolbar_buttons_instead_of_drawing() {
     open_settings(&mut ed);
     let red = ed.toolbar().tool_panel(Tool::Pen, ed.view.viewport[0], false).expect("panel").swatch_centre(2);
     pen_stroke(&mut ed, TIP, &[red, red]);
-    assert_eq!(ed.pen.colour, 2);
+    assert_eq!(ed.styles.pen.colour, 2);
     assert_eq!(ed.ink.len(), 0);
     // New strokes use the chosen colour.
     let path = [on_page(&ed, 10.0, 300.0), on_page(&ed, 40.0, 320.0), on_page(&ed, 70.0, 300.0)];

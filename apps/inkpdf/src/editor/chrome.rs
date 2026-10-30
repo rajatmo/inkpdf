@@ -36,7 +36,7 @@ pub struct Chrome {
     pub colour_hsv: Hsv,
     /// The pages overview, while it is up (see [`super::overview`]).
     pub overview: Option<super::overview::OverviewState>,
-    /// The card under the theme button is open (see [`super::theme_menu`]).
+    /// The round button under the theme button is shown (see [`super::theme_menu`]).
     pub theme_menu: bool,
     /// The pill unfolded from its round button, in a window too narrow for all three whole (see [`super::pills`]).
     pub pill: Option<Pill>,
@@ -48,8 +48,8 @@ impl Chrome {
     /// A new document: no press is under way, and no prompt is up.
     pub(super) fn clear_press_and_prompt(&mut self) {
         self.act = Act::Idle;
-        self.theme_menu = false;
         self.pill = None;
+        self.theme_menu = false;
         self.overview = None;
         self.prompt = None;
         self.prompt_grab = None;
@@ -103,7 +103,7 @@ impl Chrome {
 
     /// Open the colour editor for colour slot `slot` (starting from the colour it has now), or put it away (`None`).
     pub(super) fn set_editing(&mut self, ws: &mut Workspace, slot: Option<usize>) {
-        let colour = slot.and_then(|s| ws.palette.get(s));
+        let colour = slot.and_then(|s| ws.styles.palette.get(s));
         if slot.is_some() && colour.is_none() {
             return;
         }
@@ -126,7 +126,7 @@ impl Chrome {
         };
         self.colour_hsv[part] = value;
         let rgb = colour::hsv_to_rgb(self.colour_hsv);
-        if let Some(cell) = ws.palette.get_mut(slot) {
+        if let Some(cell) = ws.styles.palette.get_mut(slot) {
             *cell = [rgb[0], rgb[1], rgb[2], 255];
             ws.style_mut().colour = slot;
         }

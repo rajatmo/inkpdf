@@ -18,7 +18,7 @@ use crate::form::Form;
 use crate::ink::{InkStore, MarkupKind, P, PageStroke, Style, TextBlock};
 use crate::links::Link;
 use crate::outline::OutlineItem;
-use crate::pdf::{self, AnnotKind, NewAnnotation, NewShape, OrganizeError, PdfDocument};
+use crate::pdf::{self, AnnotKind, NewAnnotation, NewShape, OrganizeError, PdfBackend, PdfDocument};
 use crate::view::Layout;
 
 /// What marks an annotation as ours.
@@ -113,9 +113,15 @@ fn find_ours(doc: &dyn PdfDocument) -> Vec<Found> {
         .collect()
 }
 
-/// Read the ink this app saved earlier.
+/// Read the ink this app saved earlier, with the program's PDF engine.
+#[cfg(test)]
 pub fn load(bytes: &Arc<Vec<u8>>, geoms: &[PageGeom], layout: &Layout) -> Result<Loaded, String> {
-    let mut doc = pdf::native().open(bytes)?;
+    load_with(pdf::native(), bytes, geoms, layout)
+}
+
+/// [`load`] with another PDF engine.
+pub fn load_with(engine: &dyn PdfBackend, bytes: &Arc<Vec<u8>>, geoms: &[PageGeom], layout: &Layout) -> Result<Loaded, String> {
+    let mut doc = engine.open(bytes)?;
     let mut links = crate::pdf_read::links(&*doc, geoms, layout);
     let (form, boxes) = crate::pdf_read::form(&*doc, geoms, layout);
     // (The boxes go last: where a link and a box overlap, the box is what a press finds.)
@@ -243,7 +249,7 @@ pub fn save(
     doc_of_file: &[Option<usize>],
     copies: &[(usize, usize)],
 ) -> Result<Vec<u8>, String> {
-    save_with(base, store, geoms, layout, pages, doc_of_file, copies, &Extras::default())
+    save_with(pdf::native(), base, store, geoms, layout, pages, doc_of_file, copies, &Extras::default())
 }
 
 /// What a save writes besides the ink and the pages.
@@ -258,6 +264,7 @@ pub struct Extras<'a> {
 /// [`save`], and with `extras`.
 #[allow(clippy::too_many_arguments, reason = "the same arguments as `save`, each a different part of what the document is, and one more")]
 pub fn save_with(
+    engine: &dyn PdfBackend,
     base: &Arc<Vec<u8>>,
     store: &InkStore,
     geoms: &[PageGeom],
@@ -267,8 +274,8 @@ pub fn save_with(
     copies: &[(usize, usize)],
     extras: &Extras<'_>,
 ) -> Result<Vec<u8>, String> {
-    let mut doc = pdf::native().open(base)?;
-    let now = pdf::native().date(unix_now());
+    let mut doc = engine.open(base)?;
+    let now = engine.date(unix_now());
     let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_nanos());
     let serial = std::cell::Cell::new(0_u32);
 
@@ -795,13 +802,13 @@ mod tests {
         let on_page = |ed: &Editor, x: f32, y: f32| ed.view.doc_to_screen([12.0 + x, 12.0 + y]);
         // Black, blue, red, green strokes in different thicknesses.
         for (colour, width, y) in [(0, 2.5, 150.0), (1, 5.0, 230.0), (2, 1.2, 310.0), (3, 5.0, 390.0)] {
-            ed.pen.colour = colour;
-            ed.pen.width = width;
+            ed.styles.pen.colour = colour;
+            ed.styles.pen.width = width;
             let wave: Vec<[f32; 2]> = (0..80).map(|i| on_page(&ed, 80.0 + i as f32 * 6.0, y + (i as f32 * 0.35).sin() * 22.0)).collect();
             stroke(&mut ed, wave);
         }
-        ed.pen.colour = 2;
-        ed.pen.width = 5.0;
+        ed.styles.pen.colour = 2;
+        ed.styles.pen.width = 5.0;
         let circle: Vec<[f32; 2]> = (0..=60)
             .map(|i| {
                 on_page(
@@ -813,8 +820,8 @@ mod tests {
             .collect();
         stroke(&mut ed, circle);
         let dot = on_page(&ed, 480.0, 560.0);
-        ed.pen.colour = 0;
-        ed.pen.width = 5.0;
+        ed.styles.pen.colour = 0;
+        ed.styles.pen.width = 5.0;
         stroke(&mut ed, vec![dot, dot]);
         // And a stroke on page 2.
         let (page2_x, page2_y) = (12.0, 12.0 + 792.0 + 12.0);

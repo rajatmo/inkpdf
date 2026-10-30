@@ -15,6 +15,63 @@ use crate::view::{Layout, View};
 
 use crate::requests::Requests;
 
+/// What the tools write with: the five colours (shared), and how each tool that writes uses them: the colour slot in use and the thickness (or,
+/// for text, the size) in points; the shape the shape tool makes, and how much the pen is steadied.
+pub struct Styles {
+    pub palette: [[u8; 4]; 5],
+    pub pen: ToolStyle,
+    pub shape_style: ToolStyle,
+    /// How the lasso restyles what it picked up (not kept in the settings: it is chosen anew each time).
+    pub lasso_style: ToolStyle,
+    pub text_style: ToolStyle,
+    /// The shape the shape tool makes.
+    pub shape: Shape,
+    /// How much the pen is steadied while drawing, 0 to 1 (see [`crate::smooth`]).
+    pub smoothing: f32,
+}
+
+impl Default for Styles {
+    fn default() -> Self {
+        Self {
+            palette: PALETTE,
+            pen: ToolStyle::PEN,
+            shape_style: ToolStyle::SHAPES,
+            lasso_style: ToolStyle::PEN,
+            text_style: ToolStyle::TEXT,
+            shape: Shape::default(),
+            smoothing: crate::smooth::DEFAULT_AMOUNT,
+        }
+    }
+}
+
+/// How the interface looks: the look the user chose (the system's, light or dark), whether the pages are drawn dark too, what the system says
+/// now, and the colours the interface is drawn in now (what the tools paint their handles and outlines in), as the editor resolved the scheme.
+#[derive(Default)]
+pub struct Look {
+    pub appearance: Appearance,
+    pub dark_pages: bool,
+    pub system_scheme: Scheme,
+    pub theme: Palette,
+}
+
+/// What was copied, and the system's text clipboard.
+pub struct Clipboards {
+    /// What was copied: the items themselves, to be pasted again (see [`crate::selection`]).
+    pub items: Vec<Stroke>,
+    /// How many times the items have been pasted since they were copied.
+    pub pasted: u32,
+    /// The system's text clipboard: text copied from a text box goes there, and text from anywhere can be pasted.
+    pub text: Box<dyn TextClipboard>,
+    /// The text that copying a text box put on the system clipboard (so pasting can tell it from text that came from elsewhere).
+    pub echo: Option<String>,
+}
+
+impl Default for Clipboards {
+    fn default() -> Self {
+        Self { items: Vec::new(), pasted: 0, text: Box::new(MemoryClipboard::default()), echo: None }
+    }
+}
+
 pub struct Workspace {
     pub layout: Layout,
     pub has_doc: bool,
@@ -31,35 +88,11 @@ pub struct Workspace {
     pub erasing: HashSet<u64>,
     /// The tool in use.
     pub tool: Tool,
-    /// What was copied: the items themselves, to be pasted again (see [`crate::selection`]).
-    pub clipboard: Vec<Stroke>,
-    /// How many times the clipboard has been pasted since it was filled.
-    pub pasted: u32,
-    /// The system's text clipboard: text copied from a text box goes there, and text from anywhere can be pasted.
-    pub text_clipboard: Box<dyn TextClipboard>,
-    /// The text that copying a text box put on the system clipboard (so pasting can tell it from text that came
-    /// from elsewhere).
-    pub clipboard_echo: Option<String>,
-    /// The five colours the tools write in (shared), and how each tool that writes uses them: the
-    /// colour slot in use and the thickness (or, for text, the size) in points.
-    pub palette: [[u8; 4]; 5],
-    pub pen: ToolStyle,
-    pub shape_style: ToolStyle,
-    /// How the lasso restyles what it picked up (not kept in the settings: it is chosen anew each time).
-    pub lasso_style: ToolStyle,
-    pub text_style: ToolStyle,
-    /// The shape the shape tool makes.
-    pub shape: Shape,
-    /// How much the pen is steadied while drawing, 0 to 1 (see [`crate::smooth`]).
-    pub smoothing: f32,
-    /// The look the user chose (the system's, light or dark), whether the pages are drawn dark too, and what the system says now.
-    pub appearance: Appearance,
-    pub dark_pages: bool,
-    pub system_scheme: Scheme,
+    pub clip: Clipboards,
+    pub styles: Styles,
+    pub look: Look,
     /// The text of the pages, as far as it has been read (see `doctext`).
     pub text: crate::doctext::DocText,
-    /// The colours of the interface now (what the tools paint their handles and outlines in), as the editor resolved the scheme.
-    pub theme: Palette,
     /// What the shell is asked to do, and whether a frame is wanted.
     pub requests: Requests,
     pub redraw: bool,
@@ -78,27 +111,14 @@ impl Workspace {
             selection: Vec::new(),
             erasing: HashSet::new(),
             tool: Tool::Select,
-            clipboard: Vec::new(),
-            pasted: 0,
-            text_clipboard: Box::new(MemoryClipboard::default()),
-            clipboard_echo: None,
-            palette: PALETTE,
-            pen: ToolStyle::PEN,
-            shape_style: ToolStyle::SHAPES,
-            lasso_style: ToolStyle::PEN,
-            text_style: ToolStyle::TEXT,
-            shape: Shape::default(),
-            smoothing: crate::smooth::DEFAULT_AMOUNT,
-            appearance: Appearance::default(),
-            dark_pages: false,
+            clip: Clipboards::default(),
+            styles: Styles::default(),
+            look: Look::default(),
             text: crate::doctext::DocText::default(),
-            system_scheme: Scheme::default(),
-            theme: Palette::default(),
             requests: Requests::default(),
             redraw: false,
         }
     }
-
     /// What a press of the stylus (or the mouse standing in for it) does: its own buttons if one is held, else
     /// what the tool in use makes of the plain tip (the lasso tool loops, the eraser tool erases).
     pub fn role(&self, pen: &PenButtons) -> Role {
@@ -139,29 +159,29 @@ impl Workspace {
 
     pub fn style_of(&self, tool: Tool) -> ToolStyle {
         match tool {
-            Tool::Geometry => self.shape_style,
-            Tool::Text => self.text_style,
-            Tool::Lasso => self.lasso_style,
-            _ => self.pen,
+            Tool::Geometry => self.styles.shape_style,
+            Tool::Text => self.styles.text_style,
+            Tool::Lasso => self.styles.lasso_style,
+            _ => self.styles.pen,
         }
     }
 
     pub fn style_mut(&mut self) -> &mut ToolStyle {
         match self.tool {
-            Tool::Geometry => &mut self.shape_style,
-            Tool::Text => &mut self.text_style,
-            Tool::Lasso => &mut self.lasso_style,
-            _ => &mut self.pen,
+            Tool::Geometry => &mut self.styles.shape_style,
+            Tool::Text => &mut self.styles.text_style,
+            Tool::Lasso => &mut self.styles.lasso_style,
+            _ => &mut self.styles.pen,
         }
     }
 
     pub fn colour_of(&self, style: ToolStyle) -> [u8; 4] {
-        self.palette[style.colour % self.palette.len()]
+        self.styles.palette[style.colour % self.styles.palette.len()]
     }
 
     /// Whether pages are drawn dark now: the setting is on and the look is dark.
     pub fn dark_pages_active(&self) -> bool {
-        self.dark_pages && self.appearance.resolve(self.system_scheme) == crate::palette::Scheme::Dark
+        self.look.dark_pages && self.look.appearance.resolve(self.look.system_scheme) == crate::palette::Scheme::Dark
     }
 
     /// A colour of the page's own (ink, text) as it is shown: turned over on a dark page, as it is on a light one. What is saved is

@@ -8,6 +8,7 @@ use crate::tool::{MAX_ACTIONS, Tool, ToolAction};
 use crate::toolbar::{ContextBar, ContextItem, ContextState, PanelState};
 use crate::tools::Key;
 
+use super::act::CardHit;
 use super::{Act, Editor};
 
 impl Editor {
@@ -36,7 +37,7 @@ impl Editor {
             paste: self.can_paste(),
             actions,
             style_open: self.chrome.panel.is_some(),
-            palette: self.ws.palette,
+            palette: self.ws.styles.palette,
             colour: self.style().colour,
         };
         Some(state)
@@ -52,48 +53,42 @@ impl Editor {
         Some(bar.card(panel.rect[3] + 0.2 * panel.unit()))
     }
 
-    /// A press at `pos`: if it is on the bar, it is the bar's (and the button is pressed when it lets go).
-    pub(super) fn press_context(&mut self, dev: Device, id: u32, pos: [f32; 2]) -> bool {
-        if let Some(card) = self.theme_layout().filter(|c| c.contains(pos)) {
-            self.chrome.act = Act::Theme { dev, id, hit: card.hit(pos) };
-            self.ws.redraw = true;
-            return true;
+    /// What is under `pos` among the cards that float over the page, topmost first: the round button under the theme button, the search card (it
+    /// is over the page, under the bars), the bar under the tools. `Some(None)` is on a card but not on a button of it.
+    fn card_at(&self, pos: [f32; 2]) -> Option<Option<CardHit>> {
+        if self.theme_layout().is_some_and(|c| c.contains(pos)) {
+            return Some(Some(CardHit::Theme));
         }
-        // (The search card floats over the page, under the bars: it takes the press first.)
         if let Some(card) = self.search_layout().filter(|c| c.contains(pos)) {
-            self.chrome.act = Act::Search { dev, id, item: card.hit(pos) };
-            self.ws.redraw = true;
-            return true;
+            return Some(card.hit(pos).map(CardHit::Search));
         }
-        let Some(bar) = self.context_bar().filter(|b| b.contains(pos)) else { return false };
-        self.chrome.act = Act::Context { dev, id, item: bar.hit(pos) };
+        let bar = self.context_bar().filter(|b| b.contains(pos))?;
+        Some(bar.hit(pos).map(CardHit::Context))
+    }
+
+    /// A press at `pos`: if it is on a card, it is the card's (and the button is pressed when it lets go).
+    pub(super) fn press_context(&mut self, dev: Device, id: u32, pos: [f32; 2]) -> bool {
+        let Some(hit) = self.card_at(pos) else { return false };
+        self.chrome.act = Act::Card { dev, id, hit };
         self.ws.redraw = true;
         true
     }
 
-    /// If the pointer pressed a button of the bar and is still over it, press it.
+    /// If the pointer pressed a button of a card and is still over it, press it.
     pub(super) fn release_context(&mut self, dev: Device, id: u32, pos: Option<[f32; 2]>) {
-        if let Act::Theme { dev: d, id: a, hit: true } = self.chrome.act {
-            if d == dev && a == id && pos.is_some_and(|p| self.theme_layout().is_some_and(|c| c.hit(p))) {
-                self.press_theme_row();
-            }
-            return;
-        }
-        if let Act::Search { dev: d, id: a, item: Some(item) } = self.chrome.act {
-            if d == dev && a == id && pos.is_some_and(|p| self.search_layout().and_then(|c| c.hit(p)) == Some(item)) {
-                self.press_search_item(item);
-            }
-            return;
-        }
-        let Act::Context { dev: d, id: a, item: Some(item) } = self.chrome.act else { return };
-        if d != dev || a != id {
-            return;
-        }
-        if pos.is_some_and(|p| self.context_bar().and_then(|b| b.hit(p)) == Some(item)) {
-            self.activate_context(item);
+        let Act::Card { dev: d, id: a, hit: Some(hit) } = self.chrome.act else { return };
+        if d == dev && a == id && pos.is_some_and(|p| self.card_at(p).flatten() == Some(hit)) {
+            self.activate_card(hit);
         }
     }
 
+    fn activate_card(&mut self, hit: CardHit) {
+        match hit {
+            CardHit::Theme => self.set_dark_pages(!self.dark_pages()),
+            CardHit::Search(item) => self.press_search_item(item),
+            CardHit::Context(item) => self.activate_context(item),
+        }
+    }
     fn activate_context(&mut self, item: ContextItem) {
         match item {
             ContextItem::Style => {

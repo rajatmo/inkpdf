@@ -103,7 +103,7 @@ impl Eraser {
             [self.pos[0] + r * a.cos(), self.pos[1] + r * a.sin()]
         };
         for i in 0..STEPS {
-            out.screen_line(at(i), at(i + 1), 1.5 * ws.dpr, ws.theme.guide);
+            out.screen_line(at(i), at(i + 1), 1.5 * ws.dpr, ws.look.theme.guide);
         }
     }
 }
@@ -152,9 +152,9 @@ impl Lasso {
 
     pub fn paint(&self, ws: &Workspace, out: &mut dyn Painter) {
         let px = ws.dpr / ws.view.zoom;
-        polyline(out, &self.poly, 1.5 * px, ws.theme.selection);
+        polyline(out, &self.poly, 1.5 * px, ws.look.theme.selection);
         if let (Some(first), Some(last)) = (self.poly.first(), self.poly.last()) {
-            out.doc_line(*last, *first, 1.0 * px, [ws.theme.selection[0], ws.theme.selection[1], ws.theme.selection[2], 110]);
+            out.doc_line(*last, *first, 1.0 * px, [ws.look.theme.selection[0], ws.look.theme.selection[1], ws.look.theme.selection[2], 110]);
         }
     }
 }

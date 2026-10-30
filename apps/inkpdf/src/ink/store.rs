@@ -1,10 +1,18 @@
-//! The set of strokes in a document, with undo and redo, dirty-page tracking and hit testing.
+//! The set of strokes in a document, as the rest of the program sees it: adding, changing and removing strokes, each as a step of the undo
+//! history, and asking what is where. It is made of three parts: the [`Drawing`] (the strokes and the pages that changed), the [`History`]
+//! (the steps, which know how to do and undo themselves) and the queries (see [`super::query`]); this is the one place that holds them
+//! together, counts the changes and gives the strokes their ids.
 
-use std::collections::{BTreeSet, HashSet};
+use std::collections::HashSet;
 
 use crate::figure::Figure;
 use crate::pages::{PageEdit, Remap};
 
+use super::drawing::Drawing;
+#[cfg(test)]
+use super::history::MAX_HISTORY;
+use super::history::{Cmd, History, PageStep};
+use super::query;
 use super::{MarkupKind, P, PageStroke, Stroke, Style, TextBlock};
 
 /// Longest stroke kept, in points; a stray gesture cannot grow without bound.
@@ -13,46 +21,6 @@ const MAX_POINTS: usize = 100_000;
 /// than a few thousand points across, and numbers this large are where arithmetic on shapes starts
 /// to lose its precision.
 const MAX_COORD: f32 = 1.0e6;
-/// Undo steps kept.
-const MAX_HISTORY: usize = 500;
-
-enum Cmd {
-    Add(Vec<Stroke>),
-    /// With each stroke's position, so undo puts it back where it was in the drawing order.
-    Remove(Vec<(usize, Stroke)>),
-    Move {
-        ids: Vec<u64>,
-        dx: f32,
-        dy: f32,
-        from: Vec<(u64, u32)>,
-        to_page: Option<u32>,
-    },
-    /// A shape reshaped by its anchors: the stroke before and after.
-    Reshape {
-        before: Box<Stroke>,
-        after: Box<Stroke>,
-    },
-    /// Several strokes restyled at once (a new colour, thickness or text size): each before and after.
-    Restyle {
-        before: Vec<Stroke>,
-        after: Vec<Stroke>,
-    },
-    /// The pages were edited (added, deleted, rearranged).
-    Pages(Box<PageStep>),
-}
-
-/// An edit of the pages as the history holds it.
-struct PageStep {
-    edit: PageEdit,
-    /// The edit that takes the pages back.
-    undo: PageEdit,
-    forward: Remap,
-    backward: Remap,
-    /// The strokes that were on the pages that went, each with its place in the drawing order.
-    buried: Vec<(usize, Stroke)>,
-    /// The strokes of the pages that were copied, as the copies have them: they come back when the step is redone.
-    made: Vec<Stroke>,
-}
 
 /// A stroke that is to become something else, keeping its id and its page (see [`InkStore::replace_many`]).
 pub struct Replacement {
@@ -65,19 +33,15 @@ pub struct Replacement {
 
 #[derive(Default)]
 pub struct InkStore {
-    strokes: Vec<Stroke>,
+    drawing: Drawing,
+    history: History,
     next_id: u64,
-    undo: Vec<Cmd>,
-    redo: Vec<Cmd>,
-    dirty: BTreeSet<u32>,
     /// Counts every change to the strokes.
     revision: u64,
     /// The revision of the last change that was not just a stroke added at the end.
     structural: u64,
     /// The edit of the pages the last undo or redo made, until it is taken (see [`InkStore::take_page_edit`]).
     page_edit: Option<PageEdit>,
-    /// The graves of deletions whose steps the history let go of, until they are taken (see [`InkStore::take_evicted_graves`]).
-    evicted: Vec<u64>,
 }
 
 impl InkStore {
@@ -97,7 +61,7 @@ impl InkStore {
                 let id = self.take_id();
                 // A figure that does not draw what was stored is not to be trusted.
                 let figure = figure.filter(|f| f.points() == pts);
-                self.strokes.push(Stroke::new(id, page, style, pts, figure, text, markup));
+                self.drawing.strokes.push(Stroke::new(id, page, style, pts, figure, text, markup));
             }
         }
         self.revision += 1;
@@ -122,58 +86,56 @@ impl InkStore {
 
     #[cfg(test)]
     pub fn len(&self) -> usize {
-        self.strokes.len()
+        self.drawing.strokes.len()
     }
 
     pub fn strokes(&self) -> &[Stroke] {
-        &self.strokes
+        &self.drawing.strokes
     }
 
     pub fn get(&self, id: u64) -> Option<&Stroke> {
-        self.strokes.iter().find(|s| s.id == id)
+        self.drawing.strokes.iter().find(|s| s.id == id)
     }
 
-    pub fn dirty_pages(&self) -> &BTreeSet<u32> {
-        &self.dirty
+    pub fn dirty_pages(&self) -> &std::collections::BTreeSet<u32> {
+        &self.drawing.dirty
     }
 
     pub fn is_dirty(&self) -> bool {
-        !self.dirty.is_empty()
+        !self.drawing.dirty.is_empty()
     }
 
     /// Flag a page as changed without touching its ink (a page that was added, or flagged).
     pub fn mark_dirty(&mut self, page: u32) {
-        self.dirty.insert(page);
+        self.drawing.dirty.insert(page);
     }
 
     pub fn mark_clean(&mut self) {
-        self.dirty.clear();
+        self.drawing.dirty.clear();
     }
 
     pub fn can_undo(&self) -> bool {
-        !self.undo.is_empty()
+        self.history.can_undo()
     }
 
     pub fn can_redo(&self) -> bool {
-        !self.redo.is_empty()
+        self.history.can_redo()
     }
 
-    fn record(&mut self, cmd: Cmd) {
+    /// A step has been done: it is kept for undoing, and the strokes have changed.
+    fn done(&mut self, cmd: Cmd) {
         let appended = matches!(cmd, Cmd::Add(_));
-        self.undo.push(cmd);
-        if self.undo.len() > MAX_HISTORY
-            && let Cmd::Pages(step) = self.undo.remove(0)
-            && let PageEdit::Delete { grave, .. } = step.edit
-            && grave != 0
-        {
-            // The oldest step goes: a deletion that can no longer be undone has nothing to be kept for.
-            self.evicted.push(grave);
-        }
-        self.redo.clear();
+        self.history.record(cmd);
         self.revision += 1;
         if !appended {
             self.structural = self.revision;
         }
+    }
+
+    /// The strokes have changed without a step of their own (a restyle joined to the last).
+    fn changed(&mut self) {
+        self.revision += 1;
+        self.structural = self.revision;
     }
 
     /// Add a finished stroke. `None` when it has no usable points.
@@ -210,30 +172,22 @@ impl InkStore {
         let pts = sanitize(pts)?;
         let id = self.take_id();
         let stroke = Stroke::new(id, page, style, pts, figure, text, markup);
-        self.dirty.insert(page);
-        self.strokes.push(stroke.clone());
-        self.record(Cmd::Add(vec![stroke]));
+        self.drawing.push(stroke.clone());
+        self.done(Cmd::Add(vec![stroke]));
         Some(id)
     }
 
     /// Remove strokes by id as one undo step. Returns how many were removed.
     pub fn remove(&mut self, ids: &[u64]) -> usize {
         let wanted: HashSet<u64> = ids.iter().copied().collect();
-        let mut removed: Vec<(usize, Stroke)> = Vec::new();
-        for (i, s) in self.strokes.iter().enumerate() {
-            if wanted.contains(&s.id) {
-                removed.push((i, s.clone()));
-            }
-        }
+        let removed: Vec<(usize, Stroke)> =
+            self.drawing.strokes.iter().enumerate().filter(|(_, s)| wanted.contains(&s.id)).map(|(i, s)| (i, s.clone())).collect();
         if removed.is_empty() {
             return 0;
         }
-        self.strokes.retain(|s| !wanted.contains(&s.id));
-        for (_, s) in &removed {
-            self.dirty.insert(s.page);
-        }
+        self.drawing.remove_ids(&wanted);
         let n = removed.len();
-        self.record(Cmd::Remove(removed));
+        self.done(Cmd::Remove(removed));
         n
     }
 
@@ -244,16 +198,16 @@ impl InkStore {
     /// when the pages are numbered as they were.
     pub fn edit_pages(&mut self, edit: PageEdit, undo: PageEdit, forward: Remap, backward: Remap) {
         let made = self.copy_strokes(&forward);
-        let buried = self.remap_strokes(&forward);
-        self.strokes.extend(made.iter().cloned());
-        self.record(Cmd::Pages(Box::new(PageStep { edit, undo, forward, backward, buried, made })));
+        let buried = self.drawing.remap(&forward);
+        self.drawing.strokes.extend(made.iter().cloned());
+        self.done(Cmd::Pages(Box::new(PageStep { edit, undo, forward, backward, buried, made })));
         self.structural = self.revision;
     }
 
     /// The names of the graves of deletions that can no longer be undone, because the history has let go of their steps: what
     /// was kept for them can go. Taken, so it is given once.
     pub fn take_evicted_graves(&mut self) -> Vec<u64> {
-        std::mem::take(&mut self.evicted)
+        self.history.take_evicted()
     }
 
     /// The edit of the pages that the last undo or redo was, if it was one: what the rest of the document (the page
@@ -267,7 +221,7 @@ impl InkStore {
     fn copy_strokes(&mut self, remap: &Remap) -> Vec<Stroke> {
         let mut made = Vec::new();
         for copy in remap.copies() {
-            let sources: Vec<Stroke> = self.strokes.iter().filter(|s| s.page as usize == copy.from).cloned().collect();
+            let sources: Vec<Stroke> = self.drawing.strokes.iter().filter(|s| s.page as usize == copy.from).cloned().collect();
             for mut stroke in sources {
                 stroke.translate(copy.dx, copy.dy);
                 stroke.page = copy.page as u32;
@@ -278,32 +232,10 @@ impl InkStore {
         made
     }
 
-    /// The strokes on pages that `remap` drops come out (with their places in the drawing order) and the others take
-    /// the pages' new numbers and places; the dirty pages follow, and the pages the edit touches are dirty.
-    fn remap_strokes(&mut self, remap: &Remap) -> Vec<(usize, Stroke)> {
-        let mut buried = Vec::new();
-        for (i, mut s) in std::mem::take(&mut self.strokes).into_iter().enumerate() {
-            match remap.moved(s.page as usize) {
-                Some(m) => {
-                    s.page = m.page as u32;
-                    s.translate(m.dx, m.dy);
-                    self.strokes.push(s);
-                }
-                None => buried.push((i, s)),
-            }
-        }
-        self.dirty = self.dirty.iter().filter_map(|&p| remap.page(p as usize)).map(|p| p as u32).collect();
-        self.dirty.extend(remap.touched().into_iter().map(|p| p as u32));
-        buried
-    }
-
     /// Nothing before the last page that was deleted can be undone once the file is written without it: the page
     /// cannot be put back into a file that no longer has it.
     pub fn forget_deleted_pages(&mut self) {
-        let deleted = |cmd: &Cmd| matches!(cmd, Cmd::Pages(step) if matches!(step.edit, PageEdit::Delete { .. }));
-        if let Some(last) = self.undo.iter().rposition(deleted) {
-            self.undo.drain(..=last);
-        }
+        self.history.forget_deleted_pages();
     }
 
     /// Move strokes by `(dx, dy)` as one undo step, optionally onto another page.
@@ -312,26 +244,23 @@ impl InkStore {
             return 0;
         }
         let wanted: HashSet<u64> = ids.iter().copied().collect();
-        let from: Vec<(u64, u32)> = self.strokes.iter().filter(|s| wanted.contains(&s.id)).map(|s| (s.id, s.page)).collect();
+        let from: Vec<(u64, u32)> = self.drawing.strokes.iter().filter(|s| wanted.contains(&s.id)).map(|s| (s.id, s.page)).collect();
         if from.is_empty() || (dx == 0.0 && dy == 0.0 && to_page.is_none_or(|p| from.iter().all(|f| f.1 == p))) {
             return 0;
         }
         // Not off into space: the result must stay where numbers are still exact enough to draw.
-        let out_of_bounds = self.strokes.iter().filter(|s| wanted.contains(&s.id)).any(|s| {
+        let out_of_bounds = self.drawing.strokes.iter().filter(|s| wanted.contains(&s.id)).any(|s| {
             let b = s.bbox();
             [b[0] + dx, b[2] + dx].iter().chain(&[b[1] + dy, b[3] + dy]).any(|v| v.abs() > MAX_COORD)
         });
         if out_of_bounds {
             return 0;
         }
+        let n = from.len();
         let ids: Vec<u64> = from.iter().map(|f| f.0).collect();
         let cmd = Cmd::Move { ids, dx, dy, from, to_page };
-        self.apply(&cmd);
-        let n = match &cmd {
-            Cmd::Move { ids, .. } => ids.len(),
-            _ => 0,
-        };
-        self.record(cmd);
+        cmd.apply(&mut self.drawing, &mut self.page_edit);
+        self.done(cmd);
         n
     }
 
@@ -339,7 +268,7 @@ impl InkStore {
     /// step. `false` if there is no such shape or the figure is no good.
     pub fn reshape(&mut self, id: u64, figure: Figure) -> bool {
         let pts = figure.points();
-        let Some(old) = self.strokes.iter().find(|s| s.id == id && s.figure.is_some()) else { return false };
+        let Some(old) = self.drawing.strokes.iter().find(|s| s.id == id && s.figure.is_some()) else { return false };
         let style = old.style;
         self.replace_stroke(id, style, pts, Some(figure), None)
     }
@@ -347,7 +276,7 @@ impl InkStore {
     /// Change a text box's text, size and colour (and its outline, which follows the text) as one
     /// undo step. `false` if there is no such text box or nothing changed.
     pub fn edit_text(&mut self, id: u64, style: Style, text: TextBlock, outline: Vec<P>) -> bool {
-        if !self.strokes.iter().any(|s| s.id == id && s.text.is_some()) {
+        if !self.drawing.strokes.iter().any(|s| s.id == id && s.text.is_some()) {
             return false;
         }
         self.replace_stroke(id, style, outline, None, Some(text))
@@ -355,14 +284,14 @@ impl InkStore {
 
     fn replace_stroke(&mut self, id: u64, style: Style, pts: Vec<P>, figure: Option<Figure>, text: Option<TextBlock>) -> bool {
         let Some(pts) = sanitize(pts) else { return false };
-        let Some(old) = self.strokes.iter().find(|s| s.id == id) else { return false };
+        let Some(old) = self.drawing.strokes.iter().find(|s| s.id == id) else { return false };
         if old.pts == pts && old.style == style && old.text == text {
             return false;
         }
         let after = Stroke::new(id, old.page, style, pts, figure, text, None);
         let cmd = Cmd::Reshape { before: Box::new(old.clone()), after: Box::new(after) };
-        self.apply(&cmd);
-        self.record(cmd);
+        cmd.apply(&mut self.drawing, &mut self.page_edit);
+        self.done(cmd);
         true
     }
 
@@ -378,12 +307,9 @@ impl InkStore {
         if added.is_empty() {
             return Vec::new();
         }
-        for s in &added {
-            self.dirty.insert(s.page);
-            self.strokes.push(s.clone());
-        }
+        added.iter().for_each(|s| self.drawing.push(s.clone()));
         let ids = added.iter().map(|s| s.id).collect();
-        self.record(Cmd::Add(added));
+        self.done(Cmd::Add(added));
         ids
     }
 
@@ -394,7 +320,7 @@ impl InkStore {
         let (mut before, mut after) = (Vec::new(), Vec::new());
         for it in items {
             let Some(pts) = sanitize(it.pts) else { continue };
-            let Some(old) = self.strokes.iter().find(|s| s.id == it.id) else { continue };
+            let Some(old) = self.drawing.strokes.iter().find(|s| s.id == it.id) else { continue };
             if old.pts == pts && old.style == it.style && old.text == it.text {
                 continue;
             }
@@ -404,163 +330,56 @@ impl InkStore {
         if after.is_empty() {
             return false;
         }
-        let continues =
-            coalesce && matches!(self.undo.last(), Some(Cmd::Restyle { after: last, .. }) if after.iter().all(|s| last.iter().any(|l| l.id == s.id)));
-        if continues {
-            if let Some(Cmd::Restyle { after: last, .. }) = self.undo.last_mut() {
-                for s in &after {
-                    if let Some(slot) = last.iter_mut().find(|l| l.id == s.id) {
-                        *slot = s.clone();
-                    }
-                }
-            }
-            after.iter().for_each(|s| self.replace(s));
-            self.redo.clear();
-            self.revision += 1;
-            self.structural = self.revision;
+        if coalesce && self.history.coalesce_restyle(&after) {
+            after.iter().for_each(|s| self.drawing.replace(s));
+            self.changed();
             return true;
         }
         let cmd = Cmd::Restyle { before, after };
-        self.apply(&cmd);
-        self.record(cmd);
+        cmd.apply(&mut self.drawing, &mut self.page_edit);
+        self.done(cmd);
         true
-    }
-
-    fn replace(&mut self, with: &Stroke) {
-        if let Some(slot) = self.strokes.iter_mut().find(|s| s.id == with.id) {
-            *slot = with.clone();
-        }
-        self.dirty.insert(with.page);
-    }
-
-    fn apply(&mut self, cmd: &Cmd) {
-        match cmd {
-            Cmd::Reshape { after, .. } => self.replace(after),
-            Cmd::Restyle { after, .. } => after.iter().for_each(|s| self.replace(s)),
-            Cmd::Add(strokes) => {
-                for s in strokes {
-                    self.dirty.insert(s.page);
-                    self.strokes.push(s.clone());
-                }
-            }
-            Cmd::Remove(removed) => {
-                let ids: HashSet<u64> = removed.iter().map(|(_, s)| s.id).collect();
-                for (_, s) in removed {
-                    self.dirty.insert(s.page);
-                }
-                self.strokes.retain(|s| !ids.contains(&s.id));
-            }
-            Cmd::Pages(step) => {
-                self.remap_strokes(&step.forward);
-                self.strokes.extend(step.made.iter().cloned());
-                self.page_edit = Some(step.edit.clone());
-            }
-            Cmd::Move { ids, dx, dy, from, to_page } => {
-                let ids: HashSet<u64> = ids.iter().copied().collect();
-                for s in self.strokes.iter_mut().filter(|s| ids.contains(&s.id)) {
-                    self.dirty.insert(s.page);
-                    s.translate(*dx, *dy);
-                    if let Some(p) = to_page {
-                        s.page = *p;
-                    }
-                    self.dirty.insert(s.page);
-                }
-                let _ = from;
-            }
-        }
-    }
-
-    fn revert(&mut self, cmd: &Cmd) {
-        match cmd {
-            Cmd::Reshape { before, .. } => self.replace(before),
-            Cmd::Restyle { before, .. } => before.iter().for_each(|s| self.replace(s)),
-            Cmd::Add(strokes) => {
-                let ids: HashSet<u64> = strokes.iter().map(|s| s.id).collect();
-                for s in strokes {
-                    self.dirty.insert(s.page);
-                }
-                self.strokes.retain(|s| !ids.contains(&s.id));
-            }
-            Cmd::Remove(removed) => {
-                // Ascending positions, so each insert lands where the stroke was.
-                for (i, s) in removed {
-                    self.dirty.insert(s.page);
-                    let at = (*i).min(self.strokes.len());
-                    self.strokes.insert(at, s.clone());
-                }
-            }
-            Cmd::Pages(step) => {
-                self.remap_strokes(&step.backward);
-                // Ascending positions, so each insert lands where the stroke was.
-                for (i, s) in &step.buried {
-                    self.dirty.insert(s.page);
-                    self.strokes.insert((*i).min(self.strokes.len()), s.clone());
-                }
-                self.page_edit = Some(step.undo.clone());
-            }
-            Cmd::Move { ids, dx, dy, from, .. } => {
-                let ids: HashSet<u64> = ids.iter().copied().collect();
-                let from: std::collections::HashMap<u64, u32> = from.iter().copied().collect();
-                for s in self.strokes.iter_mut().filter(|s| ids.contains(&s.id)) {
-                    self.dirty.insert(s.page);
-                    s.translate(-*dx, -*dy);
-                    if let Some(&page) = from.get(&s.id) {
-                        s.page = page;
-                    }
-                    self.dirty.insert(s.page);
-                }
-            }
-        }
     }
 
     pub fn undo(&mut self) -> bool {
-        let Some(cmd) = self.undo.pop() else { return false };
-        self.revert(&cmd);
-        self.redo.push(cmd);
-        self.revision += 1;
-        self.structural = self.revision;
-        true
+        let did = self.history.undo(&mut self.drawing, &mut self.page_edit);
+        if did {
+            self.changed();
+        }
+        did
     }
 
     pub fn redo(&mut self) -> bool {
-        let Some(cmd) = self.redo.pop() else { return false };
-        self.apply(&cmd);
-        self.undo.push(cmd);
-        self.revision += 1;
-        self.structural = self.revision;
-        true
+        let did = self.history.redo(&mut self.drawing, &mut self.page_edit);
+        if did {
+            self.changed();
+        }
+        did
     }
 
-    // ── queries ─────────────────────────────────────────────────────────────────────────────
+    // ── queries (see `query`) ───────────────────────────────────────────────────────────────
 
     /// The topmost stroke within `radius` of `p`.
     #[cfg(test)]
     pub fn hit_test(&self, p: P, radius: f32) -> Option<u64> {
-        self.strokes.iter().rev().find(|s| s.touches_circle(p, radius)).map(|s| s.id)
+        query::hit_test(&self.drawing.strokes, p, radius)
     }
 
     /// Strokes the eraser touches moving from `a` to `b` with the given radius.
     pub fn touched_by_segment(&self, a: P, b: P, radius: f32) -> Vec<u64> {
-        self.strokes.iter().filter(|s| s.touches_segment(a, b, radius)).map(|s| s.id).collect()
+        query::touched_by_segment(&self.drawing.strokes, a, b, radius)
     }
 
     /// Strokes mostly (at least half their points) inside the lasso.
     pub fn in_polygon(&self, poly: &[P]) -> Vec<u64> {
-        self.strokes.iter().filter(|s| s.fraction_inside(poly) >= 0.5).map(|s| s.id).collect()
+        query::in_polygon(&self.drawing.strokes, poly)
     }
 
     /// The bounding box of the strokes with these ids.
     pub fn bounds_of(&self, ids: &[u64]) -> Option<[f32; 4]> {
-        let wanted: HashSet<u64> = ids.iter().copied().collect();
-        let mut out: Option<[f32; 4]> = None;
-        for s in self.strokes.iter().filter(|s| wanted.contains(&s.id)) {
-            let b = s.bbox();
-            out = Some(out.map_or(b, |o| [o[0].min(b[0]), o[1].min(b[1]), o[2].max(b[2]), o[3].max(b[3])]));
-        }
-        out
+        query::bounds_of(&self.drawing.strokes, ids)
     }
 }
-
 /// The corners of the boxes of a markup that can be used: both corners of a box are finite, and a point that is left over is dropped.
 fn box_points(pts: impl IntoIterator<Item = P>) -> Vec<P> {
     let pts: Vec<P> = pts.into_iter().collect();

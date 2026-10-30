@@ -69,12 +69,12 @@ impl Workspace {
             return false;
         }
         let words: Vec<&str> = copied.iter().filter_map(|s| s.text.as_ref()).map(|t| t.text.as_str()).collect();
-        self.clipboard_echo = (!words.is_empty()).then(|| words.join("\n"));
-        if let Some(echo) = &self.clipboard_echo {
-            self.text_clipboard.set(echo);
+        self.clip.echo = (!words.is_empty()).then(|| words.join("\n"));
+        if let Some(echo) = &self.clip.echo {
+            self.clip.text.set(echo);
         }
-        self.clipboard = copied;
-        self.pasted = 0;
+        self.clip.items = copied;
+        self.clip.pasted = 0;
         true
     }
 
@@ -86,7 +86,7 @@ impl Workspace {
     /// Whether there may be something to paste: items of the tool's kind on the clipboard, or, for the text tool,
     /// words (which might be on the system clipboard from anywhere; it is not asked every time the bar is drawn).
     pub fn can_paste(&self) -> bool {
-        self.kind() == Some(Kind::Text) || self.clipboard.iter().any(|s| self.is_own(s))
+        self.kind() == Some(Kind::Text) || self.clip.items.iter().any(|s| self.is_own(s))
     }
 
     /// Paste into the middle of what is in view, and select what was pasted: the tool's own items from the
@@ -94,20 +94,20 @@ impl Workspace {
     /// tool and words from some other program on the system clipboard, a new text box with them.
     pub fn paste(&mut self) -> bool {
         if self.kind() == Some(Kind::Text) {
-            let from_elsewhere = self.text_clipboard.get().filter(|t| !t.trim().is_empty() && self.clipboard_echo.as_ref() != Some(t));
+            let from_elsewhere = self.clip.text.get().filter(|t| !t.trim().is_empty() && self.clip.echo.as_ref() != Some(t));
             if let Some(words) = from_elsewhere {
                 return self.paste_words(&words);
             }
         }
-        let clip: Vec<Stroke> = self.clipboard.iter().filter(|s| self.is_own(s)).cloned().collect();
+        let clip: Vec<Stroke> = self.clip.items.iter().filter(|s| self.is_own(s)).cloned().collect();
         let Some(b) = union(clip.iter().map(Stroke::bbox)) else { return false };
         let page = self.current_page();
         let Some(rect) = self.page_rect(page) else { return false };
         let shown = self.to_doc([self.view.viewport[0] / 2.0, self.view.viewport[1] / 2.0]);
-        let step = COPY_OFFSET * (self.pasted % 6) as f32;
+        let step = COPY_OFFSET * (self.clip.pasted % 6) as f32;
         let at = clamp_into(rect, [shown[0] + step, shown[1] + step]);
         let (dx, dy) = keep_inside(rect, b, at[0] - (b[0] + b[2]) / 2.0, at[1] - (b[1] + b[3]) / 2.0);
-        self.pasted += 1;
+        self.clip.pasted += 1;
         self.place(clip, dx, dy, page)
     }
 
@@ -117,8 +117,8 @@ impl Workspace {
         let Some(rect) = self.page_rect(page) else { return false };
         let (rgba, size) = self.current_style();
         let shown = self.to_doc([self.view.viewport[0] / 2.0, self.view.viewport[1] / 2.0]);
-        let step = COPY_OFFSET * (self.pasted % 6) as f32;
-        self.pasted += 1;
+        let step = COPY_OFFSET * (self.clip.pasted % 6) as f32;
+        self.clip.pasted += 1;
         let at = clamp_into(rect, [shown[0] - 0.15 * (rect[2] - rect[0]) + step, shown[1] + step]);
         let (wrapped, outline) = text::fit_box(Some(rect), at, &text::clean(words), size);
         if wrapped.trim().is_empty() {

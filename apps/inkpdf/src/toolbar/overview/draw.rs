@@ -8,7 +8,7 @@ use crate::text;
 use crate::view::Layout;
 
 use super::super::icons::icons;
-use super::super::theme::{Align, Image, Label, Ui};
+use super::super::theme::{ButtonLook, Image, Label, LineSink, Ui};
 use super::layout::{Action, Control, MenuItem, OverviewLayout, TocHit, TocRow};
 
 /// How dark the scrim over the document is (0 to 255).
@@ -110,28 +110,6 @@ fn fit(words: &str, size: f32, width: f32) -> String {
     String::new()
 }
 
-/// A rectangle's outline as four lines.
-fn outline_rect(ui: &mut Ui, r: [f32; 4], width: f32, color: [u8; 4]) {
-    let half = width / 2.0;
-    let (x0, y0, x1, y1) = (r[0] - half, r[1] - half, r[2] + half, r[3] + half);
-    for (a, b) in [([x0, y0], [x1, y0]), ([x1, y0], [x1, y1]), ([x1, y1], [x0, y1]), ([x0, y1], [x0, y0])] {
-        ui.line(a, b, width, color);
-    }
-}
-
-/// The outline of a circle of `diameter`, drawn as short lines (its inside is left as it is).
-fn ring(ui: &mut Ui, centre: [f32; 2], diameter: f32, width: f32, color: [u8; 4]) {
-    const SIDES: usize = 20;
-    let r = diameter / 2.0;
-    let at = |k: usize| {
-        let t = k as f32 / SIDES as f32 * std::f32::consts::TAU;
-        [centre[0] + r * t.cos(), centre[1] + r * t.sin()]
-    };
-    for k in 0..SIDES {
-        ui.line(at(k), at(k + 1), width, color);
-    }
-}
-
 /// A chevron: pointing right, or down when `open`.
 fn chevron(ui: &mut Ui, centre: [f32; 2], size: f32, open: bool, width: f32, color: [u8; 4]) {
     let (a, b, c) = if open {
@@ -170,25 +148,12 @@ fn menu(view: &OverviewView<'_>, l: &OverviewLayout, page: usize, ui: &mut Ui) {
     let (rect, items) = l.menu(page, view.scroll);
     ui.floating(rect, 0.5 * u, px);
     for (k, (item, r)) in items.into_iter().enumerate() {
-        let enabled = view.menu_enabled[k];
-        let wash = if view.pressed == Some(Hover::Menu(item)) && enabled {
-            Some(ui.pal.pressed_wash)
-        } else if view.hover == Some(Hover::Menu(item)) && enabled {
-            Some(ui.pal.hover_wash)
-        } else {
-            None
-        };
-        if let Some(color) = wash {
-            ui.panels.push(crate::scene::Panel::solid(r, (r[2] - r[0]) / 2.0, color));
-        }
-        let color = if !enabled {
-            ui.pal.ink_dim
-        } else if item == MenuItem::Delete {
-            ui.pal.danger
-        } else if item == MenuItem::Flag && view.flagged.binary_search(&page).is_ok() {
-            ui.pal.accent
-        } else {
-            ui.pal.ink
+        let look = ButtonLook {
+            enabled: view.menu_enabled[k],
+            hovered: view.hover == Some(Hover::Menu(item)),
+            pressed: view.pressed == Some(Hover::Menu(item)),
+            on: item == MenuItem::Flag && view.flagged.binary_search(&page).is_ok(),
+            danger: item == MenuItem::Delete,
         };
         let icon = match item {
             MenuItem::Before => &icons().add_before,
@@ -197,7 +162,7 @@ fn menu(view: &OverviewView<'_>, l: &OverviewLayout, page: usize, ui: &mut Ui) {
             MenuItem::Flag => &icons().flag,
             MenuItem::Delete => &icons().trash,
         };
-        icon.draw(&mut ui.lines, (r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0, 0.42 * u, 1.7 * px, color);
+        ui.round_button(r, icon, look, 0.42 * u, 1.7 * px);
     }
 }
 
@@ -217,36 +182,20 @@ fn header(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
         [format!("All pages ({count})"), count.to_string()]
     };
     if let Some(title) = titles.into_iter().find(|t| text::measure(t, size)[0] <= room) {
-        ui.labels.push(Label { text: title, size, color: ui.pal.ink, at: [x, centre_y], align: Align::Left, alpha: 1.0 });
+        ui.labels.push(Label::left(title, size, ui.pal.ink, [x, centre_y]));
     }
     for (control, r) in l.controls {
-        let centre = [(r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0];
-        let enabled = match control {
-            Control::Undo => view.can_undo,
-            Control::Redo => view.can_redo,
-            _ => true,
+        let look = ButtonLook {
+            enabled: match control {
+                Control::Undo => view.can_undo,
+                Control::Redo => view.can_redo,
+                _ => true,
+            },
+            hovered: view.hover == Some(Hover::Control(control)),
+            pressed: view.pressed == Some(Hover::Control(control)),
+            on: control == Control::Edit && view.edit,
+            danger: false,
         };
-        let on = control == Control::Edit && view.edit;
-        let wash = if view.pressed == Some(Hover::Control(control)) && enabled {
-            Some(ui.pal.pressed_wash)
-        } else if on {
-            Some(ui.pal.accent_wash)
-        } else if view.hover == Some(Hover::Control(control)) && enabled {
-            Some(ui.pal.hover_wash)
-        } else {
-            None
-        };
-        if let Some(color) = wash {
-            ui.panels.push(crate::scene::Panel::solid(r, (r[2] - r[0]) / 2.0, color));
-        }
-        let color = if !enabled {
-            ui.pal.ink_dim
-        } else if on {
-            ui.pal.accent
-        } else {
-            ui.pal.ink
-        };
-        let half = 0.45 * u;
         let icon = match control {
             Control::Close => &icons().close,
             Control::Redo => &icons().redo,
@@ -254,7 +203,7 @@ fn header(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
             Control::Edit => &icons().check,
             Control::Add => &icons().plus,
         };
-        icon.draw(&mut ui.lines, centre[0], centre[1], half, 1.7 * px, color);
+        ui.round_button(r, icon, look, 0.45 * u, 1.7 * px);
     }
     ui.line([l.header[0], l.header[3]], [l.header[2], l.header[3]], px, ui.pal.separator);
 }
@@ -263,14 +212,8 @@ fn contents(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
     let (u, px) = (l.unit(), l.px());
     let Some(toc) = l.toc else { return };
     ui.line([toc[2], toc[1]], [toc[2], toc[3] - 0.9 * u], px, ui.pal.separator);
-    ui.labels.push(Label {
-        text: "Contents".to_string(),
-        size: 0.46 * u,
-        color: ui.pal.ink_dim,
-        at: [toc[0] + 0.9 * u, toc[1] + 0.6 * u],
-        align: Align::Left,
-        alpha: 1.0,
-    });
+    ui.labels.push(Label::left("Contents", 0.46 * u, ui.pal.ink_dim, [toc[0] + 0.9 * u, toc[1] + 0.6 * u]));
+
     let size = 0.46 * u;
     for k in l.toc_visible(view.rows.len(), view.toc_scroll) {
         let row = view.rows[k];
@@ -301,7 +244,7 @@ fn contents(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
         };
         let title = fit(&item.title, size, r[2] - x - 0.2 * u);
         if !title.is_empty() {
-            ui.labels.push(Label { text: title, size, color, at: [x, centre_y], align: Align::Left, alpha: 1.0 });
+            ui.labels.push(Label::left(title, size, color, [x, centre_y]));
         }
     }
 }
@@ -337,9 +280,9 @@ fn pages(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
         }
         if whole {
             if selected(i) {
-                outline_rect(ui, [thumb[0] - 3.0 * px, thumb[1] - 3.0 * px, thumb[2] + 3.0 * px, thumb[3] + 3.0 * px], 3.0 * px, ui.pal.accent);
+                ui.rect_outline([thumb[0] - 3.0 * px, thumb[1] - 3.0 * px, thumb[2] + 3.0 * px, thumb[3] + 3.0 * px], 3.0 * px, ui.pal.accent);
             } else if current {
-                outline_rect(ui, [thumb[0] - 3.0 * px, thumb[1] - 3.0 * px, thumb[2] + 3.0 * px, thumb[3] + 3.0 * px], 2.5 * px, ui.pal.accent);
+                ui.rect_outline([thumb[0] - 3.0 * px, thumb[1] - 3.0 * px, thumb[2] + 3.0 * px, thumb[3] + 3.0 * px], 2.5 * px, ui.pal.accent);
             }
             if view.flagged.binary_search(&i).is_ok() {
                 // A flagged page wears a bookmark in the top left corner, on a disc of the accent colour.
@@ -358,8 +301,8 @@ fn pages(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
                 } else {
                     // An open ring (the page shows through it) that shows on white paper, with a pale one round it
                     // so that it shows on dark pages too.
-                    ring(ui, centre, 0.7 * u, 3.6 * px, ui.pal.white_a(200));
-                    ring(ui, centre, 0.7 * u, 1.8 * px, ui.pal.ink_dim);
+                    ui.ring(centre, 0.7 * u, 3.6 * px, ui.pal.white_a(200));
+                    ui.ring(centre, 0.7 * u, 1.8 * px, ui.pal.ink_dim);
                 }
                 // A tick just made pops in: it grows from half its size as it clears.
                 ui.apply(tick, Xform::grow(centre, 1.0 - 0.5 * motion.tick, 1.0 - motion.tick));
@@ -379,7 +322,7 @@ fn pages(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
                 ));
             }
             let text = (i + 1).to_string();
-            ui.labels.push(Label { text: text.clone(), size: 0.5 * u, color, at: [centre_x - 0.2 * u, centre_y], align: Align::Centre, alpha: 1.0 });
+            ui.labels.push(Label::centre(text.clone(), 0.5 * u, color, [centre_x - 0.2 * u, centre_y]));
             let after = centre_x - 0.2 * u + text::measure(&text, 0.5 * u)[0] / 2.0 + 0.35 * u;
             chevron(ui, [after, centre_y], 0.12 * u, view.menu == Some(i), 1.4 * px, ui.pal.ink_dim);
         }
@@ -406,20 +349,15 @@ fn bar(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
     ui.line([bar[0], bar[1]], [bar[2], bar[1]], px, ui.pal.separator);
     for (i, action) in Action::ALL.into_iter().enumerate() {
         let r = l.action(action);
-        let enabled = view.enabled[i];
-        let hovered = view.hover == Some(Hover::Action(action));
-        let wash = if view.pressed == Some(Hover::Action(action)) && enabled {
-            Some(ui.pal.pressed_wash)
-        } else if hovered && enabled {
-            Some(ui.pal.hover_wash)
-        } else {
-            None
+        // (Choosing every page is always on offer.)
+        let enabled = view.enabled[i] || action == Action::SelectAll;
+        let look = ButtonLook {
+            enabled,
+            hovered: view.hover == Some(Hover::Action(action)),
+            pressed: view.pressed == Some(Hover::Action(action)),
+            on: false,
+            danger: action == Action::Delete,
         };
-        if let Some(color) = wash {
-            ui.panels.push(crate::scene::Panel::solid(r, (r[3] - r[1]) / 2.0, color));
-        }
-        let color = if enabled || action == Action::SelectAll { ui.pal.ink } else { ui.pal.ink_dim };
-        let centre = [(r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0];
         let icon = match action {
             // Every page is chosen: the button lets them all go; otherwise it chooses them all.
             Action::SelectAll if !view.layout.is_empty() && view.selected.len() == view.layout.len() => &icons().select_none,
@@ -429,8 +367,7 @@ fn bar(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
             Action::Later => &icons().later,
             Action::Delete => &icons().trash,
         };
-        let tint = if action == Action::Delete && enabled { ui.pal.danger } else { color };
-        icon.draw(&mut ui.lines, centre[0], centre[1], 0.42 * u, 1.7 * px, tint);
+        ui.round_button(r, icon, look, 0.42 * u, 1.7 * px);
     }
 }
 
@@ -449,18 +386,11 @@ fn dragging(view: &OverviewView<'_>, l: &OverviewLayout, drag: &DragView<'_>, ui
     ui.panels.push(crate::scene::Panel::new([rect[0], rect[1] + 3.0 * px, rect[2], rect[3] + 3.0 * px], 2.0 * px, 10.0 * px, ui.pal.shadow(70)));
     ui.panels.push(crate::scene::Panel::solid(rect, 1.5 * px, ui.pal.paper));
     ui.images.push(Image { page: first as u32, full: rect, shown: rect, alpha: 0.85 });
-    outline_rect(ui, rect, 2.0 * px, ui.pal.accent);
+    ui.rect_outline(rect, 2.0 * px, ui.pal.accent);
     if drag.pages.len() > 1 {
         let badge = [rect[2], rect[1]];
         ui.disc(badge, 0.9 * u, ui.pal.accent);
-        ui.labels.push(Label {
-            text: drag.pages.len().to_string(),
-            size: 0.46 * u,
-            color: ui.pal.white,
-            at: badge,
-            align: Align::Centre,
-            alpha: 1.0,
-        });
+        ui.labels.push(Label::centre(drag.pages.len().to_string(), 0.46 * u, ui.pal.white, badge));
     }
 }
 

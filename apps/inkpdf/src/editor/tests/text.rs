@@ -10,28 +10,13 @@ fn with_text() -> Editor {
     ed
 }
 
-fn tap(ed: &mut Editor, x: f32, y: f32) {
-    let at = on_page(ed, x, y);
-    mouse_click_at(ed, at);
-}
-
-/// The mouse button pressed at the first point, dragged through the rest and let go.
-fn mouse_drag(ed: &mut Editor, path: &[[f32; 2]]) {
-    ed.mouse_moved(path[0]);
-    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
-    for &p in &path[1..] {
-        ed.mouse_moved(p);
-    }
-    ed.mouse_button(ButtonState::Released, MouseButton::Left);
-}
-
 fn texts(ed: &Editor) -> Vec<String> {
     ed.ink.strokes().iter().filter_map(|s| s.text.as_ref().map(|t| t.text.clone())).collect()
 }
 
 /// A box with `words` in it, its top-left corner at (`x`, `y`) on page 0, finished.
 fn written(ed: &mut Editor, x: f32, y: f32, words: &str) {
-    tap(ed, x, y);
+    click_on_page(ed, x, y);
     ed.type_text(words);
     ed.finish_text();
 }
@@ -43,14 +28,14 @@ fn a_tap_on_the_corner_a_box_was_placed_at_or_just_outside_it_edits_it() {
     for (dx, dy) in [(0.0, 0.0), (-3.0, -3.0), (-5.0, 2.0)] {
         // (As after reopening a file: nothing is selected, so only the box itself can be hit.)
         ed.selection.clear();
-        tap(&mut ed, 100.0 + dx, 200.0 + dy);
+        click_on_page(&mut ed, 100.0 + dx, 200.0 + dy);
         assert!(ed.text_edit().is_some_and(|e| e.target.is_some()), "a tap {dx},{dy} from the corner edits the box");
         ed.finish_text();
     }
     assert_eq!(ed.ink.len(), 1, "no second box was made");
     // Well away from it, a tap still starts a new box.
     ed.selection.clear();
-    tap(&mut ed, 100.0 - 20.0, 200.0);
+    click_on_page(&mut ed, 100.0 - 20.0, 200.0);
     assert!(ed.text_edit().is_some_and(|e| e.target.is_none()));
 }
 
@@ -58,14 +43,14 @@ fn a_tap_on_the_corner_a_box_was_placed_at_or_just_outside_it_edits_it() {
 fn a_tap_on_empty_page_starts_a_box_and_the_keyboard_fills_it() {
     let mut ed = with_text();
     assert!(!ed.is_typing());
-    tap(&mut ed, 100.0, 200.0);
+    click_on_page(&mut ed, 100.0, 200.0);
     assert!(ed.is_typing());
     assert_eq!(ed.ink.len(), 0, "nothing is stored until the typing ends");
     ed.type_text("Hello");
     ed.type_text(", world");
     assert_eq!(ed.text_edit().map(|e| e.text.as_str()), Some("Hello, world"));
     // Another tap on empty page ends it and starts the next.
-    tap(&mut ed, 100.0, 400.0);
+    click_on_page(&mut ed, 100.0, 400.0);
     assert_eq!(texts(&ed), ["Hello, world"]);
     assert!(ed.is_typing() && ed.text_edit().is_some_and(|e| e.target.is_none() && e.text.is_empty()));
     // The box begins where the pen touched.
@@ -91,7 +76,7 @@ fn only_the_text_tool_while_a_box_is_being_edited_hears_the_keyboard() {
     ed.type_text("abc");
     assert!(ed.text_edit().is_none() && ed.ink.len() == 0);
     // And not while the prompt is up.
-    tap(&mut ed, 100.0, 200.0);
+    click_on_page(&mut ed, 100.0, 200.0);
     ed.ask_unsaved();
     ed.type_text("abc");
     assert_eq!(ed.text_edit().map(|e| e.text.as_str()), Some(""));
@@ -141,7 +126,7 @@ fn the_stylus_can_still_press_the_buttons_of_the_toolbar_with_the_text_tool() {
 #[test]
 fn the_backspace_key_takes_a_character_away_and_enter_starts_a_line() {
     let mut ed = with_text();
-    tap(&mut ed, 100.0, 160.0);
+    click_on_page(&mut ed, 100.0, 160.0);
     ed.type_text("abc");
     ed.backspace();
     ed.type_text("\n");
@@ -160,7 +145,7 @@ fn the_backspace_key_takes_a_character_away_and_enter_starts_a_line() {
 #[test]
 fn a_box_is_never_longer_than_the_limit() {
     let mut ed = with_text();
-    tap(&mut ed, 100.0, 160.0);
+    click_on_page(&mut ed, 100.0, 160.0);
     ed.type_text(&"x".repeat(crate::text::MAX_CHARS - 1));
     ed.type_text("yyyyyyyy");
     assert_eq!(ed.text_edit().map(|e| e.text.chars().count()), Some(crate::text::MAX_CHARS));
@@ -174,7 +159,7 @@ fn a_tap_on_a_box_edits_it_and_the_change_is_one_undo_step() {
     written(&mut ed, 100.0, 200.0, "Hello");
     let id = ed.ink.strokes()[0].id;
     assert_eq!(ed.selection, [id], "a new box is selected");
-    tap(&mut ed, 105.0, 205.0);
+    click_on_page(&mut ed, 105.0, 205.0);
     assert!(ed.text_edit().is_some_and(|e| e.target == Some(id)));
     ed.type_text(" there");
     ed.finish_text();
@@ -188,7 +173,7 @@ fn a_tap_on_a_box_edits_it_and_the_change_is_one_undo_step() {
     let steps = ed.ink.can_undo();
     ed.undo();
     ed.redo();
-    tap(&mut ed, 105.0, 205.0);
+    click_on_page(&mut ed, 105.0, 205.0);
     ed.finish_text();
     assert_eq!((steps, ed.ink.can_redo()), (true, false));
 }
@@ -198,19 +183,19 @@ fn undo_while_typing_throws_the_typing_away_first() {
     let mut ed = with_text();
     written(&mut ed, 100.0, 200.0, "Hello");
     // Typing a new box.
-    tap(&mut ed, 100.0, 400.0);
+    click_on_page(&mut ed, 100.0, 400.0);
     ed.type_text("draft");
     ed.undo();
     assert!(ed.text_edit().is_none());
     assert_eq!(texts(&ed), ["Hello"], "the draft went and the finished box stayed");
     // Typing into an old box.
-    tap(&mut ed, 105.0, 205.0);
+    click_on_page(&mut ed, 105.0, 205.0);
     ed.type_text(" there");
     ed.undo();
     assert!(ed.text_edit().is_none());
     assert_eq!(texts(&ed), ["Hello"]);
     // With nothing typed, undo is an ordinary undo.
-    tap(&mut ed, 100.0, 400.0);
+    click_on_page(&mut ed, 100.0, 400.0);
     ed.undo();
     assert!(texts(&ed).is_empty(), "the box was undone");
 }
@@ -218,13 +203,13 @@ fn undo_while_typing_throws_the_typing_away_first() {
 #[test]
 fn an_empty_box_leaves_nothing_and_emptying_a_box_removes_it() {
     let mut ed = with_text();
-    tap(&mut ed, 100.0, 200.0);
+    click_on_page(&mut ed, 100.0, 200.0);
     ed.type_text("  \n ");
     ed.finish_text();
     assert_eq!(ed.ink.len(), 0);
     assert!(!ed.ink.is_dirty());
     written(&mut ed, 100.0, 200.0, "Hello");
-    tap(&mut ed, 105.0, 205.0);
+    click_on_page(&mut ed, 105.0, 205.0);
     for _ in 0..5 {
         ed.backspace();
     }
@@ -266,7 +251,7 @@ fn leaving_the_tool_saving_or_adding_a_page_finishes_the_typing() {
     ];
     for (what, step) in steps {
         let mut ed = with_text();
-        tap(&mut ed, 100.0, 200.0);
+        click_on_page(&mut ed, 100.0, 200.0);
         ed.type_text("kept");
         step(&mut ed);
         assert!(ed.text_edit().is_none(), "{what}");
@@ -277,22 +262,22 @@ fn leaving_the_tool_saving_or_adding_a_page_finishes_the_typing() {
 #[test]
 fn the_colour_and_size_in_the_panel_style_the_box_being_typed() {
     let mut ed = with_text();
-    tap(&mut ed, 100.0, 200.0);
+    click_on_page(&mut ed, 100.0, 200.0);
     ed.type_text("big");
     ed.chrome.panel = Some(PanelState::default());
     ed.set_slider(Slider::Width, 60.0);
-    ed.palette[2] = [200, 10, 10, 255];
-    ed.text_style.colour = 2;
+    ed.styles.palette[2] = [200, 10, 10, 255];
+    ed.styles.text_style.colour = 2;
     ed.restyle_tool();
     ed.finish_text();
     let s = &ed.ink.strokes()[0];
     assert_eq!((s.text.as_ref().map(|t| t.size), s.style.rgba), (Some(60.0), [200, 10, 10, 255]));
     // The size stays in the text range, which is not the pen's.
     ed.set_slider(Slider::Width, 1.0e6);
-    assert_eq!(ed.text_style.width, crate::tool::TEXT_SIZES.1);
+    assert_eq!(ed.styles.text_style.width, crate::tool::TEXT_SIZES.1);
     ed.set_slider(Slider::Width, -4.0);
-    assert_eq!(ed.text_style.width, crate::tool::TEXT_SIZES.0);
-    assert_eq!(ed.pen, ToolStyle::PEN, "the pen is untouched");
+    assert_eq!(ed.styles.text_style.width, crate::tool::TEXT_SIZES.0);
+    assert_eq!(ed.styles.pen, ToolStyle::PEN, "the pen is untouched");
 }
 
 #[test]
@@ -300,7 +285,7 @@ fn typed_text_wraps_at_the_pages_right_edge_and_never_leaves_the_page() {
     let mut ed = with_text();
     let page = ed.page_rect(0).expect("page");
     // A long text from the middle: broken into lines that end at the page's edge.
-    tap(&mut ed, 300.0, 140.0);
+    click_on_page(&mut ed, 300.0, 140.0);
     ed.type_text(&"word ".repeat(40));
     let edit = ed.text_edit().cloned().expect("typing");
     assert!(edit.text.lines().count() > 3 && edit.text.replace('\n', "") == "word ".repeat(40), "{:?}", edit.text);
@@ -308,13 +293,13 @@ fn typed_text_wraps_at_the_pages_right_edge_and_never_leaves_the_page() {
     let b = ed.ink.strokes()[0].bbox();
     assert!(b[0] >= page[0] - 0.01 && b[2] <= page[2] + 0.5, "{b:?} within {page:?}");
     // One long word is broken inside.
-    tap(&mut ed, 300.0, 400.0);
+    click_on_page(&mut ed, 300.0, 400.0);
     ed.type_text(&"W".repeat(60));
     ed.finish_text();
     let b = ed.ink.strokes()[1].bbox();
     assert!(b[2] <= page[2] + 0.01, "{b:?}");
     // A box begun right at the edge is moved left, so that there is room to type, and stays there.
-    tap(&mut ed, 600.0, 600.0);
+    click_on_page(&mut ed, 600.0, 600.0);
     ed.type_text("close to the edge");
     let edit = ed.text_edit().cloned().expect("typing");
     assert!(edit.top_left[0] < 500.0, "moved left: {:?}", edit.top_left);
@@ -322,19 +307,19 @@ fn typed_text_wraps_at_the_pages_right_edge_and_never_leaves_the_page() {
     let b = ed.ink.strokes()[2].bbox();
     assert!(b[0] >= page[0] && b[2] <= page[2] + 0.5, "{b:?} within {page:?}");
     // Past the bottom edge the box is moved up.
-    tap(&mut ed, 100.0, 780.0);
+    click_on_page(&mut ed, 100.0, 780.0);
     ed.type_text("low\nlower\nlowest");
     ed.finish_text();
     let b = ed.ink.strokes()[3].bbox();
     assert!(b[3] <= page[3] + 0.01, "{b:?} within {page:?}");
     // Backspace takes a line break away whole, giving the words back as they were.
-    tap(&mut ed, 100.0, 700.0);
+    click_on_page(&mut ed, 100.0, 700.0);
     ed.type_text(&"ab ".repeat(100));
     let broken = ed.text_edit().map(|e| e.text.clone()).unwrap_or_default();
     assert!(broken.contains('\n'));
     // Making the text bigger breaks it again.
     let lines = broken.lines().count();
-    ed.text_style.width = 90.0;
+    ed.styles.text_style.width = 90.0;
     ed.restyle_tool();
     assert!(ed.text_edit().is_some_and(|e| e.text.lines().count() > lines));
     ed.finish_text();

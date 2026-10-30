@@ -6,7 +6,7 @@ use crate::geometry::{SHAPES, Shape};
 fn shaping(shape: Shape) -> Editor {
     let mut ed = editor();
     ed.set_tool(Tool::Geometry);
-    ed.shape = shape;
+    ed.styles.shape = shape;
     ed
 }
 
@@ -47,7 +47,7 @@ fn a_drag_makes_each_simple_shape_as_one_stroke_in_the_tools_colour_and_thicknes
         assert!(stroke.pts.iter().zip(&want).all(|(a, b)| near(*a, *b)), "{shape:?} came out as dragged");
         let (rgba, width) = ed.current_style();
         assert_eq!((stroke.style.rgba, stroke.style.width), (rgba, width));
-        assert_eq!(rgba, ed.palette[ToolStyle::SHAPES.colour], "the shape tool's colour, not the pen's");
+        assert_eq!(rgba, ed.styles.palette[ToolStyle::SHAPES.colour], "the shape tool's colour, not the pen's");
         assert!(ed.ink.is_dirty(), "{shape:?}: there is something to save");
         assert!(ed.is_idle());
         // One undo takes the whole shape away.
@@ -140,15 +140,15 @@ fn the_eraser_end_erases_a_whole_shape_and_the_lasso_picks_one_up_as_one() {
 #[test]
 fn the_pens_and_the_shape_tools_colour_and_thickness_are_separate() {
     let mut ed = editor();
-    let (pen_before, shape_before) = (ed.pen, ed.shape_style);
+    let (pen_before, shape_before) = (ed.styles.pen, ed.styles.shape_style);
     ed.set_tool(Tool::Geometry);
-    ed.shape_style = ToolStyle { colour: 3, width: 9.0 };
-    assert_eq!(ed.pen, pen_before);
+    ed.styles.shape_style = ToolStyle { colour: 3, width: 9.0 };
+    assert_eq!(ed.styles.pen, pen_before);
     ed.set_tool(Tool::Pen);
-    assert_eq!(ed.current_style(), (ed.palette[pen_before.colour], pen_before.width));
+    assert_eq!(ed.current_style(), (ed.styles.palette[pen_before.colour], pen_before.width));
     ed.set_tool(Tool::Geometry);
-    assert_eq!(ed.current_style(), (ed.palette[3], 9.0));
-    assert_ne!(shape_before, ed.shape_style);
+    assert_eq!(ed.current_style(), (ed.styles.palette[3], 9.0));
+    assert_ne!(shape_before, ed.styles.shape_style);
 }
 
 // ── the panel ────────────────────────────────────────────────────────────────────────────────
@@ -161,12 +161,12 @@ fn the_shape_buttons_open_the_shape_panel_and_choose_the_shape_which_is_remember
     open_settings(&mut ed);
     assert_eq!((ed.tool, ed.chrome.panel.is_some()), (Tool::Geometry, true));
     assert!(ed.requests.has(&Request::SettingsChanged), "the tool choice is saved");
-    let mut previous = ed.shape;
+    let mut previous = ed.styles.shape;
     for shape in SHAPES {
         ed.requests.take(&Request::SettingsChanged);
         let at = ed.toolbar().tool_panel(Tool::Geometry, ed.view.viewport[0], false).expect("panel").shape_centre(shape);
         pen_stroke(&mut ed, TIP, &[at, at]);
-        assert_eq!(ed.shape, shape);
+        assert_eq!(ed.styles.shape, shape);
         assert!(ed.chrome.panel.is_some(), "the panel stays open");
         assert_eq!(ed.settings().shape, shape);
         assert_eq!(ed.requests.has(&Request::SettingsChanged), shape != previous, "a new shape is saved, the same one is not");
@@ -184,21 +184,21 @@ fn the_shape_panels_colours_and_thickness_belong_to_the_shape_tool() {
     let panel = ed.toolbar().tool_panel(Tool::Geometry, ed.view.viewport[0], false).expect("panel");
     let green = panel.swatch_centre(3);
     pen_stroke(&mut ed, TIP, &[green, green]);
-    assert_eq!((ed.shape_style.colour, ed.pen.colour), (3, ToolStyle::PEN.colour));
+    assert_eq!((ed.styles.shape_style.colour, ed.styles.pen.colour), (3, ToolStyle::PEN.colour));
     // Thickness: drag the slider to the thick end.
     let (a, b) = (panel.point_on(Slider::Width, 0.2), panel.point_on(Slider::Width, 1.0));
     pen_stroke(&mut ed, TIP, &[a, b]);
-    assert!((ed.shape_style.width - crate::tool::MAX_WIDTH).abs() < 0.01);
-    assert_eq!(ed.pen.width, ToolStyle::PEN.width, "the pen is as it was");
+    assert!((ed.styles.shape_style.width - crate::tool::MAX_WIDTH).abs() < 0.01);
+    assert_eq!(ed.styles.pen.width, ToolStyle::PEN.width, "the pen is as it was");
     // No smoothing slider here.
     assert_eq!(panel.slider_at(panel.point_on(Slider::Smoothing, 0.5)), None);
     // And the next shape is that thick and green.
     let away = page_pts(&ed, &[[20.0, 600.0], [40.0, 600.0]]);
     pen_stroke(&mut ed, TIP, &away);
-    ed.shape = Shape::Line;
+    ed.styles.shape = Shape::Line;
     drag(&mut ed, [20.0, 650.0], [60.0, 700.0]);
     let s = &ed.ink.strokes()[0];
-    assert_eq!((s.style.rgba, s.style.width.round()), (ed.palette[3], crate::tool::MAX_WIDTH.round()));
+    assert_eq!((s.style.rgba, s.style.width.round()), (ed.styles.palette[3], crate::tool::MAX_WIDTH.round()));
 }
 
 #[test]
@@ -218,16 +218,19 @@ fn a_press_on_the_shape_panel_that_is_not_a_control_draws_no_shape() {
 fn the_tool_and_every_setting_come_back_in_the_next_session() {
     let mut ed = editor();
     ed.set_tool(Tool::Geometry);
-    ed.shape = Shape::Axes2d;
-    ed.shape_style = ToolStyle { colour: 4, width: 0.75 };
-    ed.pen = ToolStyle { colour: 2, width: 6.0 };
-    ed.smoothing = 0.2;
-    ed.palette[1] = [1, 2, 3, 255];
+    ed.styles.shape = Shape::Axes2d;
+    ed.styles.shape_style = ToolStyle { colour: 4, width: 0.75 };
+    ed.styles.pen = ToolStyle { colour: 2, width: 6.0 };
+    ed.styles.smoothing = 0.2;
+    ed.styles.palette[1] = [1, 2, 3, 255];
     let saved = crate::settings::Settings::parse(&ed.settings().to_text());
     let mut next = editor();
     next.apply_settings(&saved);
-    assert_eq!((next.tool, next.shape, next.shape_style, next.pen, next.smoothing), (Tool::Geometry, Shape::Axes2d, ed.shape_style, ed.pen, 0.2));
-    assert_eq!(next.palette, ed.palette);
+    assert_eq!(
+        (next.tool, next.styles.shape, next.styles.shape_style, next.styles.pen, next.styles.smoothing),
+        (Tool::Geometry, Shape::Axes2d, ed.styles.shape_style, ed.styles.pen, 0.2)
+    );
+    assert_eq!(next.styles.palette, ed.styles.palette);
     assert!(next.chrome.panel.is_none(), "it starts with the panel closed");
 }
 

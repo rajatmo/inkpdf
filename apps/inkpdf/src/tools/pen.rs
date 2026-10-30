@@ -199,7 +199,7 @@ impl PenTool {
         self.gesture = if let Some(pick) = Pick::begin(ws, ev, p, on_selection) {
             Gesture::Pick(pick)
         } else if ws.selection.is_empty() {
-            Gesture::Draw(Draw::new(ev.id, ws.smoothing))
+            Gesture::Draw(Draw::new(ev.id, ws.styles.smoothing))
         } else if on_selection {
             // With something selected, the pen drags it; touching elsewhere lets go.
             Gesture::Pick(Pick::grab(Device::Pen, ev.id, p))

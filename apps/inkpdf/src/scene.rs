@@ -74,6 +74,50 @@ impl Capsule {
     }
 }
 
+/// Somewhere round-ended lines are put (the interface's lines, an overlay's capsules): what is drawn from them (a dot, a connected line, the
+/// outline of a box, a ring) is made once, here. Generic over the sink, so it costs no indirection.
+pub trait LineSink {
+    fn line(&mut self, a: [f32; 2], b: [f32; 2], width: f32, color: [u8; 4]);
+
+    /// A filled circle of `diameter`.
+    fn disc(&mut self, centre: [f32; 2], diameter: f32, color: [u8; 4]) {
+        self.line(centre, centre, diameter, color);
+    }
+
+    /// A dot, or a connected line through `pts`.
+    fn polyline(&mut self, pts: &[[f32; 2]], width: f32, color: [u8; 4]) {
+        match pts {
+            [] => {}
+            [p] => self.line(*p, *p, width, color),
+            _ => pts.windows(2).for_each(|w| self.line(w[0], w[1], width, color)),
+        }
+    }
+
+    /// The outline of `r` (`x0, y0, x1, y1`), `width` thick, centred on its edge.
+    fn rect_outline(&mut self, r: [f32; 4], width: f32, color: [u8; 4]) {
+        self.polyline(&[[r[0], r[1]], [r[2], r[1]], [r[2], r[3]], [r[0], r[3]], [r[0], r[1]]], width, color);
+    }
+
+    /// The outline of a circle of `diameter` (its inside is left as it is), drawn as short lines.
+    fn ring(&mut self, centre: [f32; 2], diameter: f32, width: f32, color: [u8; 4]) {
+        const SIDES: usize = 20;
+        let r = diameter / 2.0;
+        let at = |k: usize| {
+            let t = k as f32 / SIDES as f32 * std::f32::consts::TAU;
+            [centre[0] + r * t.cos(), centre[1] + r * t.sin()]
+        };
+        for k in 0..SIDES {
+            self.line(at(k), at(k + 1), width, color);
+        }
+    }
+}
+
+impl LineSink for Vec<Capsule> {
+    fn line(&mut self, a: [f32; 2], b: [f32; 2], width: f32, color: [u8; 4]) {
+        self.push(Capsule::new(a, b, width, color));
+    }
+}
+
 /// A rounded rectangle in pixels. `soft` is how many pixels its edge fades over (1 is a crisp
 /// edge; more makes a shadow).
 #[repr(C)]

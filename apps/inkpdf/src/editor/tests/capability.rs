@@ -29,7 +29,7 @@ impl Rig {
         ed.set_mode(mode);
         ed.set_tool(tool);
         ed.chrome.panel = None;
-        ed.shape = Shape::Line;
+        ed.styles.shape = Shape::Line;
         Rig { ed, tool, mode, clock: 10_000.0 }
     }
 
@@ -234,7 +234,7 @@ fn the_colour_and_thickness_chosen_in_the_panel_restyle_what_is_selected_and_und
         assert!(rig.ed.chrome.panel.is_some(), "{}", rig.label());
         let panel = || rig.ed.toolbar().tool_panel(rig.ed.tool, rig.ed.view.viewport[0], false).expect("panel");
         let (swatch, wide) = (panel().swatch_centre(3), panel().point_on(Slider::Width, 0.95));
-        let want = rig.ed.palette[3];
+        let want = rig.ed.styles.palette[3];
         rig.tap(swatch);
         assert_eq!(rig.look(id).0, want, "{}: colour", rig.label());
         assert_eq!(rig.ed.selection, [id], "{}: still selected", rig.label());
@@ -258,7 +258,7 @@ fn a_colour_in_the_bar_is_one_tap_for_the_tool_and_for_what_is_selected_and_the_
         rig.choose(Tool::Lasso);
         let on = rig.on_item();
         rig.tap(on);
-        let want = rig.ed.palette[3];
+        let want = rig.ed.styles.palette[3];
         rig.bar(ContextItem::Swatch(3));
         assert_eq!(rig.look(id).0, want, "{}: the selected item took the colour", rig.label());
         assert_eq!(rig.ed.style().colour, 3, "{}: and so did the tool", rig.label());

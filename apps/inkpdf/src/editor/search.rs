@@ -5,6 +5,7 @@
 
 use std::ops::Range;
 
+use crate::field::{Edited, Field, Rules};
 use crate::pagetext::snippet;
 use crate::toolbar::{SearchItem, SearchLayout, SearchRow, SearchView};
 use crate::tools::{Dir, Key};
@@ -18,6 +19,8 @@ const PER_PAGE: usize = 500;
 const CONTEXT: usize = 28;
 /// The longest query.
 const MAX_QUERY: usize = 200;
+/// What the query takes: a line of at most so many characters.
+const RULES: Rules = Rules { max_chars: MAX_QUERY, multiline: false };
 /// Pixels from the top of the window that the toolbars cover, which a place is brought below.
 const BARS_PX: f32 = 140.0;
 
@@ -43,9 +46,8 @@ struct Stamp {
 #[derive(Default)]
 pub struct Search {
     pub open: bool,
-    pub query: String,
-    /// The caret, as a byte index on a character of the query.
-    pub caret: usize,
+    /// The query being typed, with its caret.
+    pub field: Field,
     pub case: bool,
     pub words: bool,
     hits: Vec<Hit>,
@@ -121,7 +123,7 @@ impl Editor {
         self.settle();
         self.chrome.panel = None;
         self.search.open = true;
-        self.search.caret = self.search.query.len();
+        self.search.field.move_to(usize::MAX, false);
         self.refresh_search();
         self.ws.redraw = true;
     }
@@ -140,9 +142,9 @@ impl Editor {
         }
         let bar = self.toolbar();
         let mut top = self.context_bar().map_or(bar.bottom(), |c| c.rect[3]) + 8.0 * self.ws.dpr;
-        // (Under the theme card, which is at the same edge, while that is open.)
-        if let Some(theme) = self.theme_layout() {
-            top = top.max(theme.card[3] + 8.0 * self.ws.dpr);
+        // (Under the round button, which is at the same edge, while that is shown.)
+        if let Some(button) = self.theme_layout() {
+            top = top.max(button.rect[3] + 8.0 * self.ws.dpr);
         }
         Some(SearchLayout::new(&bar, self.ws.view.viewport, top, self.search.hits.len().min(crate::toolbar::SEARCH_ROWS)))
     }
@@ -162,8 +164,8 @@ impl Editor {
             .map(|(i, h)| SearchRow { page: h.page, snippet: h.snippet.clone(), at: h.at.clone(), current: i == s.current })
             .collect();
         Some(SearchView {
-            query: s.query.clone(),
-            caret: s.caret,
+            query: s.field.text.clone(),
+            caret: s.field.byte(s.field.caret),
             case: s.case,
             words: s.words,
             total: s.hits.len(),
@@ -181,7 +183,7 @@ impl Editor {
         let now = Stamp {
             text: self.ws.text.revision(),
             ink: self.ws.ink.revision(),
-            query: self.search.query.clone(),
+            query: self.search.field.text.clone(),
             case: self.search.case,
             words: self.search.words,
         };
@@ -299,7 +301,7 @@ impl Editor {
     pub(super) fn press_search_item(&mut self, item: SearchItem) {
         match item {
             // (The caret goes to the end: the field is one line and short.)
-            SearchItem::Field => self.search.caret = self.search.query.len(),
+            SearchItem::Field => self.search.field.move_to(usize::MAX, false),
             SearchItem::Case => {
                 self.search.case = !self.search.case;
                 self.ws.requests.push(Request::SettingsChanged);
@@ -317,40 +319,14 @@ impl Editor {
         self.ws.redraw = true;
     }
 
-    /// The keyboard while the card is open: typing in the field, the caret, Enter and the arrows to move between places, Esc to close.
-    /// `true` if the key was used.
+    /// The keyboard while the card is open: typing in the field and editing it as any field is edited (see [`crate::field`]), Enter and the
+    /// arrows up and down to move between places, Esc to close. `true` if the key was used.
     pub(super) fn search_key(&mut self, key: Key<'_>) -> bool {
         let used = match key {
-            Key::Text(typed) => {
-                for c in typed.chars() {
-                    match c {
-                        '\n' | '\r' => self.search_next(),
-                        c if !c.is_control() => self.type_in_search(c),
-                        _ => {}
-                    }
-                }
-                true
-            }
-            Key::Backspace => {
-                if let Some((at, _)) = self.search.query[..self.search.caret].char_indices().next_back() {
-                    self.search.query.remove(at);
-                    self.search.caret = at;
-                }
-                true
-            }
-            Key::Delete => {
-                if self.search.caret < self.search.query.len() {
-                    self.search.query.remove(self.search.caret);
-                }
-                true
-            }
-            Key::Arrow(Dir::Left, _) => {
-                self.search.caret = self.search.query[..self.search.caret].char_indices().next_back().map_or(0, |(at, _)| at);
-                true
-            }
-            Key::Arrow(Dir::Right, _) => {
-                let rest = &self.search.query[self.search.caret..];
-                self.search.caret += rest.chars().next().map_or(0, char::len_utf8);
+            Key::Text(typed) if typed.contains(['\n', '\r']) => {
+                // (An Enter is the next place; what came with it is typed first, without its line breaks.)
+                self.search.field.type_text(typed, RULES);
+                self.search_next();
                 true
             }
             Key::Arrow(Dir::Up, _) => {
@@ -361,49 +337,16 @@ impl Editor {
                 self.search_next();
                 true
             }
-            Key::Home(_) => {
-                self.search.caret = 0;
-                true
-            }
-            Key::End(_) => {
-                self.search.caret = self.search.query.len();
-                true
-            }
             Key::Escape => {
                 self.close_search();
                 true
             }
-            // Select all of the field is its whole text to copy or to take away; paste puts the clipboard's first line in.
-            Key::Chord('c') => {
-                self.ws.text_clipboard.set(&self.search.query);
-                true
-            }
-            Key::Chord('x') => {
-                self.ws.text_clipboard.set(&self.search.query);
-                self.search.query.clear();
-                self.search.caret = 0;
-                true
-            }
-            Key::Chord('v') => {
-                if let Some(text) = self.ws.text_clipboard.get() {
-                    for c in text.lines().next().unwrap_or_default().chars().filter(|c| !c.is_control()) {
-                        self.type_in_search(c);
-                    }
-                }
-                true
-            }
             // (A page key goes on to scroll the document, as the search card has no use for it.)
-            Key::Chord(_) | Key::Page(_) => false,
+            Key::Page(_) => false,
+            _ => self.search.field.key(key, &mut *self.ws.clip.text, RULES) != Edited::Unused,
         };
         self.refresh_search();
         self.ws.redraw = true;
         used
-    }
-
-    fn type_in_search(&mut self, c: char) {
-        if self.search.query.chars().count() < MAX_QUERY {
-            self.search.query.insert(self.search.caret, c);
-            self.search.caret += c.len_utf8();
-        }
     }
 }

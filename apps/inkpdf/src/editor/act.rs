@@ -5,6 +5,17 @@
 use crate::input::Device;
 use crate::toolbar::{ContextItem, Item, SearchItem, Slider};
 
+/// A button of one of the cards that float over the page.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CardHit {
+    /// A button of the bar under the tools (see [`crate::toolbar::ContextBar`]).
+    Context(ContextItem),
+    /// A part of the search card (see [`crate::toolbar::SearchLayout`]).
+    Search(SearchItem),
+    /// The round button under the theme button: whether the pages follow the look.
+    Theme,
+}
+
 #[derive(Clone, Debug, Default)]
 pub(crate) enum Act {
     #[default]
@@ -14,23 +25,12 @@ pub(crate) enum Act {
         id: u32,
         item: Option<Item>,
     },
-    /// A press on a button of the bar under the tools (see [`crate::toolbar::ContextBar`]).
-    Context {
+    /// A press on one of the cards that float over the page (the bar under the tools, the search card, the round button under the theme
+    /// button); `hit` is the button of it that was pressed, if it was on one.
+    Card {
         dev: Device,
         id: u32,
-        item: Option<ContextItem>,
-    },
-    /// A press on a part of the search card (see [`crate::toolbar::SearchLayout`]).
-    Search {
-        dev: Device,
-        id: u32,
-        item: Option<SearchItem>,
-    },
-    /// A press on the card under the theme button (`hit`: on its row).
-    Theme {
-        dev: Device,
-        id: u32,
-        hit: bool,
+        hit: Option<CardHit>,
     },
     /// Dragging one of the sliders in the pen panel.
     Slider {

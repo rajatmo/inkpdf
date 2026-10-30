@@ -254,7 +254,7 @@ impl ShapeTool {
     /// solid), the handles that exist as circles joined to their anchors, and a marker where a drag has
     /// snapped to another shape's anchor.
     pub(super) fn paint_anchors(&self, ws: &Workspace, out: &mut dyn Painter) {
-        let (accent, white) = (ws.theme.selection, ws.theme.white);
+        let (accent, white) = (ws.look.theme.selection, ws.look.theme.white);
         let px = ws.dpr / ws.view.zoom;
         let offset = self.drag_offset();
         if let Some((_, figure)) = self.editing(ws) {
@@ -289,7 +289,7 @@ impl ShapeTool {
         }
         if let Some(target) = self.snap {
             // A ring and a cross where the drag has landed on another shape's anchor.
-            let magenta = ws.theme.snap;
+            let magenta = ws.look.theme.snap;
             let r = 10.0 * px;
             let ring: Vec<P> = (0..=24)
                 .map(|i| {

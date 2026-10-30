@@ -147,8 +147,9 @@ pub struct State {
     /// The look the user chose, whether the interface is dark now, and whether the pages follow it.
     pub appearance: Appearance,
     pub dark: bool,
+    /// The pages are drawn dark with a dark look.
     pub dark_pages: bool,
-    /// The card under the theme button is open.
+    /// The round button under the theme button is shown.
     pub theme_menu: bool,
     /// The search card is open.
     pub search: bool,
@@ -511,7 +512,7 @@ impl Toolbar {
                         Appearance::Light => &icons.theme_light,
                         Appearance::Dark => &icons.theme_dark,
                     };
-                    // (The accent while its card is open.)
+                    // (The accent while its round button is shown.)
                     icon.draw(&mut ui.lines, cx, cy, half, line, if state.theme_menu { ui.pal.accent } else { ui.pal.ink });
                 }
                 Item::Fullscreen => {

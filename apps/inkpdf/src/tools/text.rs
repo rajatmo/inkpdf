@@ -9,6 +9,7 @@
 //! closing, a new page. Then it becomes one undo step: a new text box, or the old one changed (or removed,
 //! if it was emptied). Undo while typing throws the typing away.
 
+use crate::field::{Edited, Field, Rules};
 use crate::ink::{P, Style, TextBlock};
 use crate::input::{Device, Mode, Phase, Role, Sample};
 use crate::text;
@@ -19,7 +20,7 @@ use super::paint::{Painter, polyline};
 use super::shortcuts::selection_key;
 use super::{Dir, InputPolicy, Key, MouseUse, PageEvent, TAP_SELECT_PX, Tool};
 
-/// A text box being typed into.
+/// A text box being typed into: a field (its text, caret and selection: see [`crate::field`]) with a place on a page. It reads as its field.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TextEdit {
     /// The stroke being edited; `None` for a new text box.
@@ -27,68 +28,42 @@ pub struct TextEdit {
     pub page: u32,
     /// The box's top-left corner, in document space.
     pub top_left: P,
-    pub text: String,
+    field: Field,
     /// Points, and colour.
     pub size: f32,
     pub rgba: [u8; 4],
-    /// Where the caret is, as the number of characters before it.
-    pub caret: usize,
-    /// The other end of the selected text, if some is selected: the characters between it and the caret.
-    pub anchor: Option<usize>,
     /// How far along its line, in points, the caret was before it was moved up or down, so that it comes back to
     /// the same place after a short line.
     goal_x: Option<f32>,
 }
 
+impl std::ops::Deref for TextEdit {
+    type Target = Field;
+
+    fn deref(&self) -> &Field {
+        &self.field
+    }
+}
+
+impl std::ops::DerefMut for TextEdit {
+    fn deref_mut(&mut self) -> &mut Field {
+        &mut self.field
+    }
+}
+
 impl TextEdit {
     fn new(target: Option<u64>, page: u32, top_left: P, text: String, size: f32, rgba: [u8; 4]) -> Self {
-        let caret = text.chars().count();
-        Self { target, page, top_left, text, size, rgba, caret, anchor: None, goal_x: None }
+        Self { target, page, top_left, field: Field::new(text), size, rgba, goal_x: None }
     }
 
     /// The box as it is now: its rectangle (see [`text::outline`]).
     pub fn outline(&self) -> Vec<P> {
         text::outline(self.top_left, &self.text, self.size)
     }
-
-    /// The selected text, as the first and last character: `None` if nothing is selected.
-    pub fn selection(&self) -> Option<(usize, usize)> {
-        self.anchor.filter(|&a| a != self.caret).map(|a| (a.min(self.caret), a.max(self.caret)))
-    }
-
-    fn selected_text(&self) -> Option<String> {
-        self.selection().map(|(lo, hi)| self.text.chars().skip(lo).take(hi - lo).collect())
-    }
-
-    fn len(&self) -> usize {
-        self.text.chars().count()
-    }
-
-    /// The byte of the text that character `index` starts at.
-    fn byte(&self, index: usize) -> usize {
-        self.text.char_indices().nth(index).map_or(self.text.len(), |(b, _)| b)
-    }
-
-    /// Put `with` in the place of characters `lo` to `hi`, the caret after it, nothing selected.
-    fn replace(&mut self, lo: usize, hi: usize, with: &str) {
-        let (a, b) = (self.byte(lo), self.byte(hi));
-        self.text.replace_range(a..b, with);
-        self.caret = lo + with.chars().count();
-        self.anchor = None;
-        self.goal_x = None;
-    }
-
-    /// The caret goes to character `to`; with `extend` the text between where it was and there is selected.
-    fn move_to(&mut self, to: usize, extend: bool) {
-        if extend {
-            self.anchor.get_or_insert(self.caret);
-        } else {
-            self.anchor = None;
-        }
-        self.caret = to.min(self.len());
-    }
 }
 
+/// What a text box takes: a page of text, with lines.
+const RULES: Rules = Rules { max_chars: text::MAX_CHARS, multiline: true };
 /// A press of the mouse, until it is let go.
 #[derive(Clone, Debug, Default, PartialEq)]
 enum Press {
@@ -120,95 +95,33 @@ impl TextTool {
         self.edit.is_some()
     }
 
-    /// Type `typed` at the caret, in the place of what is selected (see [`text::clean`]).
-    pub fn type_text(&mut self, ws: &mut Workspace, typed: &str) {
-        if let Some(edit) = &mut self.edit {
-            let (lo, hi) = edit.selection().unwrap_or((edit.caret, edit.caret));
-            let room = text::MAX_CHARS.saturating_sub(edit.len() - (hi - lo));
-            let cleaned: String = text::clean(typed).chars().take(room).collect();
-            edit.replace(lo, hi, &cleaned);
-            ws.redraw = true;
-        }
-        self.fit_width(ws);
-    }
-
-    /// Take away what is selected, or else the character before the caret (a line break goes whole).
-    pub fn backspace(&mut self, ws: &mut Workspace) {
-        if let Some(edit) = &mut self.edit {
-            match edit.selection() {
-                Some((lo, hi)) => edit.replace(lo, hi, ""),
-                None if edit.caret > 0 => edit.replace(edit.caret - 1, edit.caret, ""),
-                None => {}
-            }
-            ws.redraw = true;
-        }
-    }
-
-    /// Take away what is selected, or else the character after the caret.
-    fn delete_forward(&mut self, ws: &mut Workspace) {
-        if let Some(edit) = &mut self.edit {
-            match edit.selection() {
-                Some((lo, hi)) => edit.replace(lo, hi, ""),
-                None if edit.caret < edit.len() => edit.replace(edit.caret, edit.caret + 1, ""),
-                None => {}
-            }
-            ws.redraw = true;
-        }
-    }
-
-    /// Move the caret as `key` says: an arrow, Home or End (with Shift they select).
-    fn move_caret(&mut self, ws: &mut Workspace, key: Key<'_>) {
-        let Some(edit) = &mut self.edit else { return };
-        ws.redraw = true;
-        let (selection, last) = (edit.selection(), edit.len());
-        let extend = matches!(key, Key::Arrow(_, true) | Key::Home(true) | Key::End(true));
-        let before = text::caret_at(&edit.text, edit.size, edit.caret)[0];
-        let (to, vertical) = match key {
-            // Without Shift, an arrow first lets go of the selection at the end it points to.
-            Key::Arrow(Dir::Left, _) => (selection.filter(|_| !extend).map_or(edit.caret.saturating_sub(1), |(lo, _)| lo), false),
-            Key::Arrow(Dir::Right, _) => (selection.filter(|_| !extend).map_or((edit.caret + 1).min(last), |(_, hi)| hi), false),
-            Key::Arrow(dir, _) => {
-                let goal = edit.goal_x.unwrap_or(before);
+    /// The keyboard on the text box being typed into: the field's own keys (see [`Field::key`]), and the arrows that go up and down a line.
+    fn edit_key(&mut self, ws: &mut Workspace, key: Key<'_>) -> bool {
+        let Some(edit) = &mut self.edit else { return false };
+        let edited = match key {
+            Key::Arrow(dir @ (Dir::Up | Dir::Down), extend) => {
+                // The caret goes to the same place along the line above or below, also after a short line.
+                let goal = edit.goal_x.unwrap_or_else(|| text::caret_at(&edit.text, edit.size, edit.caret)[0]);
+                let to = text::vertical(&edit.text, edit.size, edit.caret, dir == Dir::Down, goal);
+                edit.move_to(to, extend);
                 edit.goal_x = Some(goal);
-                (text::vertical(&edit.text, edit.size, edit.caret, dir == Dir::Down, goal), true)
+                Edited::Moved
             }
-            Key::Home(_) => (text::line_range(&edit.text, edit.caret).0, false),
-            Key::End(_) => (text::line_range(&edit.text, edit.caret).1, false),
-            _ => return,
+            _ => {
+                let edited = edit.field.key(key, &mut *ws.clip.text, RULES);
+                edit.goal_x = None;
+                if matches!(key, Key::Chord('c' | 'x')) {
+                    ws.clip.echo = None;
+                }
+                edited
+            }
         };
-        edit.move_to(to, extend);
-        if !vertical {
-            edit.goal_x = None;
+        ws.redraw = true;
+        if edited == Edited::Changed {
+            self.fit_width(ws);
         }
+        edited != Edited::Unused
     }
-
-    /// Ctrl+A, C, X and V on the text being edited.
-    fn chord(&mut self, ws: &mut Workspace, letter: char) {
-        match letter {
-            'a' => {
-                if let Some(edit) = &mut self.edit {
-                    edit.anchor = Some(0);
-                    edit.caret = edit.len();
-                    ws.redraw = true;
-                }
-            }
-            'c' | 'x' => {
-                let Some(words) = self.edit.as_ref().and_then(TextEdit::selected_text) else { return };
-                ws.text_clipboard.set(&words);
-                ws.clipboard_echo = None;
-                if letter == 'x' {
-                    self.backspace(ws);
-                }
-            }
-            'v' => {
-                if let Some(words) = ws.text_clipboard.get() {
-                    self.type_text(ws, &words);
-                }
-            }
-            _ => {}
-        }
-    }
-
     /// Keep the box being typed into within its page's right edge: lines that would run off it are broken
     /// (see [`text::wrap`]), and a box too near the edge for that to leave a readable width is moved left. The
     /// caret and the selection stay among the same characters.
@@ -342,7 +255,7 @@ impl TextTool {
         let style = Style { rgba: edit.rgba, width: 0.0 };
         let empty = edit.text.trim().is_empty();
         let outline = keep_on_page(ws, edit.page, edit.outline());
-        let block = TextBlock { text: edit.text, size: edit.size };
+        let block = TextBlock { text: edit.field.text, size: edit.size };
         match edit.target {
             Some(id) if empty => {
                 ws.ink.remove(&[id]);
@@ -457,14 +370,10 @@ impl Tool for TextTool {
             return selection_key(ws, key);
         }
         match key {
-            Key::Text(typed) => self.type_text(ws, typed),
-            Key::Backspace => self.backspace(ws),
-            Key::Delete => self.delete_forward(ws),
             Key::Escape => self.finish_text(ws),
-            Key::Arrow(..) | Key::Home(_) | Key::End(_) => self.move_caret(ws, key),
-            Key::Chord(letter) => self.chord(ws, letter),
             // (A box being typed into has no use for the page keys; the document scrolls.)
             Key::Page(_) => return false,
+            _ => return self.edit_key(ws, key),
         }
         true
     }
@@ -495,7 +404,7 @@ impl Tool for TextTool {
     }
 
     fn paint(&self, ws: &Workspace, out: &mut dyn Painter) {
-        let accent = ws.theme.selection;
+        let accent = ws.look.theme.selection;
         if let Press::Pick(p) = &self.press {
             p.paint(ws, out);
         }

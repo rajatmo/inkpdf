@@ -12,17 +12,8 @@ fn with_text() -> Editor {
     ed
 }
 
-fn click(ed: &mut Editor, x: f32, y: f32) {
-    let at = on_page(ed, x, y);
-    mouse_click_at(ed, at);
-}
-
 fn drag(ed: &mut Editor, from: [f32; 2], to: [f32; 2]) {
-    ed.mouse_moved(from);
-    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
-    ed.mouse_moved([(from[0] + to[0]) / 2.0, (from[1] + to[1]) / 2.0]);
-    ed.mouse_moved(to);
-    ed.mouse_button(ButtonState::Released, MouseButton::Left);
+    mouse_drag(ed, &[from, [(from[0] + to[0]) / 2.0, (from[1] + to[1]) / 2.0], to]);
 }
 
 fn key(ed: &mut Editor, key: Key<'_>) {
@@ -45,7 +36,7 @@ fn selected(ed: &Editor) -> Option<(usize, usize)> {
 /// A new box begun at (100, 200) and typed into.
 fn typing(words: &str) -> Editor {
     let mut ed = with_text();
-    click(&mut ed, 100.0, 200.0);
+    click_on_page(&mut ed, 100.0, 200.0);
     ed.type_text(words);
     ed
 }
@@ -143,7 +134,7 @@ fn ctrl_a_c_x_and_v_work_on_the_text_with_the_system_clipboard() {
     assert!(ed.shortcut("a", false));
     assert_eq!(selected(&ed), Some((0, 7)));
     assert!(ed.shortcut("c", false));
-    assert_eq!(ed.text_clipboard.get().as_deref(), Some("one two"));
+    assert_eq!(ed.clip.text.get().as_deref(), Some("one two"));
     // Paste over the selection, then again at the caret.
     ed.type_text("Z");
     assert!(ed.shortcut("v", false));
@@ -153,12 +144,12 @@ fn ctrl_a_c_x_and_v_work_on_the_text_with_the_system_clipboard() {
     key(&mut ed, Key::Arrow(Dir::Left, true));
     key(&mut ed, Key::Arrow(Dir::Left, true));
     assert!(ed.shortcut("x", false));
-    assert_eq!((edited(&ed), ed.text_clipboard.get().as_deref()), (("Zone ".to_string(), 5), Some("two")));
+    assert_eq!((edited(&ed), ed.clip.text.get().as_deref()), (("Zone ".to_string(), 5), Some("two")));
     // Nothing selected: copying and cutting change nothing.
     assert!(ed.shortcut("c", false) && ed.shortcut("x", false));
-    assert_eq!((edited(&ed), ed.text_clipboard.get().as_deref()), (("Zone ".to_string(), 5), Some("two")));
+    assert_eq!((edited(&ed), ed.clip.text.get().as_deref()), (("Zone ".to_string(), 5), Some("two")));
     // Pasted text is cleaned like typed text: a tab is a space, other control characters go.
-    ed.text_clipboard.set("a\tb\u{7}c\nd");
+    ed.clip.text.set("a\tb\u{7}c\nd");
     ed.shortcut("v", false);
     assert_eq!(edited(&ed).0, "Zone a bc\nd");
 }
@@ -166,7 +157,7 @@ fn ctrl_a_c_x_and_v_work_on_the_text_with_the_system_clipboard() {
 #[test]
 fn a_press_in_the_box_being_edited_puts_the_caret_there_and_a_drag_selects_and_a_press_outside_ends_it() {
     let mut ed = with_text();
-    click(&mut ed, 100.0, 200.0);
+    click_on_page(&mut ed, 100.0, 200.0);
     ed.type_text("Hello world");
     let size = ed.text_edit().map(|e| e.size).expect("size");
     // Press just after the first letter: the caret goes between the first and second.
@@ -185,7 +176,7 @@ fn a_press_in_the_box_being_edited_puts_the_caret_there_and_a_drag_selects_and_a
     drag(&mut ed, pb, pa);
     assert_eq!((selected(&ed), edited(&ed).1), (Some((2, 8)), 2));
     // A press elsewhere ends the edit and stores the box (and starts the next).
-    click(&mut ed, 100.0, 500.0);
+    click_on_page(&mut ed, 100.0, 500.0);
     assert_eq!(ed.ink.len(), 1);
     assert!(ed.text_edit().is_some_and(|e| e.target.is_none() && e.text.is_empty()));
 }
@@ -208,7 +199,7 @@ fn as_a_tablet_the_stylus_puts_the_caret_and_the_touch_keyboard_types() {
     assert!(ed.shortcut("a", false));
     assert_eq!(selected(&ed), Some((0, 12)));
     assert!(ed.shortcut("c", false));
-    assert_eq!(ed.text_clipboard.get().as_deref(), Some("Hello, world"));
+    assert_eq!(ed.clip.text.get().as_deref(), Some("Hello, world"));
     // The caret is part of the box: the arrows are the keyboard's, and the stylus's drag selects.
     let (a, b) = (
         on_page(&ed, 100.0 + crate::text::caret_at("Hello, world", size, 0)[0], 205.0),
@@ -221,9 +212,9 @@ fn as_a_tablet_the_stylus_puts_the_caret_and_the_touch_keyboard_types() {
 #[test]
 fn breaking_lines_while_typing_in_the_middle_keeps_the_caret_among_the_same_characters() {
     let mut ed = with_text();
-    ed.text_style.width = 60.0;
+    ed.styles.text_style.width = 60.0;
     ed.restyle_tool();
-    click(&mut ed, 100.0, 160.0);
+    click_on_page(&mut ed, 100.0, 160.0);
     let words = "word ".repeat(30);
     ed.type_text(&words);
     let (text, _) = edited(&ed);
@@ -245,12 +236,12 @@ fn the_words_of_a_copied_box_go_on_the_system_clipboard_and_words_from_elsewhere
     let id = add_text(&mut ed, 100.0, 200.0, "Hello");
     ed.selection = vec![id];
     assert!(ed.copy_selection());
-    assert_eq!(ed.text_clipboard.get().as_deref(), Some("Hello"));
+    assert_eq!(ed.clip.text.get().as_deref(), Some("Hello"));
     // Pasting the box we copied pastes the box, not the words as well.
     assert!(ed.paste());
     assert_eq!(ed.ink.len(), 2);
     // Words that came from some other program become a box of their own, in the text tool's size.
-    ed.text_clipboard.set("from elsewhere");
+    ed.clip.text.set("from elsewhere");
     ed.selection.clear();
     assert!(ed.paste());
     assert_eq!(ed.ink.len(), 3);
@@ -258,12 +249,12 @@ fn the_words_of_a_copied_box_go_on_the_system_clipboard_and_words_from_elsewhere
     assert_eq!(made.text.as_ref().map(|t| t.text.replace('\n', " ")), Some("from elsewhere".to_string()));
     assert_eq!(ed.selection, [made.id]);
     // Nothing to paste (blank words) makes nothing; another tool has no use for words.
-    ed.text_clipboard.set("   ");
+    ed.clip.text.set("   ");
     ed.selection.clear();
     let before = ed.ink.len();
-    ed.clipboard.clear();
+    ed.clip.items.clear();
     assert!(!ed.paste());
-    ed.text_clipboard.set("words");
+    ed.clip.text.set("words");
     ed.set_tool(Tool::Pen);
     assert!(!ed.paste());
     assert_eq!(ed.ink.len(), before);
@@ -273,7 +264,7 @@ fn the_words_of_a_copied_box_go_on_the_system_clipboard_and_words_from_elsewhere
 fn a_new_size_or_colour_chosen_while_editing_keeps_the_caret_where_it_was() {
     let mut ed = typing("one two three");
     left(&mut ed, 6);
-    ed.text_style.width = 40.0;
+    ed.styles.text_style.width = 40.0;
     ed.restyle_tool();
     assert_eq!(edited(&ed), ("one two three".to_string(), 7));
     ed.type_text("-");

@@ -139,7 +139,7 @@ impl ShapeTool {
         self.gesture = match ws.page_hit(p) {
             Some(page) => {
                 let start = self.snapped(ws, p, None);
-                Gesture::Drag { id, page, shape: ws.shape, start, end: start }
+                Gesture::Drag { id, page, shape: ws.styles.shape, start, end: start }
             }
             None => Gesture::Swallow(id),
         };

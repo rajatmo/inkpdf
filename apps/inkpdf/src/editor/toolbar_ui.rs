@@ -41,8 +41,9 @@ impl Editor {
             // The bar comes down into place as it comes in.
             let came = self.motions.bar_amount();
             ui.apply(coming, Xform::slide([0.0, -(1.0 - came) * 8.0 * self.ws.dpr], came));
-            if let (Some(card), Some(view)) = (self.theme_layout(), self.theme_view()) {
-                card.draw(&view, ui);
+
+            if let (Some(button), Some(view)) = (self.theme_layout(), self.theme_view()) {
+                button.draw(&view, ui);
             }
             if let (Some(card), Some(view)) = (self.search_layout(), self.search_view()) {
                 card.draw(&view, ui);
@@ -133,7 +134,7 @@ impl Editor {
                 Some(Restyle { width: Some(width), rgba: None })
             }
             Slider::Smoothing => {
-                self.ws.smoothing = value.clamp(0.0, 1.0);
+                self.ws.styles.smoothing = value.clamp(0.0, 1.0);
                 None
             }
             Slider::Channel(channel) => {
@@ -162,7 +163,7 @@ impl Editor {
         let editing = self.chrome.panel.and_then(|p| p.editing);
         if slot == self.style().colour {
             self.set_editing(if editing == Some(slot) { None } else { Some(slot) });
-        } else if slot < self.ws.palette.len() {
+        } else if slot < self.ws.styles.palette.len() {
             self.ws.style_mut().colour = slot;
             self.ws.requests.push(Request::SettingsChanged);
             self.restyle_tool();
@@ -225,7 +226,7 @@ impl Editor {
                 Item::Fullscreen => self.ws.requests.push(Request::Fullscreen),
                 // The other mode (the posture decides again when the machine is turned into a tablet or back).
                 Item::ModeSwitch => self.set_mode(if self.mode == Mode::Desktop { Mode::Tablet } else { Mode::Desktop }),
-                // (The look goes round, and its card drops down: whether the pages follow it.)
+                // (The look goes round, and a round button drops down from it: whether the pages follow it.)
                 Item::Theme => {
                     self.cycle_appearance();
                     self.open_theme_menu();

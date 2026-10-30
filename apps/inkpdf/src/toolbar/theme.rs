@@ -1,7 +1,9 @@
 //! The look of the interface: a floating style (rounded panels with soft shadows, line icons, one accent), in the colours of the
 //! [`Palette`] the [`Ui`] carries, and the small drawing helpers the toolbar and pop-ups share.
 
+use super::icons::Icon;
 use crate::palette::Palette;
+pub use crate::scene::LineSink;
 use crate::scene::{Capsule, Panel, Xform};
 
 /// Which side of its position a label sits on.
@@ -25,6 +27,31 @@ pub struct Label {
     pub align: Align,
     /// How opaque it is, 0 to 1 (not in what the bitmap is made of: a fade does not make a bitmap for every step of it).
     pub alpha: f32,
+}
+
+impl Label {
+    /// A label whose position is its left edge, fully opaque.
+    pub fn left(text: impl Into<String>, size: f32, color: [u8; 4], at: [f32; 2]) -> Self {
+        Self { text: text.into(), size, color, at, align: Align::Left, alpha: 1.0 }
+    }
+
+    /// A label whose position is its middle, fully opaque.
+    pub fn centre(text: impl Into<String>, size: f32, color: [u8; 4], at: [f32; 2]) -> Self {
+        Self { align: Align::Centre, ..Self::left(text, size, color, at) }
+    }
+}
+
+/// How a round button is (what its wash and its icon's colour are made from).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ButtonLook {
+    /// A button that cannot be pressed now is dim and does not light up.
+    pub enabled: bool,
+    pub hovered: bool,
+    pub pressed: bool,
+    /// Switched on: in the accent colour.
+    pub on: bool,
+    /// It takes something away: its icon is in the danger colour.
+    pub danger: bool,
 }
 
 /// A picture of a page, with its ink, in pixels.
@@ -66,7 +93,23 @@ pub struct Ui {
     pub labels: Vec<Label>,
 }
 
+impl LineSink for Ui {
+    fn line(&mut self, a: [f32; 2], b: [f32; 2], width: f32, color: [u8; 4]) {
+        self.lines.push(Capsule::new(a, b, width, color));
+    }
+}
+
 impl Ui {
+    /// A line, as the interface draws them (the same as through [`LineSink`], which the shapes made of lines are made through).
+    pub fn line(&mut self, a: [f32; 2], b: [f32; 2], width: f32, color: [u8; 4]) {
+        LineSink::line(self, a, b, width, color);
+    }
+
+    /// A filled circle of `diameter`.
+    pub fn disc(&mut self, centre: [f32; 2], diameter: f32, color: [u8; 4]) {
+        LineSink::disc(self, centre, diameter, color);
+    }
+
     /// An empty drawing, to be made in these colours.
     pub fn with_palette(pal: Palette) -> Self {
         Self { pal, ..Self::default() }
@@ -107,17 +150,33 @@ impl Ui {
         self.apply(Mark::default(), Xform::fade(f));
     }
 
-    /// A filled circle of `diameter`.
-    pub fn disc(&mut self, centre: [f32; 2], diameter: f32, color: [u8; 4]) {
-        self.lines.push(Capsule::new(centre, centre, diameter, color));
-    }
-
-    pub fn line(&mut self, a: [f32; 2], b: [f32; 2], width: f32, color: [u8; 4]) {
-        self.lines.push(Capsule::new(a, b, width, color));
-    }
-
     pub fn panel(&mut self, rect: [f32; 4], radius: f32, color: [u8; 4]) {
         self.panels.push(Panel::solid(rect, radius, color));
+    }
+
+    /// A round button in `rect`: its wash (pressed, switched on or hovered, in that order of say; none while it cannot be pressed) and its `icon`,
+    /// `half` across, in the colour of how the button is.
+    pub(super) fn round_button(&mut self, rect: [f32; 4], icon: &Icon, look: ButtonLook, half: f32, line: f32) {
+        let pal = self.pal;
+        let wash = if look.pressed && look.enabled {
+            Some(pal.pressed_wash)
+        } else if look.on {
+            Some(pal.accent_wash)
+        } else if look.hovered && look.enabled {
+            Some(pal.hover_wash)
+        } else {
+            None
+        };
+        if let Some(color) = wash {
+            self.panel(rect, (rect[2] - rect[0]).min(rect[3] - rect[1]) / 2.0, color);
+        }
+        let color = match (look.enabled, look.on, look.danger) {
+            (false, _, _) => pal.ink_dim,
+            (_, true, _) => pal.accent,
+            (_, _, true) => pal.danger,
+            _ => pal.ink,
+        };
+        icon.draw(&mut self.lines, (rect[0] + rect[2]) / 2.0, (rect[1] + rect[3]) / 2.0, half, line, color);
     }
 
     /// A panel that floats: a wide soft shadow, a tight one, a hairline edge, the fill.

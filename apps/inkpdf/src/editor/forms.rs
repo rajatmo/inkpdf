@@ -4,6 +4,7 @@
 //! until Esc, Enter (in a field of one line) or a press elsewhere. What is put in is a change to the file (it is saved with it), not a step of the
 //! history: pressing a box again is how it is undone.
 
+use crate::field::{Edited, Field, Rules};
 use crate::form::Kind;
 use crate::input::Dir;
 use crate::links::{self, Target};
@@ -11,11 +12,18 @@ use crate::tools::Key;
 
 use super::Editor;
 
-/// The field being typed into, and which of its boxes was pressed.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// The field being typed into, which of its boxes was pressed, and the text being edited (see [`crate::field`]): it is put in the form as it changes.
+#[derive(Clone, Debug, PartialEq)]
 pub(super) struct Typing {
     pub field: usize,
     pub widget: usize,
+    edit: Field,
+}
+
+impl Typing {
+    fn is(&self, field: usize, widget: usize) -> bool {
+        (self.field, self.widget) == (field, widget)
+    }
 }
 
 /// How a box of a field is drawn: where it is, what the person put in it and where its text goes.
@@ -55,15 +63,14 @@ impl Editor {
             let size = text_size(rect, f.multiline);
             let (width, height) = (rect[2] - rect[0] - 4.0, rect[3] - rect[1]);
             let mut top_left = [rect[0] + 2.0, if f.multiline { rect[1] + 2.0 } else { rect[1] + (height - size * crate::text::LINE_HEIGHT) / 2.0 }];
-            let typing = self.form_typing == Some(Typing { field, widget });
-            // (A line longer than the box is shown by its end, which is where the typing is.)
-            if !f.multiline && typing {
-                top_left[0] -= (crate::text::measure(&text, size)[0] - width).max(0.0);
+            let typing = self.form_typing.as_ref().filter(|t| t.is(field, widget));
+            let at = typing.map(|t| crate::text::caret_at(&text, size, t.edit.caret));
+            // (A line longer than the box is shown as far as the caret.)
+            if let Some(at) = at.filter(|_| !f.multiline) {
+                top_left[0] -= (at[0] - width).max(0.0);
             }
-            let caret = typing.then(|| {
-                let at = crate::text::caret_at(&text, size, text.chars().count());
-                [top_left[0] + at[0], top_left[1] + at[1], top_left[0] + at[0], top_left[1] + at[1] + size * crate::text::LINE_HEIGHT]
-            });
+            let caret =
+                at.map(|at| [top_left[0] + at[0], top_left[1] + at[1], top_left[0] + at[0], top_left[1] + at[1] + size * crate::text::LINE_HEIGHT]);
             out.push(BoxDraw { page, rect, kind: f.kind, changed: f.changed(), on: f.is_on(widget), text, size, top_left, caret });
         }
         out
@@ -72,7 +79,7 @@ impl Editor {
     /// The field being typed into, if one is.
     #[cfg(test)]
     pub fn form_typing(&self) -> Option<usize> {
-        self.form_typing.map(|t| t.field)
+        self.form_typing.as_ref().map(|t| t.field)
     }
 
     /// Every box of a field on a page, in document space: `(field, widget, rect)`.
@@ -86,12 +93,13 @@ impl Editor {
     /// A press on box `widget` of field `field`, which is on `rect`: it is filled as its kind is.
     pub(super) fn press_field(&mut self, field: usize, widget: usize, rect: [f32; 4]) {
         // (Another field that was being typed into is let go of: its text stays.)
-        if self.form_typing.is_some_and(|t| t.field != field || t.widget != widget) {
+        if self.form_typing.as_ref().is_some_and(|t| !t.is(field, widget)) {
             self.end_form_typing();
         }
         let Some(f) = self.form.fields.get_mut(field) else { return };
         if f.kind == Kind::Text {
-            self.form_typing = Some(Typing { field, widget });
+            // (The caret is at the end of what the field holds, as in a text box.)
+            self.form_typing.get_or_insert_with(|| Typing { field, widget, edit: Field::new(f.shown()) });
             self.ws.redraw = true;
         } else if f.press(widget) {
             self.form_changed(rect);
@@ -107,7 +115,7 @@ impl Editor {
 
     /// The box the field being typed into is pressed on, in document space.
     fn typing_rect(&self) -> Option<[f32; 4]> {
-        let t = self.form_typing?;
+        let t = self.form_typing.as_ref()?;
         self.field_places().find(|&(f, w, _)| f == t.field && w == t.widget).map(|(_, _, r)| r)
     }
 
@@ -126,36 +134,35 @@ impl Editor {
         }
     }
 
-    /// The keyboard, while a field is being typed into: `true` if it was heard.
+    /// The keyboard, while a field is being typed into: the text is edited as any field is (see [`Field::key`]); Enter ends a field of one line,
+    /// as Esc ends any. `true` if it was heard.
     pub(super) fn form_key(&mut self, key: Key<'_>) -> bool {
-        let Some(t) = self.form_typing else { return false };
-        let multiline = self.form.fields.get(t.field).is_some_and(|f| f.multiline);
-        let changed = match key {
-            Key::Text("\n") if !multiline => {
-                self.end_form_typing();
-                return true;
-            }
-            Key::Text(typed) => self.form.fields.get_mut(t.field).is_some_and(|f| f.type_text(typed)),
-            Key::Backspace | Key::Delete => self.form.fields.get_mut(t.field).is_some_and(|f| f.backspace()),
+        let Some(typing) = &mut self.form_typing else { return false };
+        let Some(f) = self.form.fields.get_mut(typing.field) else { return false };
+        let (max_chars, multiline) = f.rules();
+        match key {
             Key::Escape => {
                 self.end_form_typing();
                 return true;
             }
-            // (The text's own select all, copy and cut are not offered here; paste puts the clipboard's text at the end.)
-            Key::Chord('v') => {
-                let pasted = self.ws.text_clipboard.get();
-                pasted.is_some_and(|text| self.form.fields.get_mut(t.field).is_some_and(|f| f.type_text(&text)))
+            Key::Text("\n") if !multiline => {
+                self.end_form_typing();
+                return true;
             }
-            Key::Chord(_) | Key::Arrow(Dir::Left | Dir::Right, _) | Key::Home(_) | Key::End(_) => false,
-            // (What scrolls the page is left to scroll it.)
-            Key::Arrow(..) | Key::Page(_) => return false,
-        };
-        if changed && let Some(rect) = self.typing_rect() {
+            // (What scrolls the page, and the arrows that go up and down, are left to scroll it.)
+            Key::Arrow(Dir::Up | Dir::Down, _) | Key::Page(_) => return false,
+            _ => {}
+        }
+        let edited = typing.edit.key(key, &mut *self.ws.clip.text, Rules { max_chars, multiline });
+        if edited == Edited::Changed
+            && f.set_text(typing.edit.text.clone())
+            && let Some(rect) = self.typing_rect()
+        {
             self.form_changed(rect);
         }
-        true
+        self.ws.redraw = true;
+        edited != Edited::Unused
     }
-
     /// Fill the field under `pos`, if there is one (a tap): `true` if there was.
     pub(super) fn fill_field_at(&mut self, pos: [f32; 2]) -> bool {
         let at = self.to_doc(pos);

@@ -141,7 +141,7 @@ impl State {
             &scene.quads,
             &self.layers.overview.quads,
             &ink_scene,
-            [self.ed.theme.window[0], self.ed.theme.window[1], self.ed.theme.window[2], 1.0],
+            [self.ed.look.theme.window[0], self.ed.look.theme.window[1], self.ed.look.theme.window[2], 1.0],
         );
         let t_draw = Instant::now();
         // Keep the buffers (and their room) for the next frame.

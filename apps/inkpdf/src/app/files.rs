@@ -5,9 +5,9 @@ use std::path::{Path, PathBuf};
 use winit::window::Fullscreen;
 
 use super::config;
-use crate::doc::{Doc, UNTITLED};
+use crate::doc::{Contents, Doc, DocError, UNTITLED};
 use crate::editor::Request;
-use crate::ink::PageStroke;
+use crate::ink_io::Extras;
 use crate::pages::PageEdit;
 use crate::platform::Pick;
 use crate::requests::Choice;
@@ -31,6 +31,11 @@ fn proceeds(choice: Choice, save: impl FnOnce() -> bool) -> bool {
         Choice::Discard => true,
         Choice::Cancel => false,
     }
+}
+
+/// What a save is to write besides the ink: the pages that are flagged, and the values put in the fields of the form (see [`Extras`]).
+fn save_extras(ed: &crate::editor::Editor) -> (Vec<usize>, Vec<(String, crate::pdf::RawValue)>) {
+    (ed.flags.iter().copied().collect(), crate::pdf_read::raw_values(ed.form.changes()))
 }
 
 impl State {
@@ -69,14 +74,14 @@ impl State {
         }
     }
     /// Make `doc` the document being edited, with the ink it came with.
-    fn install(&mut self, mut doc: Doc, strokes: Vec<PageStroke>) {
-        eprintln!("opened {} — {} pages, {} ink strokes, {} ms", doc.name, doc.page_count(), strokes.len(), doc.open_millis);
+    fn install(&mut self, doc: Doc, contents: Contents) {
+        eprintln!("opened {} — {} pages, {} ink strokes, {} ms", doc.name, doc.page_count(), contents.strokes.len(), doc.open_millis);
         self.gpu.clear_textures();
         self.session.failed.clear();
-        self.ed.load(doc.layout(), strokes);
-        self.ed.links = doc.take_links();
-        self.ed.form = doc.take_form();
-        self.ed.set_outline(doc.take_outline());
+        self.ed.load(doc.layout(), contents.strokes);
+        self.ed.links = contents.links;
+        self.ed.form = contents.form;
+        self.ed.set_outline(contents.outline);
         self.ed.forget_text();
         self.session.indexer = Some(crate::indexer::Indexer::start(doc.text_bytes()));
         self.session.doc = Some(doc);
@@ -99,7 +104,7 @@ impl State {
 
     fn open_now(&mut self, id: DocId) {
         match Doc::open_from(&*self.session.files, &id) {
-            Ok((doc, strokes)) => self.install(doc, strokes),
+            Ok((doc, contents)) => self.install(doc, contents),
             Err(e) => {
                 eprintln!("could not open {id}: {e}");
                 self.platform.error_box(&*self.window, &format!("Could not open {}:\n{e}", id.name()));
@@ -129,7 +134,7 @@ impl State {
     /// first by the callers that need it ([`Self::close_document`]).
     pub(super) fn open_blank(&mut self) {
         match Doc::blank(self.display_page()) {
-            Ok(doc) => self.install(doc, Vec::new()),
+            Ok(doc) => self.install(doc, Contents::default()),
             Err(e) => {
                 eprintln!("could not make a blank document: {e}");
                 self.set_title(format!("InkPDF — {e}"));
@@ -164,11 +169,10 @@ impl State {
     fn save_to(&mut self, id: DocId) {
         let result = match &mut self.session.doc {
             Some(doc) => {
-                doc.set_flags(self.ed.flags.iter().copied().collect());
-                doc.set_fields(self.ed.form.changes());
-                doc.save_as_to(&*self.session.files, &id, &self.ed.ink)
+                let (flags, fields) = save_extras(&self.ed);
+                doc.save_as_to(&*self.session.files, &id, &self.ed.ink, &Extras { flags: Some(&flags), fields: &fields })
             }
-            None => Err("there is no document to save".to_string()),
+            None => Err(DocError::NotSaved),
         };
         match result {
             Ok(()) => {
@@ -202,9 +206,8 @@ impl State {
             return false;
         }
         let Some(doc) = &mut self.session.doc else { return true };
-        doc.set_flags(self.ed.flags.iter().copied().collect());
-        doc.set_fields(self.ed.form.changes());
-        match doc.save_to(&*self.session.files, &self.ed.ink) {
+        let (flags, fields) = save_extras(&self.ed);
+        match doc.save_to(&*self.session.files, &self.ed.ink, &Extras { flags: Some(&flags), fields: &fields }) {
             Ok(()) => {
                 self.ed.document_saved();
                 self.title.clear();

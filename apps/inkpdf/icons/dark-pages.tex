@@ -3,11 +3,11 @@
 \begin{document}
 \begin{tikzpicture}
   \iconbox
-  % Dark pages: a page with its lower half in shade (hatched).
-  \draw[soft] (-0.5,0.714) -- (0.214,0.714) -- (0.5,0.429) -- (0.5,-0.714) -- (-0.5,-0.714) -- cycle;
-  \draw (0.214,0.714) -- (0.214,0.429) -- (0.5,0.429);
-  \draw (-0.286,-0.357) -- (0.286,0.214);
-  \draw (-0.286,-0.643) -- (0.429,0.071);
-  \draw (0,-0.643) -- (0.429,-0.214);
+  % Whether the pages go dark with the look: a page with its corner folded, and a moon on it.
+  \draw[soft] (-0.66,0.9) -- (0.26,0.9) -- (0.66,0.5) -- (0.66,-0.9) -- (-0.66,-0.9) -- cycle;
+  \draw (0.26,0.9) -- (0.26,0.5) -- (0.66,0.5);
+  \begin{scope}[shift={(-0.02,-0.2)}, scale=0.42]
+    \draw (0.0043,0.8) arc (89.7:348.3:0.8) arc (305.9:132.1:0.62) -- cycle;
+  \end{scope}
 \end{tikzpicture}
 \end{document}

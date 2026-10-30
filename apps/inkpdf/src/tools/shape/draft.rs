@@ -44,7 +44,7 @@ impl ShapeTool {
     pub(super) fn begin_draft(&mut self, ws: &mut Workspace, page: u32, at: P) {
         ws.selection.clear();
         self.anchor = None;
-        self.draft = Some(Draft { page, nodes: vec![at], curve: ws.shape == Shape::Curve, hover: None, last_tap: None });
+        self.draft = Some(Draft { page, nodes: vec![at], curve: ws.styles.shape == Shape::Curve, hover: None, last_tap: None });
         ws.redraw = true;
     }
 
@@ -172,8 +172,8 @@ impl ShapeTool {
         let (rgba, width) = ws.current_style();
         polyline(out, &outline, width, ws.on_page(rgba));
         for &n in &nodes {
-            fill_square(out, n, 5.0 * px, px, ws.theme.selection);
-            fill_square(out, n, 3.2 * px, px, ws.theme.white);
+            fill_square(out, n, 5.0 * px, px, ws.look.theme.selection);
+            fill_square(out, n, 3.2 * px, px, ws.look.theme.white);
         }
     }
 }

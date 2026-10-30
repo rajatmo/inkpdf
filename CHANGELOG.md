@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.5.0
+- **Fill in forms.** A PDF's form fields are lit faintly on the page and can be filled: a text field takes typed text (Enter or Esc ends it; a
+  field of several lines takes new lines), a check box turns on and off, a radio button is chosen, and a choice goes to its next option. A finger
+  does it with every tool; the stylus's tip and the left mouse button with the Select tool (the click that follows a link). What is put in is saved
+  with the file (as real form values, with their appearances, so any reader shows them) and counts as a change. Read-only fields, push buttons,
+  signatures and passwords are left alone; the form's JavaScript is not run. New: `pdfcraft-forms` (same pinned revision), `form.rs`, `inkpdf-gen --form`.
+- **Flag a page.** The menu of a page in the overview has a fifth round button, a bookmark. A flagged page wears a bookmark in the
+  overview; on save the file gets an outline entry "Flag: page N" for it, so any reader shows a bookmark. The program keeps its flags apart from the
+  contents it shows, flags follow their pages through every page edit, and a flag counts as a change to save.
+- **The look's card is a round button.** Pressing the theme button still goes round the system's look, light and dark, and a single round button (a
+  moon on a page) hangs from it for whether the pages go dark too; the card with its words and its switch is gone.
+- **One way to edit text.** The text box, the search field and the fields of a form share one text field (`field.rs`): the caret and Shift
+  selection, arrows, Home and End, select all, copy, cut and paste work the same in all of them (a form field could only be typed into at its end).
+- **Less code, the same behaviour.** The icons are listed once (a macro), the overview's round buttons and labels are drawn by one helper, the
+  interface's and the overlays' line shapes by one `LineSink`, the settings file's keys by two small setters, and the editor's tests share their tap and
+  drag helpers. The pen path is untouched.
+- **Structure.** The ink store is made of the strokes, the undo history and the queries; an open document keeps no staged state (what a file holds comes
+  out of opening it once, what a save adds goes in with the save) and its renderer is a part of its own; the window's cards share one press path; the
+  workspace groups the styles, the look and the clipboards; opening and saving fail with a `DocError`.
+- **Two missed redraws fixed,** found by a new storm that checks every event that changes what is drawn asks for a frame: a finger's press on a toolbar
+  button was not shown until something else drew, and nor was its release.
 ## 1.4.0
 
 - **Input behaves like a reader (milestone 1.4.0, `docs/INPUT.md`).**
@@ -17,14 +38,6 @@
     presses and the new double tap all read their slop and times from it, in logical pixels.
   - **A double tap fits the page to the width,** and a second double tap goes back to the zoom and place it came from. A single tap on a link
     still follows it at once, and a single tap on empty page still only lets go of the selection.
-- **Fill in forms.** A PDF's form fields are lit faintly on the page and can be filled: a text field takes typed text (Enter or Esc ends it; a
-  field of several lines takes new lines), a check box turns on and off, a radio button is chosen, and a choice goes to its next option. A finger
-  does it with every tool; the stylus's tip and the left mouse button with the Select tool (the click that follows a link). What is put in is saved
-  with the file (as real form values, with their appearances, so any reader shows them) and counts as a change. Read-only fields, push buttons,
-  signatures and passwords are left alone; the form's JavaScript is not run. New: `pdfcraft-forms` (same pinned revision), `form.rs`, `inkpdf-gen --form`.
-- **Flag a page.** The menu of a page in the overview has a fifth round button, a bookmark. A flagged page wears a bookmark in the
-  overview; on save the file gets an outline entry "Flag: page N" for it, so any reader shows a bookmark. The program keeps its flags apart from the
-  contents it shows, flags follow their pages through every page edit, and a flag counts as a change to save.
 - **In a narrow window the pills fold into round buttons.** Where the document's, the tools' and the look's pills no longer fit side by side
   (a phone upright, a small window) the document's folds into a round button (a page), then the look's (sliders), then, in a very small
   window, the tools' (the tool in use). Pressing one unfolds its pill over the others, growing out of the button; the pill folds again when a

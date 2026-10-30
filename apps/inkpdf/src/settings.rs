@@ -122,41 +122,13 @@ impl Settings {
                 ["search-words", value] => out.search_words = value == "on",
                 ["tool", name] => out.tool = Tool::from_name(name).unwrap_or(out.tool),
                 ["shape", name] => out.shape = Shape::from_name(name).unwrap_or(out.shape),
-                ["slot", slot] => {
-                    if let Some(slot) = parse_slot(slot) {
-                        out.pen.colour = slot;
-                    }
-                }
-                ["shape-slot", slot] => {
-                    if let Some(slot) = parse_slot(slot) {
-                        out.shape_style.colour = slot;
-                    }
-                }
-                ["text-slot", slot] => {
-                    if let Some(slot) = parse_slot(slot) {
-                        out.text_style.colour = slot;
-                    }
-                }
-                ["text-size", value] => {
-                    if let Some(size) = parse_finite(value) {
-                        out.text_style.width = size.clamp(TEXT_SIZES.0, TEXT_SIZES.1);
-                    }
-                }
-                ["width", value] => {
-                    if let Some(w) = parse_finite(value) {
-                        out.pen.width = w.clamp(MIN_WIDTH, MAX_WIDTH);
-                    }
-                }
-                ["shape-width", value] => {
-                    if let Some(w) = parse_finite(value) {
-                        out.shape_style.width = w.clamp(MIN_WIDTH, MAX_WIDTH);
-                    }
-                }
-                ["smoothing", value] => {
-                    if let Some(s) = parse_finite(value) {
-                        out.smoothing = s.clamp(0.0, 1.0);
-                    }
-                }
+                ["slot", slot] => set_slot(&mut out.pen.colour, slot),
+                ["shape-slot", slot] => set_slot(&mut out.shape_style.colour, slot),
+                ["text-slot", slot] => set_slot(&mut out.text_style.colour, slot),
+                ["text-size", value] => set_clamped(&mut out.text_style.width, value, TEXT_SIZES.0, TEXT_SIZES.1),
+                ["width", value] => set_clamped(&mut out.pen.width, value, MIN_WIDTH, MAX_WIDTH),
+                ["shape-width", value] => set_clamped(&mut out.shape_style.width, value, MIN_WIDTH, MAX_WIDTH),
+                ["smoothing", value] => set_clamped(&mut out.smoothing, value, 0.0, 1.0),
                 _ => {}
             }
         }
@@ -177,18 +149,29 @@ impl Settings {
         ));
         text.push_str(&format!("shape {}\nshape-slot {}\nshape-width {:.2}\n", self.shape.name(), self.shape_style.colour, self.shape_style.width));
         text.push_str(&format!("text-slot {}\ntext-size {:.2}\n", self.text_style.colour, self.text_style.width));
-        text.push_str(&format!("appearance {}\ndark-pages {}\n", self.appearance.name(), if self.dark_pages { "on" } else { "off" }));
-        text.push_str(&format!(
-            "search-case {}\nsearch-words {}\n",
-            if self.search_case { "on" } else { "off" },
-            if self.search_words { "on" } else { "off" }
-        ));
+        let on = |b: bool| if b { "on" } else { "off" };
+        text.push_str(&format!("appearance {}\ndark-pages {}\n", self.appearance.name(), on(self.dark_pages)));
+        text.push_str(&format!("search-case {}\nsearch-words {}\n", on(self.search_case), on(self.search_words)));
         text
     }
 }
 
 fn parse_finite(text: &str) -> Option<f32> {
     text.parse::<f32>().ok().filter(|v| v.is_finite())
+}
+
+/// `into` is the colour slot `text` names, if it names one.
+fn set_slot(into: &mut usize, text: &str) {
+    if let Some(slot) = parse_slot(text) {
+        *into = slot;
+    }
+}
+
+/// `into` is the number `text` is, kept from `low` to `high`, if it is one.
+fn set_clamped(into: &mut f32, text: &str, low: f32, high: f32) {
+    if let Some(value) = parse_finite(text) {
+        *into = value.clamp(low, high);
+    }
 }
 
 /// A colour slot: one of the five.

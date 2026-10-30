@@ -1,4 +1,4 @@
-//! An open PDF: its page layout, the pool that renders its tiles, and saving.
+//! An open PDF: its pages (which can be edited before the file is written), the renderer that draws them, and saving.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -7,7 +7,7 @@ use std::time::Instant;
 use crate::coords::PageGeom;
 use crate::form::Form;
 use crate::ink::{InkStore, PageStroke};
-use crate::ink_io;
+use crate::ink_io::{self, Extras};
 use crate::links::Link;
 use crate::outline::OutlineItem;
 pub use crate::page_table::BLANK_PAGE;
@@ -15,7 +15,8 @@ use crate::page_table::PageTable;
 use crate::pages::PageEdit;
 #[cfg(test)]
 use crate::path_store::PathStore;
-use crate::pdf::{self, PageLook, RawValue, RenderPool, RenderRequest, Rendered};
+use crate::pdf::{self, PageLook, PdfBackend, Rendered};
+use crate::renderer::Renderer;
 use crate::store::{DocId, FileStore};
 use crate::tiles::{self, Key};
 use crate::view::Layout;
@@ -25,46 +26,85 @@ const PAGE_SIDE: [f32; 2] = [72.0, 14_400.0];
 /// What a document with no file yet is called.
 pub const UNTITLED: &str = "Untitled";
 
+/// Why a document could not be opened or saved.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DocError {
+    /// The file could not be read.
+    Read(String),
+    /// The PDF engine could not make sense of it, or could not make what was asked.
+    Engine(String),
+    /// The file has no pages.
+    NoPages,
+    /// A save in place of a document that has no file yet.
+    NotSaved,
+    /// The file could not be written.
+    Write(String),
+}
+
+impl std::fmt::Display for DocError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DocError::Read(e) | DocError::Engine(e) | DocError::Write(e) => f.write_str(e),
+            DocError::NoPages => f.write_str("the document has no pages"),
+            DocError::NotSaved => f.write_str("this document has not been saved anywhere yet"),
+        }
+    }
+}
+
+impl From<String> for DocError {
+    fn from(e: String) -> Self {
+        DocError::Engine(e)
+    }
+}
+
+/// What a file holds besides its pages, which the editor takes when the document is opened and keeps from then on: the ink this app saved in
+/// it earlier, the links, the form (the boxes of its fields are among the links), and the table of contents.
+#[derive(Default)]
+pub struct Contents {
+    pub strokes: Vec<PageStroke>,
+    pub links: Vec<Link>,
+    pub form: Form,
+    pub outline: Vec<OutlineItem>,
+}
+
 pub struct Doc {
     /// Which file it is saved in; `None` for a new document that has not been saved yet.
     pub id: Option<DocId>,
     pub name: String,
-    /// Links on the pages as the file had them, in document space, for the editor to take (see [`Doc::take_links`]).
-    links: Vec<Link>,
-    /// The fields of the form as the file had them, for the editor to take (see [`Doc::take_form`]), and what the person put in them, once the editor
-    /// has said (see [`Doc::set_fields`]).
-    form: Form,
-    fields: Vec<(String, RawValue)>,
-    /// The pages flagged, once the editor has said (see [`Doc::set_flags`]).
-    flags: Option<Vec<usize>>,
-    /// The table of contents as the file had it, for the editor to take (see [`Doc::take_outline`]).
-    outline: Vec<OutlineItem>,
     pub open_millis: u128,
+    /// The PDF engine the document was opened with (the one the rest of it is made with too).
+    engine: &'static dyn PdfBackend,
     /// The file as last read or saved: saving appends to it.
     base: Arc<Vec<u8>>,
     /// Each page: its size, and where it renders from and which page of `base` it is.
     pages: PageTable,
-    /// The size of each page of the file the renderer has, in points (what its pictures are made for).
-    render_sizes: Vec<[f32; 2]>,
-    pool: Box<dyn RenderPool>,
-    queued: Vec<RenderRequest>,
-    /// What the renderer draws from (the file without the ink this program keeps itself), and how it draws it.
-    render_bytes: Arc<Vec<u8>>,
-    look: PageLook,
+    renderer: Renderer,
 }
 
 impl Doc {
-    /// Open a PDF from the file system. Also returns the ink this app saved in it earlier. (The program opens through its
-    /// platform's store; the tests, which use the file system, through this.)
+    /// Open a PDF from the file system. Also returns what it holds. (The program opens through its platform's store; the tests, which use
+    /// the file system, through this.)
     #[cfg(test)]
-    pub fn open(path: &Path) -> Result<(Doc, Vec<PageStroke>), String> {
+    pub fn open(path: &Path) -> Result<(Doc, Vec<PageStroke>), DocError> {
+        let (doc, contents) = Self::open_contents(path)?;
+        Ok((doc, contents.strokes))
+    }
+
+    /// [`Doc::open`], with all that the file holds.
+    #[cfg(test)]
+    pub fn open_contents(path: &Path) -> Result<(Doc, Contents), DocError> {
         Self::open_from(&PathStore, &DocId::Path(path.to_path_buf()))
     }
 
-    /// Open the PDF `id` names in `files`. Also returns the ink this app saved in it earlier.
-    pub fn open_from(files: &dyn FileStore, id: &DocId) -> Result<(Doc, Vec<PageStroke>), String> {
-        let bytes = files.read(id)?;
-        Self::from_bytes(Arc::new(bytes), Some(id.clone()), files.display_name(id))
+    /// Open the PDF `id` names in `files`, with the program's PDF engine. Also returns what the file holds.
+    pub fn open_from(files: &dyn FileStore, id: &DocId) -> Result<(Doc, Contents), DocError> {
+        Self::open_with(pdf::native(), files, id)
+    }
+
+    /// [`Doc::open_from`] with another PDF engine.
+    pub fn open_with(engine: &'static dyn PdfBackend, files: &dyn FileStore, id: &DocId) -> Result<(Doc, Contents), DocError> {
+        let bytes = files.read(id).map_err(DocError::Read)?;
+        Self::from_bytes(engine, Arc::new(bytes), Some(id.clone()), files.display_name(id))
     }
 
     /// The file's path, if it is kept by path and has been saved.
@@ -74,52 +114,38 @@ impl Doc {
 
     /// A new document of one blank page `size` points across, with no file yet: where you can just
     /// start writing.
-    pub fn blank(size: [f32; 2]) -> Result<Doc, String> {
+    pub fn blank(size: [f32; 2]) -> Result<Doc, DocError> {
         let size = size.map(|s| if s.is_finite() { s.clamp(PAGE_SIDE[0], PAGE_SIDE[1]) } else { BLANK_PAGE[0] });
-        let bytes = pdf::native().blank(size)?;
-        Self::from_bytes(Arc::new(bytes), None, UNTITLED.into()).map(|(doc, _)| doc)
+        let engine = pdf::native();
+        let bytes = engine.blank(size)?;
+        Self::from_bytes(engine, Arc::new(bytes), None, UNTITLED.into()).map(|(doc, _)| doc)
     }
 
-    fn from_bytes(bytes: Arc<Vec<u8>>, id: Option<DocId>, name: String) -> Result<(Doc, Vec<PageStroke>), String> {
+    fn from_bytes(engine: &'static dyn PdfBackend, bytes: Arc<Vec<u8>>, id: Option<DocId>, name: String) -> Result<(Doc, Contents), DocError> {
         let started = Instant::now();
-        let all = pdf::native().inspect(&bytes)?;
+        let all = engine.inspect(&bytes)?;
         if all.is_empty() {
-            return Err("the document has no pages".into());
+            return Err(DocError::NoPages);
         }
         let geoms: Vec<PageGeom> = all.into_iter().take(tiles::MAX_PAGES).collect();
         let sizes: Vec<[f32; 2]> = geoms.iter().map(|p| [p.width, p.height]).collect();
         let layout = Layout::new(&sizes);
         // A file this app inked earlier shows that ink from the ink layer, not the page raster.
-        let (strokes, mut links, form, mut outline, render_bytes) = match ink_io::load(&bytes, &geoms, &layout) {
-            Ok(l) => (l.strokes, l.links, l.form, l.outline, l.render_bytes),
+        let (contents, render_bytes) = match ink_io::load_with(engine, &bytes, &geoms, &layout) {
+            Ok(l) => (Contents { strokes: l.strokes, links: l.links, form: l.form, outline: l.outline }, l.render_bytes),
             Err(e) => {
                 eprintln!("could not read earlier ink: {e}");
-                (Vec::new(), Vec::new(), Form::default(), Vec::new(), bytes.clone())
+                (Contents::default(), bytes.clone())
             }
         };
         // (In a damaged file the outline and the links can name pages the renderer does not show.)
+        let Contents { strokes, mut links, form, mut outline } = contents;
         crate::outline::limit_to(&mut outline, sizes.len());
         crate::links::limit_to(&mut links, sizes.len());
-        let pool = pdf::native().render_pool(render_bytes.clone(), render_threads(), PageLook::Plain);
-        let sizes_of_file = sizes.clone();
-        let doc = Doc {
-            id,
-            name,
-            pages: PageTable::of_file(sizes, geoms),
-            links,
-            form,
-            fields: Vec::new(),
-            outline,
-            flags: None,
-            open_millis: started.elapsed().as_millis(),
-            base: bytes,
-            render_sizes: sizes_of_file,
-            pool,
-            queued: Vec::new(),
-            render_bytes,
-            look: PageLook::Plain,
-        };
-        Ok((doc, strokes))
+        let renderer = Renderer::new(engine, render_bytes, sizes.clone());
+        let doc =
+            Doc { id, name, open_millis: started.elapsed().as_millis(), engine, base: bytes, pages: PageTable::of_file(sizes, geoms), renderer };
+        Ok((doc, Contents { strokes, links, form, outline }))
     }
 
     pub fn page_count(&self) -> usize {
@@ -134,21 +160,6 @@ impl Doc {
     /// Where each page is laid out, as the editor lays it out.
     pub fn layout(&self) -> Layout {
         Layout::new(self.pages.sizes())
-    }
-
-    /// The links the file had, for the editor, which keeps them from then on.
-    pub fn take_links(&mut self) -> Vec<Link> {
-        std::mem::take(&mut self.links)
-    }
-
-    /// The form the file had, for the editor, which keeps it from then on (the boxes of its fields are among the links).
-    pub fn take_form(&mut self) -> Form {
-        std::mem::take(&mut self.form)
-    }
-
-    /// The table of contents the file had, for the editor, which keeps it from then on.
-    pub fn take_outline(&mut self) -> Vec<OutlineItem> {
-        std::mem::take(&mut self.outline)
     }
 
     /// Add a blank page after the last one, the same size as it.
@@ -180,29 +191,19 @@ impl Doc {
 
     /// Whether the renderer has a page for `key` (whose page is one of the file's, see [`Doc::render_page`]).
     pub fn renders(&self, key: Key) -> bool {
-        (key.page() as usize) < self.render_sizes.len()
+        self.renderer.renders(key)
     }
 
-    /// Replace the work the pool is doing with exactly `keys` (pages of the file, see [`Doc::render_page`]), most urgent
+    /// Replace the work the renderer is doing with exactly `keys` (pages of the file, see [`Doc::render_page`]), most urgent
     /// first. Unchanged requests keep running, through any change of the pages.
     pub fn set_queue(&mut self, keys: &[Key]) {
-        let requests: Vec<RenderRequest> = keys
-            .iter()
-            .filter_map(|&k| {
-                let size = self.render_sizes.get(k.page() as usize)?;
-                Some(RenderRequest { page: k.page() as usize, ..tiles::request(k, *size) })
-            })
-            .collect();
-        if requests != self.queued {
-            self.pool.set_queue(requests.clone());
-            self.queued = requests;
-        }
+        self.renderer.set_queue(keys);
     }
 
     /// The file the text is read from: as the renderer has it, without the ink and the text boxes this program keeps itself (those are the
     /// editor's own to search, so they are not found twice).
     pub fn text_bytes(&self) -> Arc<Vec<u8>> {
-        self.render_bytes.clone()
+        self.renderer.bytes()
     }
 
     /// The page of the file that draws each page of the document (`None` for a page that was added).
@@ -213,57 +214,40 @@ impl Doc {
     /// How the pages are drawn now.
     #[cfg(test)]
     pub fn look(&self) -> PageLook {
-        self.look
+        self.renderer.look()
     }
 
-    /// Draw the pages in another look: a new pool takes over (what the old one had under way is dropped with it) and everything must be
-    /// asked for again. `false` if it already is that look.
+    /// Draw the pages in another look (see [`Renderer::set_look`]). `false` if it already is that look.
     pub fn set_look(&mut self, look: PageLook) -> bool {
-        if self.look == look {
-            return false;
-        }
-        self.pool = pdf::native().render_pool(self.render_bytes.clone(), render_threads(), look);
-        self.queued.clear();
-        self.look = look;
-        true
+        self.renderer.set_look(look)
     }
 
     pub fn try_recv(&self) -> Option<Rendered> {
-        self.pool.try_recv()
+        self.renderer.try_recv()
     }
 
-    /// The pages that are flagged (as the document numbers them), to be written with the next save; until this is said the file's flags are left as they are.
-    pub fn set_flags(&mut self, pages: Vec<usize>) {
-        self.flags = Some(pages);
-    }
-
-    /// What the person put in the fields of the form, to be written with the next save.
-    pub fn set_fields(&mut self, values: Vec<(String, crate::form::Value)>) {
-        self.fields = crate::pdf_read::raw_values(values);
-    }
-
-    /// Write the ink (and any added pages) into the file, in `files`. `Err` for a document with no file yet: use
+    /// Write the ink (and any added pages, and `extras`) into the file, in `files`. [`DocError::NotSaved`] for a document with no file yet: use
     /// [`Doc::save_as_to`].
-    pub fn save_to(&mut self, files: &dyn FileStore, store: &InkStore) -> Result<(), String> {
-        let id = self.id.clone().ok_or("this document has not been saved anywhere yet")?;
-        self.write_to(files, &id, store)
+    pub fn save_to(&mut self, files: &dyn FileStore, store: &InkStore, extras: &Extras<'_>) -> Result<(), DocError> {
+        let id = self.id.clone().ok_or(DocError::NotSaved)?;
+        self.write_to(files, &id, store, extras)
     }
 
-    /// [`Doc::save_to`] on the file system.
+    /// [`Doc::save_to`] on the file system, with nothing extra.
     #[cfg(test)]
-    pub fn save(&mut self, store: &InkStore) -> Result<(), String> {
-        self.save_to(&PathStore, store)
+    pub fn save(&mut self, store: &InkStore) -> Result<(), DocError> {
+        self.save_to(&PathStore, store, &Extras::default())
     }
 
     /// Save to `path` on the file system, which becomes where the document lives.
     #[cfg(test)]
-    pub fn save_as(&mut self, path: &Path, store: &InkStore) -> Result<(), String> {
-        self.save_as_to(&PathStore, &DocId::Path(path.to_path_buf()), store)
+    pub fn save_as(&mut self, path: &Path, store: &InkStore) -> Result<(), DocError> {
+        self.save_as_to(&PathStore, &DocId::Path(path.to_path_buf()), store, &Extras::default())
     }
 
     /// Save as the file `id` names in `files`, which becomes where the document lives.
-    pub fn save_as_to(&mut self, files: &dyn FileStore, id: &DocId, store: &InkStore) -> Result<(), String> {
-        self.write_to(files, id, store)?;
+    pub fn save_as_to(&mut self, files: &dyn FileStore, id: &DocId, store: &InkStore, extras: &Extras<'_>) -> Result<(), DocError> {
+        self.write_to(files, id, store, extras)?;
         self.name = files.display_name(id);
         self.id = Some(id.clone());
         Ok(())
@@ -271,8 +255,9 @@ impl Doc {
 
     /// The new file is written whole or not at all (see [`FileStore::write_atomic`]), so a failure part-way leaves the original as
     /// it was.
-    fn write_to(&mut self, files: &dyn FileStore, id: &DocId, store: &InkStore) -> Result<(), String> {
+    fn write_to(&mut self, files: &dyn FileStore, id: &DocId, store: &InkStore, extras: &Extras<'_>) -> Result<(), DocError> {
         let bytes = ink_io::save_with(
+            self.engine,
             &self.base,
             store,
             self.pages.geoms(),
@@ -280,18 +265,13 @@ impl Doc {
             store.dirty_pages(),
             &self.pages.doc_of_file(),
             &self.pages.copies(),
-            &ink_io::Extras { flags: self.flags.as_deref(), fields: &self.fields },
+            extras,
         )?;
-        files.write_atomic(id, &bytes)?;
+        files.write_atomic(id, &bytes).map_err(DocError::Write)?;
         self.base = Arc::new(bytes);
         self.pages.written();
         Ok(())
     }
-}
-
-/// Worker threads for rendering: leave two logical processors free for the rest of the system.
-fn render_threads() -> usize {
-    std::thread::available_parallelism().map_or(2, |n| n.get()).saturating_sub(2).clamp(2, 8)
 }
 #[cfg(test)]
 mod tests {
@@ -353,8 +333,8 @@ mod tests {
         let dir = temp_dir("form");
         let path = dir.join("form.pdf");
         fs::write(&path, crate::testutil::pdf_with_form()).expect("write");
-        let (mut doc, _) = Doc::open(&path).expect("open");
-        let (mut form, boxes) = (doc.take_form(), doc.take_links());
+        let (mut doc, contents) = Doc::open_contents(&path).expect("open");
+        let (mut form, boxes) = (contents.form, contents.links);
         let names: Vec<&str> = form.fields.iter().map(|f| f.name.as_str()).collect();
         assert_eq!(names, ["name", "agree", "size", "colour"]);
         let places: Vec<_> = boxes
@@ -373,17 +353,16 @@ mod tests {
         let expected = [12.0 + 100.0, 12.0 + 792.0 - 720.0, 12.0 + 300.0, 12.0 + 792.0 - 700.0];
         assert!(places[0].2.iter().zip(expected).all(|(a, b)| (a - b).abs() < 1e-3), "{:?}", places[0].2);
 
-        form.fields[0].type_text("Ada Lovelace");
+        form.fields[0].set_text("Ada Lovelace".into());
         form.fields[1].press(0);
         form.fields[2].press(1);
         form.fields[3].press(0);
         let mut store = InkStore::new();
         store.mark_dirty(0);
-        doc.set_fields(form.changes());
-        doc.save(&store).expect("save");
+        let fields = crate::pdf_read::raw_values(form.changes());
+        doc.save_to(&PathStore, &store, &Extras { flags: None, fields: &fields }).expect("save");
 
-        let (mut again, _) = Doc::open(&path).expect("reopen");
-        let back = again.take_form();
+        let back = Doc::open_contents(&path).expect("reopen").1.form;
         assert_eq!(back.fields[0].shown(), "Ada Lovelace");
         assert!(back.fields[1].is_on(0), "the box is checked");
         assert!(!back.fields[2].is_on(0) && back.fields[2].is_on(1), "the second radio button is on");
@@ -399,12 +378,12 @@ mod tests {
         let mut store = InkStore::new();
         let second = doc.add_blank_page().expect("a second page");
         store.mark_dirty(second as u32);
-        doc.set_flags(vec![0, second]);
-        doc.save(&store).expect("save");
+        let with_flags = |pages: &'static [usize]| Extras { flags: Some(pages), fields: &[] };
+        doc.save_to(&PathStore, &store, &with_flags(&[0, 1])).expect("save");
         store.mark_clean();
 
-        let (mut again, _) = Doc::open(&path).expect("reopen");
-        let mut items = again.take_outline();
+        let (mut again, contents) = Doc::open_contents(&path).expect("reopen");
+        let mut items = contents.outline;
         assert!(!items.is_empty(), "the flags are outline entries in the file, so any reader shows them");
         let flags = crate::outline::take_flags(&mut items);
         assert_eq!(flags.into_iter().collect::<Vec<_>>(), [0, second]);
@@ -413,12 +392,10 @@ mod tests {
         // A save that says nothing about flags leaves them; one that says there are none takes them away.
         store.mark_dirty(0);
         again.save(&store).expect("save without saying");
-        let (mut kept, _) = Doc::open(&path).expect("reopen");
-        assert_eq!(crate::outline::take_flags(&mut kept.take_outline()).len(), 2);
-        again.set_flags(Vec::new());
-        again.save(&store).expect("save with none");
-        let (mut cleared, _) = Doc::open(&path).expect("reopen");
-        let mut left = cleared.take_outline();
+        let mut kept = Doc::open_contents(&path).expect("reopen").1.outline;
+        assert_eq!(crate::outline::take_flags(&mut kept).len(), 2);
+        again.save_to(&PathStore, &store, &with_flags(&[])).expect("save with none");
+        let mut left = Doc::open_contents(&path).expect("reopen").1.outline;
         assert!(crate::outline::take_flags(&mut left).is_empty() && left.is_empty());
         let _ = fs::remove_dir_all(path.parent().expect("dir"));
     }
@@ -464,11 +441,10 @@ mod tests {
 
     #[test]
     fn a_blank_document_is_one_empty_page_with_no_file() {
-        let mut doc = Doc::blank(BLANK_PAGE).expect("blank");
+        let doc = Doc::blank(BLANK_PAGE).expect("blank");
         assert_eq!(doc.page_count(), 1);
         assert_eq!(doc.page_size(0), [595.0, 842.0], "A4");
         assert_eq!((doc.path(), doc.name.as_str()), (None, UNTITLED));
-        assert!(doc.take_links().is_empty());
     }
 
     #[test]
@@ -555,8 +531,8 @@ mod tests {
         let dir = temp_dir("links");
         let path = dir.join("links.pdf");
         fs::write(&path, crate::testutil::pdf_with_links()).expect("write");
-        let (mut doc, _) = Doc::open(&path).expect("open");
-        assert_eq!(doc.take_links().len(), 4);
+        let (_, contents) = Doc::open_contents(&path).expect("open");
+        assert_eq!(contents.links.len(), 4);
         let _ = fs::remove_dir_all(dir);
     }
     #[test]
@@ -573,10 +549,10 @@ mod tests {
         let dir = temp_dir("insert");
         let path = dir.join("links.pdf");
         fs::write(&path, crate::testutil::pdf_with_links()).expect("write");
-        let (mut doc, _) = Doc::open(&path).expect("open");
+        let (mut doc, contents) = Doc::open_contents(&path).expect("open");
         let n = doc.page_count();
         assert!(n >= 2, "the sample has more than one page");
-        let mut links = doc.take_links();
+        let mut links = contents.links;
         let was = doc.layout();
         let last = (n - 1) as u32;
         let mut store = InkStore::new();
@@ -595,13 +571,14 @@ mod tests {
         crate::links::remap(&mut links, &was, &Remap::new(&edit, &was, &doc.layout()).expect("remap"));
         doc.save(&store).expect("save");
 
-        let (mut reopened, strokes) = Doc::open(&path).expect("reopen");
+        let (reopened, contents) = Doc::open_contents(&path).expect("reopen");
+        let strokes = contents.strokes;
         assert_eq!(reopened.page_count(), n + 1, "the page is in the file");
         assert_eq!(reopened.page_size(1), doc.page_size(1));
         assert_eq!(strokes.len(), 2, "both strokes came back");
         assert!(strokes.iter().all(|s| s.0 == last + 1), "on the page they were on, which is one further on");
         // The links as read from the new file are where the carried ones are.
-        let from_file = reopened.take_links();
+        let from_file = contents.links;
         assert_eq!(from_file.len(), links.len());
         for (a, b) in from_file.iter().zip(&links) {
             assert_eq!(a.target, b.target);
@@ -874,18 +851,18 @@ mod tests {
         fs::write(&path, crate::testutil::pdf_with_links()).expect("write");
         // The links go through the edit as the editor carries them.
         let through = |page: usize| {
-            let (mut doc, _) = Doc::open(&path).expect("open");
-            let mut links = doc.take_links();
+            let (mut doc, contents) = Doc::open_contents(&path).expect("open");
+            let mut links = contents.links;
             let before = doc.layout();
             let edit = PageEdit::delete(page);
             assert!(doc.apply(&edit));
             crate::links::remap(&mut links, &before, &Remap::new(&edit, &before, &doc.layout()).expect("remap"));
             (links, doc.page_count())
         };
-        let all = Doc::open(&path).expect("open").0.take_links().len();
+        let all = Doc::open_contents(&path).expect("open").1.links.len();
         assert!(all > 0);
         // The sample's links are all on its first page; delete the second and they stay (those that went to it go).
-        let to_second = Doc::open(&path).expect("open").0.take_links().iter().filter(|l| l.target == crate::links::Target::Page(1)).count();
+        let to_second = Doc::open_contents(&path).expect("open").1.links.iter().filter(|l| l.target == crate::links::Target::Page(1)).count();
         let (links, pages) = through(1);
         assert_eq!(links.len(), all - to_second, "the links that went to the deleted page are gone");
         assert!(links.iter().all(|l| !matches!(l.target, crate::links::Target::Page(p) if p >= pages)));

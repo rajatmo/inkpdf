@@ -52,7 +52,7 @@ fn a_drag_from_one_letter_to_another_selects_the_text_between_and_copy_puts_it_o
     drag_g(&mut ed, (0, 6), (1, 8));
     assert_eq!(selected(&ed).as_deref(), Some("world\nThe quick"));
     assert!(ed.press(Key::Chord('c')) || ed.tools.select.copy_text(&mut ed.ws));
-    assert_eq!(ed.text_clipboard.get().as_deref(), Some("world\nThe quick"));
+    assert_eq!(ed.clip.text.get().as_deref(), Some("world\nThe quick"));
     // Dragging the other way round selects the same.
     ed.press(Key::Escape);
     drag_g(&mut ed, (1, 8), (0, 6));
@@ -155,7 +155,7 @@ fn the_marks_and_copy_are_dim_until_text_is_selected() {
     // Copy from the bar works like the key.
     let at = ed.context_bar().expect("bar").centre_of(ContextItem::Copy);
     pen_stroke(&mut ed, TIP, &[at, at]);
-    assert_eq!(ed.text_clipboard.get().as_deref(), Some("Hello"));
+    assert_eq!(ed.clip.text.get().as_deref(), Some("Hello"));
 }
 
 #[test]
@@ -223,7 +223,7 @@ fn the_desktops_ctrl_a_and_ctrl_c_are_the_texts_with_this_tool() {
     ed.set_mode(Mode::Desktop);
     assert!(ed.shortcut("a", false));
     assert!(ed.shortcut("c", false));
-    assert_eq!(ed.text_clipboard.get().as_deref(), Some("Hello world\nThe quick brown fox\nHello again"));
+    assert_eq!(ed.clip.text.get().as_deref(), Some("Hello world\nThe quick brown fox\nHello again"));
     // With the tool put away they are the items' again: nothing is selected to copy.
     ed.set_tool(Tool::Pen);
     assert_eq!(selected(&ed), None, "putting the tool away lets go of the text");

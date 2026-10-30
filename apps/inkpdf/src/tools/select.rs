@@ -89,7 +89,7 @@ impl SelectTool {
     /// Put the selected text on the clipboard. `true` if there was some.
     pub fn copy_text(&mut self, ws: &mut Workspace) -> bool {
         let Some(text) = self.text(ws) else { return false };
-        ws.text_clipboard.set(&text);
+        ws.clip.text.set(&text);
         true
     }
 
@@ -383,7 +383,7 @@ impl Tool for SelectTool {
     fn paint(&self, ws: &Workspace, out: &mut dyn Painter) {
         let Some(c) = self.live(ws) else { return };
         let px = ws.dpr / ws.view.zoom;
-        let [r, g, b, _] = ws.theme.selection;
+        let [r, g, b, _] = ws.look.theme.selection;
         for q in Self::boxes(ws, c) {
             let h = q[3] - q[1];
             let ends = (h / 2.0).min((q[2] - q[0]) / 2.0);
@@ -392,8 +392,8 @@ impl Tool for SelectTool {
         // A handle at each end: a ring with a dot, on the line's foot.
         if let Some(handles) = Self::handles(ws, c) {
             for h in handles {
-                out.doc_line(h, h, 11.0 * px, ws.theme.selection);
-                out.doc_line(h, h, 7.5 * px, ws.theme.white);
+                out.doc_line(h, h, 11.0 * px, ws.look.theme.selection);
+                out.doc_line(h, h, 7.5 * px, ws.look.theme.white);
             }
         }
     }

@@ -21,8 +21,8 @@ fn stress_shapes_drawn_by_the_pen_stay_on_their_page_undo_redo_exactly_and_survi
             use_tool(&mut ed, Tool::Geometry);
         }
         // (Nor is the bar under the tools to leave the tip choosing to select or erase.)
-        ed.shape = rng.pick(&crate::geometry::SHAPES);
-        ed.shape_style = crate::tool::ToolStyle { colour: rng.below(5), width: rng.range(MIN_WIDTH, MAX_WIDTH) };
+        ed.styles.shape = rng.pick(&crate::geometry::SHAPES);
+        ed.styles.shape_style = crate::tool::ToolStyle { colour: rng.below(5), width: rng.range(MIN_WIDTH, MAX_WIDTH) };
         // Anywhere in the window, off the page, or far beyond it.
         let spot = |rng: &mut Rng| {
             if rng.chance(0.1) { [rng.coord(size[0]), rng.coord(size[1])] } else { [rng.range(0.0, size[0]), rng.range(0.0, size[1])] }

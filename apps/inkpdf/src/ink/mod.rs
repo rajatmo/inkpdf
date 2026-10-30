@@ -1,9 +1,12 @@
-//! Ink strokes: the model, geometry (simplify, hit tests, selection) and the undo history.
+//! Ink strokes: the model, geometry (simplify, hit tests, selection) and the undo history, in four parts: the strokes ([drawing]), the history\n//! of steps ([history]), what can be asked of the strokes ([query]) and the store that holds them together ([store]).
 //! Pure logic with no window or GPU types, so it is unit-tested.
 //!
 //! Strokes live in document space (points, pages stacked as in [`crate::view::Layout`]) with the
 //! page each belongs to. Width is fixed along a stroke.
 
+mod drawing;
+mod history;
+mod query;
 mod store;
 mod stroke;
 

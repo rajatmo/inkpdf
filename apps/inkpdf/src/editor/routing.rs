@@ -110,7 +110,8 @@ impl Editor {
             Some(Modal::Overview) => return self.overview_key(key),
             None => {}
         }
-        // Esc puts away the card under the theme button.
+
+        // Esc puts away the round button under the theme button.
         if self.chrome.theme_menu && key == Key::Escape {
             self.close_theme_menu();
             return true;
@@ -239,9 +240,9 @@ impl Editor {
 
     /// Choose the shape the shape tool makes.
     pub(super) fn pick_shape(&mut self, shape: Shape) {
-        if shape != self.ws.shape {
+        if shape != self.ws.styles.shape {
             self.finish_draft();
-            self.ws.shape = shape;
+            self.ws.styles.shape = shape;
             self.ws.requests.push(Request::SettingsChanged);
             self.ws.redraw = true;
         }

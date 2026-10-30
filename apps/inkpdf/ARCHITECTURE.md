@@ -54,11 +54,11 @@ ones below; no two modules may reach each other, directly or through others.
 
 | Layer | Modules |
 |---|---|
-| adapter | `app`, `gpu`, `platform`, `pdf`, `doc`, `path_store`, `pdf_read`, `ink_io`, `tiles`, `thumbnail` |
+| adapter | `app`, `gpu`, `platform`, `pdf`, `doc`, `renderer`, `path_store`, `pdf_read`, `ink_io`, `tiles`, `thumbnail` |
 | session | `editor` |
 | tools | `tools` |
 | ui | `toolbar` |
-| domain | `tool`, `input`, `requests`, `workspace`, `selection`, `settings`, `store` |
+| domain | `tool`, `input`, `field`, `requests`, `workspace`, `selection`, `settings`, `store` |
 | model | `figure`, `form`, `ink`, `laser`, `links`, `outline`, `pages`, `page_table`, `pagetext` |
 | base | `plane`, `motion`, `scene`, `clock`, `geometry`, `colour`, `coords`, `view`, `text`, `smooth`, `clipboard`, `palette` |
 
@@ -143,6 +143,20 @@ clock's source) is handed to them.
   backend the program was built with. `pdf/contract.rs` is the conformance suite (geometry, sizing, text and find, outline and links, annotations
   written and read back, organized pages, renders checked by a few pixels, a render pool, damaged files): a backend must pass it, and a test
   shows it can fail. The upgrade rule, the numbers and the criteria for reconsidering the engine are in `docs/PDF-BACKEND.md`.
+* `ink/` is four parts held together by the `InkStore` facade: `drawing.rs` (the strokes and the pages that changed: the one thing a step changes),
+  `history.rs` (the steps, `Cmd`, which know how to apply and revert themselves, and the `History` that runs them), `query.rs` (what can be asked
+  of the strokes without changing them) and `store.rs` (the ids, the counts of changes, and the public API of one-step edits).
+* `Doc` (`doc.rs`) is the file model: its pages (`PageTable`), the file as last written, and saving. What a file holds besides its pages comes
+  out of `open` once, as `Contents` (ink, links, form, outline), and what a save writes besides the ink goes in per call, as `ink_io::Extras`; the
+  document keeps no staged state. The pictures are `Renderer` (`renderer.rs`: the pool, its queue and the look), which knows the file it renders
+  from and not the document's pages. The PDF engine is a value the document is opened with (`Doc::open_with`), not looked up inside `ink_io`.
+  Opening and saving fail with `DocError`.
+* The window's own cards (the bar under the tools, the search card, the round button under the theme button) share one press path: `card_at`
+  says which button is under a point, `Act::Card` holds a press on any of them, and `activate_card` does what it asks. A new card is a `CardHit`
+  variant and three arms, not a new `Act` variant in every list of them. `Workspace` keeps what the tools write with in `styles`, how the interface
+  looks in `look` and what was copied in `clip`.
+* A frame is asked for by hand (`redraw = true`), so `stress/redraw.rs` feeds random input and checks the rule that makes that safe: whenever
+  what is drawn is different after an event, a frame was asked for.
 * `pdf_read.rs` (adapter) places what the engine hands over on the layout (links in document space, an outline with tidy titles) for the
   model, which (`links.rs`, `outline.rs`) keeps it and carries it through edits. `ink_io.rs` is the policy for ink: which annotations are
   ours (`inkpdf-` names), how strokes and shapes are written, in terms of `PdfDocument`.

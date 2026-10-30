@@ -230,15 +230,15 @@ impl Editor {
             unsaved: self.ws.ink.is_dirty(),
             fullscreen: self.chrome.fullscreen,
             mode: self.mode,
-            appearance: self.ws.appearance,
-            dark: self.scheme() == crate::palette::Scheme::Dark,
-            dark_pages: self.ws.dark_pages,
+            appearance: self.ws.look.appearance,
+            dark_pages: self.ws.look.dark_pages,
             theme_menu: self.chrome.theme_menu,
+            dark: self.scheme() == crate::palette::Scheme::Dark,
             search: self.search.open,
             tool: self.ws.tool,
-            pen_colour: self.colour_of(self.ws.pen),
-            shape_colour: self.colour_of(self.ws.shape_style),
-            text_colour: self.colour_of(self.ws.text_style),
+            pen_colour: self.colour_of(self.ws.styles.pen),
+            shape_colour: self.colour_of(self.ws.styles.shape_style),
+            text_colour: self.colour_of(self.ws.styles.text_style),
             hover: self.chrome.hover,
             pressed: match self.chrome.act {
                 Act::Toolbar { item, .. } => item,
@@ -269,10 +269,10 @@ impl Editor {
             tool: self.ws.tool,
             editing: p.editing,
             width: self.style().width,
-            smoothing: self.ws.smoothing,
-            shape: self.ws.shape,
+            smoothing: self.ws.styles.smoothing,
+            shape: self.ws.styles.shape,
             colour: self.style().colour,
-            palette: self.ws.palette,
+            palette: self.ws.styles.palette,
             hsv: self.chrome.colour_hsv,
             zoom: self.ws.view.zoom,
         })
@@ -280,18 +280,18 @@ impl Editor {
 
     /// Take the saved settings: the tool, and each tool's colours, thickness and options.
     pub fn apply_settings(&mut self, settings: &crate::settings::Settings) {
-        self.ws.appearance = settings.appearance;
-        self.ws.dark_pages = settings.dark_pages;
+        self.ws.look.appearance = settings.appearance;
+        self.ws.look.dark_pages = settings.dark_pages;
         self.search.case = settings.search_case;
         self.search.words = settings.search_words;
         self.sync_theme();
-        self.ws.palette = settings.palette;
+        self.ws.styles.palette = settings.palette;
         self.ws.tool = settings.tool;
-        self.ws.pen = settings.pen;
-        self.ws.smoothing = settings.smoothing;
-        self.ws.shape = settings.shape;
-        self.ws.shape_style = settings.shape_style;
-        self.ws.text_style = settings.text_style;
+        self.ws.styles.pen = settings.pen;
+        self.ws.styles.smoothing = settings.smoothing;
+        self.ws.styles.shape = settings.shape;
+        self.ws.styles.shape_style = settings.shape_style;
+        self.ws.styles.text_style = settings.text_style;
         self.tools = ToolSet::with_extensions(&self.extensions);
         self.chrome.panel = None;
         self.ws.redraw = true;
@@ -300,17 +300,17 @@ impl Editor {
     /// What is worth remembering for the next session.
     pub fn settings(&self) -> crate::settings::Settings {
         crate::settings::Settings {
-            appearance: self.ws.appearance,
-            dark_pages: self.ws.dark_pages,
+            appearance: self.ws.look.appearance,
+            dark_pages: self.ws.look.dark_pages,
             search_case: self.search.case,
             search_words: self.search.words,
-            palette: self.ws.palette,
+            palette: self.ws.styles.palette,
             tool: self.ws.tool,
-            pen: self.ws.pen,
-            smoothing: self.ws.smoothing,
-            shape: self.ws.shape,
-            shape_style: self.ws.shape_style,
-            text_style: self.ws.text_style,
+            pen: self.ws.styles.pen,
+            smoothing: self.ws.styles.smoothing,
+            shape: self.ws.styles.shape,
+            shape_style: self.ws.styles.shape_style,
+            text_style: self.ws.styles.text_style,
         }
     }
 
@@ -345,7 +345,7 @@ impl Editor {
         let overview = self.step_overview(dt);
         let interface = self.step_motions(dt);
         self.refresh_search();
-        self.ws.theme = self.palette();
+        self.ws.look.theme = self.palette();
         self.ws.step_view(dt) || overview || interface
     }
 
@@ -390,12 +390,12 @@ impl Editor {
 
     /// How much the pen is steadied while drawing, from the command line.
     pub fn set_smoothing(&mut self, amount: f32) {
-        self.ws.smoothing = amount.clamp(0.0, 1.0);
+        self.ws.styles.smoothing = amount.clamp(0.0, 1.0);
     }
 
     /// Where text is copied to and pasted from (the system's clipboard).
     pub fn set_text_clipboard(&mut self, clipboard: Box<dyn crate::clipboard::TextClipboard>) {
-        self.ws.text_clipboard = clipboard;
+        self.ws.clip.text = clipboard;
     }
 
     /// The document was written to its file: nothing is unsaved.

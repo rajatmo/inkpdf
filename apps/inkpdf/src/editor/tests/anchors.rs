@@ -6,7 +6,7 @@ use crate::geometry::Shape;
 fn shaping(shape: Shape) -> Editor {
     let mut ed = editor();
     ed.set_tool(Tool::Geometry);
-    ed.shape = shape;
+    ed.styles.shape = shape;
     ed
 }
 
@@ -100,7 +100,7 @@ fn nodes(f: &Figure) -> Vec<[f32; 2]> {
 /// A broken line of three nodes, selected: a line from (100, 300) to (300, 300) with a node added
 /// halfway along it (double tap) and pulled up to (200, 200).
 fn broken_line(ed: &mut Editor) {
-    ed.shape = Shape::Line;
+    ed.styles.shape = Shape::Line;
     draw(ed, [100.0, 300.0], [300.0, 300.0]);
     double_tap(ed, on_page(ed, 200.0, 300.0), 20_000.0);
     let node = at(ed, Control::Anchor(1));
@@ -653,7 +653,7 @@ fn shapes_from_other_tools_selection_also_show_anchors_and_plain_ink_does_not() 
     assert!(ed.editing().is_none(), "handwriting has no anchors");
     // A shape drawn, then selected again with a tap of the stylus, shows its anchors.
     ed.set_tool(Tool::Geometry);
-    ed.shape = Shape::Rectangle;
+    ed.styles.shape = Shape::Rectangle;
     draw(&mut ed, [100.0, 500.0], [300.0, 600.0]);
     ed.selection.clear();
     ed.set_tool(Tool::Geometry);

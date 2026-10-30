@@ -84,26 +84,26 @@ fn the_field_takes_edits_the_caret_and_the_clipboard_and_escape_closes_the_card(
     assert_eq!(ed.search.hits().len(), 0);
     ed.press(Key::Arrow(Dir::Left, false));
     ed.press(Key::Text("c"));
-    assert_eq!((ed.search.query.as_str(), ed.search.hits().len()), ("quick", 1));
+    assert_eq!((ed.search.field.text.as_str(), ed.search.hits().len()), ("quick", 1));
     ed.press(Key::Home(false));
     ed.press(Key::Delete);
-    assert_eq!(ed.search.query, "uick");
+    assert_eq!(ed.search.field.text, "uick");
     ed.press(Key::End(false));
     ed.press(Key::Backspace);
-    assert_eq!(ed.search.query, "uic");
+    assert_eq!(ed.search.field.text, "uic");
     ed.press(Key::Chord('c'));
-    assert_eq!(ed.text_clipboard.get().as_deref(), Some("uic"));
+    assert_eq!(ed.clip.text.get().as_deref(), Some("uic"));
     ed.press(Key::Chord('x'));
-    assert_eq!(ed.search.query, "");
-    ed.text_clipboard.set("brown\nsecond line");
+    assert_eq!(ed.search.field.text, "");
+    ed.clip.text.set("brown\nsecond line");
     ed.press(Key::Chord('v'));
-    assert_eq!(ed.search.query, "brown", "the first line of the clipboard");
+    assert_eq!(ed.search.field.text, "brown", "the first line of the clipboard");
     assert!(ed.is_typing(), "the keyboard is the card's");
     assert!(ed.press(Key::Escape));
     assert!(!ed.search_open() && !ed.is_typing());
     assert_eq!(ed.search.hits().len(), 0, "the places are forgotten, the query kept");
     ed.open_search();
-    assert_eq!((ed.search.query.as_str(), ed.search.hits().len()), ("brown", 1), "opened again it has what was typed");
+    assert_eq!((ed.search.field.text.as_str(), ed.search.hits().len()), ("brown", 1), "opened again it has what was typed");
 }
 
 #[test]
@@ -114,7 +114,7 @@ fn a_query_with_nothing_to_find_empty_or_hostile_is_no_places_and_no_trouble() {
     for hostile in ["\u{0}", "a\u{301}", "😀", &"x".repeat(5000), "\t\r"] {
         ed.press(Key::Text(hostile));
     }
-    assert!(ed.search.query.chars().count() <= 200, "the query is capped");
+    assert!(ed.search.field.text.chars().count() <= 200, "the query is capped");
     ed.press(Key::Backspace);
     ed.press(Key::Text("\u{7f}"));
     assert!(ed.search_view().is_some());

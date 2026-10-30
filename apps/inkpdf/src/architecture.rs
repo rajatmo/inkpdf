@@ -3,11 +3,11 @@
 //! sources, so a stray `use` in the wrong direction fails the build of the tests, not a review.
 //!
 //! ```text
-//!   adapter   app, gpu, platform, doc, ink_io, tiles, thumbnail   (window, GPU, files, OS)
+//!   adapter   app, gpu, platform, doc, renderer, ink_io, tiles, thumbnail   (window, GPU, files, OS)
 //!   session   editor            routes input to the tool in use; owns the chrome
 //!   tools     tools             what a press on the page does; one file each
 //!   ui        toolbar           where the buttons are, how they look
-//!   domain    tool, input, requests, workspace, selection, settings
+//!   domain    tool, input, field, requests, workspace, selection, settings
 //!   model     figure, form, ink, laser, links, outline, pages
 //!   base      plane, motion, scene, clock, geometry, colour, coords, view, text, smooth, clipboard
 //! ```
@@ -147,7 +147,7 @@ enum Layer {
 }
 
 /// Every top-level module of the program, and its layer. A new module is placed here or the test fails.
-const LAYERS: [(&str, Layer); 42] = [
+const LAYERS: [(&str, Layer); 44] = [
     ("plane", Layer::Base),
     ("motion", Layer::Base),
     ("scene", Layer::Base),
@@ -171,6 +171,7 @@ const LAYERS: [(&str, Layer); 42] = [
     ("doctext", Layer::Model),
     ("tool", Layer::Domain),
     ("input", Layer::Domain),
+    ("field", Layer::Domain),
     ("requests", Layer::Domain),
     ("workspace", Layer::Domain),
     ("selection", Layer::Domain),
@@ -186,6 +187,7 @@ const LAYERS: [(&str, Layer); 42] = [
     ("path_store", Layer::Adapter),
     ("pdf", Layer::Adapter),
     ("pdf_read", Layer::Adapter),
+    ("renderer", Layer::Adapter),
     ("ink_io", Layer::Adapter),
     ("tiles", Layer::Adapter),
     ("thumbnail", Layer::Adapter),

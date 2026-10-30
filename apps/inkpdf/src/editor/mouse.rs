@@ -24,10 +24,8 @@ pub(super) struct MousePress {
 impl Editor {
     pub(crate) fn mouse_moved(&mut self, pos: [f32; 2]) {
         self.cursor = pos;
-        match self.modal() {
-            Some(Modal::Prompt) => return self.prompt_pointer(Device::Mouse, 0, Phase::Move, pos),
-            Some(Modal::Overview) => return self.overview_pointer(Device::Mouse, 0, Phase::Move, pos),
-            None => {}
+        if let Some(modal) = self.modal() {
+            return self.modal_pointer(modal, Device::Mouse, 0, Phase::Move, pos);
         }
         self.update_hover(Some(pos));
         match self.chrome.act {
@@ -94,10 +92,7 @@ impl Editor {
             // A modal layer answers the left button alone.
             if button == MouseButton::Left {
                 let (phase, at) = (if pressed { Phase::Down } else { Phase::Up }, self.cursor);
-                match modal {
-                    Modal::Prompt => self.prompt_pointer(Device::Mouse, 0, phase, at),
-                    Modal::Overview => self.overview_pointer(Device::Mouse, 0, phase, at),
-                }
+                self.modal_pointer(modal, Device::Mouse, 0, phase, at);
             }
             return;
         }

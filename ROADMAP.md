@@ -6,7 +6,7 @@ task** from section 6, do it on a branch, and leave the CI result as the proof.
 
 - **Written:** 2026-10-29, at version **1.0.0** (commits `e734263` "v1.0.0: the interface moves" and `c4e8a6a` "Demo GIF for 1.0.0"); **re-planned the same day** after Linux and Android landed on `main` (unreleased) and the owner chose the order in section 6.
 - **Owner:** Rajat Mandal (`rajatmo`). The owner reviews and pushes; do not push to `main`, open pull requests instead (unless the task says so).
-- **Status (2026-10-30):** **1.1.0 and 1.2.0 are finished on branches** (`pdf-seam`: F3, K1 to K3; `theme`, on top of it: T1 to T7, then X1 to X6, then P1 and part of P2; versions bumped to 1.2.0, changelog written); the owner merges them and tags the releases. Milestone 1.3.0 is half done (P1, most of P2; P3 waits for the owner's call on how a bookmark flag is told from the file's own; P4 is the owner's say-so); it is not released, the version stays 1.2.0. The platform backlog (A3, A4, L2, L3) is untouched: it needs devices. The platform work is on `main` (`docs/PORTING.md`).
+- **Status (2026-10-30):** **1.1.0 and 1.2.0 are finished on branches** (`pdf-seam`: F3, K1 to K3; `theme`, on top of it: T1 to T7, then X1 to X6, then P1 and part of P2; versions bumped to 1.2.0, changelog written); the owner merges them and tags the releases. Milestone 2.0 (extensions, with A4) is planned in section 6 and is next. Milestone 1.3.0 is half done (P1, most of P2; P3 waits for the owner's call on how a bookmark flag is told from the file's own; P4 is the owner's say-so); it is not released, the version stays 1.2.0. The platform backlog (A3, A4, L2, L3) is untouched: it needs devices. The platform work is on `main` (`docs/PORTING.md`).
 
 ## 1. What InkPDF is, and the rules that do not bend
 
@@ -409,6 +409,26 @@ of a core; look at rebuilding the whole `Ui` each frame during a glide).
 **P4 (optional, ask first).** Things pdfcraft already makes cheap: a "Make searchable" OCR option (opt-in, models and licence notice),
 filling form fields, printing. Only on the owner's say-so.
 **Release 1.3.0.**
+
+### Milestone 2.0: extensions (E), with the Android files and clipboard (A4) beside it
+
+*Decided with the owner, 2026-10-30.* Goal: **a new tool is one new folder and touches no core file** (today the Select tool touched about 15 places: `tool.rs`, `ToolSet`, the toolbar arrays and `BUTTONS`, look, icons, the context bar, settings, the tool lists of the tests and storms). Select stays core. Extensions are built in (compiled in, no dynamic loading, no sandbox: review is the gate); forks add them and they are merged.
+
+**Layout (three crates; the compiler keeps extensions to the API).**
+`inkpdf-api` (the stable facade: traits and plain types), `inkpdf-ext` (every extension, one module each under `src/<name>/`, found by a `build.rs`, so no central list is edited and forks do not conflict), `inkpdf` (the core: implements the API and registers `inkpdf_ext::all()`). Dependencies point `ext -> api <- core`. An extension that needs a crate adds a line to `inkpdf-ext/Cargo.toml` (the owner reviews it); the core's `Cargo.toml` never changes for an extension. Each extension has a manifest: the API version it needs and what it uses (PDF write, clipboard, its own settings).
+
+**The API (v0)** offers: pointer events with hover and leave, and keys; painting in document space and in screen space; `tick(now)` saying whether the tool is still animating (the shell asks the laser by name today); committing, replacing and removing items with undo; page geometry, page text and the selection, read-only; one shared text-field widget (Save As, the search card and the text tool each have their own copy); the clipboard; per-extension settings; a toolbar icon, order and optional bar actions. Versioned with semantic versioning: breaking it breaks every fork, so the move of the shared types (page text, painter, keys, palette roles) into `inkpdf-api` is done once, carefully.
+
+| Step | Work | Done when |
+|---|---|---|
+| **E0** | A registry of tool descriptors (id, name, icon, order, input policy, bar actions, settings keys) replaces the closed `enum Tool` and the fixed arrays; toolbar, look, bar and settings read it. No behaviour change. | A test-only tool registered from outside shows on the toolbar and no core file changed; goldens and storms unchanged. |
+| **E1** | `inkpdf-api`, then **Laser moves into `inkpdf-ext`** (the proof: hover, screen-space painting, a fading trail through `tick`). | Laser passes the tool contract suite, the golden and the storms, and imports nothing of the core. |
+| **E2** | Template extension, `docs/EXTENSIONS.md`, manifest check in CI, the contract suite and a pen-latency cap run on every registered extension automatically. | A fork adds a dummy tool with one folder and no core edit. |
+| **E3** | Item kinds an extension can register: a payload on a stroke (so undo, move, erase, copy and page edits follow, as markup proved), hooks to save to and load from an annotation, hit test, bounds, drawing, optional searchable text (so it is found by search). The PDF seam gains the note annotation. | An item of a test kind survives save, reopen, undo and page moves. |
+| **E4** | **Sticky notes** as an extension: a note (PDF `/Text`, "Sticky Note") with its popup and **replies** (a thread: `/IRT`, `/RT /R`, author and date on each message, open or closed). The author's name is a setting. A note card shows the thread and a field to reply (the shared widget). Notes from other programs stay as the file has them (as markup). Searchable. | Placing, replying, closing, moving and deleting a note works with the left mouse button and keyboard alone and with the stylus tip alone, survives save and reopen in this program, and the file shows the thread in another reader. *First spike: pdfcraft creates notes and popups and reads reply threads; whether it writes replies must be checked before E4 is sized.* |
+| **A4** | Android: the Storage Access Framework (open and save through `content://`; `FileStore` and `DocId::Uri` exist), the system clipboard, opening links; JNI. Runs **in parallel** with E0 and E1 (it lives in `platform/android` and is independent). | The owner opens and saves their own PDFs and copies text out on a device. It cannot be tested from the cloud: each build is handed to the owner to try. |
+
+Order: A4 and E0 first, together; E1; E2; E3; E4. Quality fixes from the owner's use go in between on small branches (the seam steps change no behaviour, so they merge around them). Quality loop: a report comes with a `--record` recording, becomes a failing replay test, and the fix lands with it; a ring buffer of the last minute of input saved on a panic, and a bug template, are the first small additions.
 
 ### Beside the milestones: the platform backlog (`docs/PORTING.md` has the detail)
 

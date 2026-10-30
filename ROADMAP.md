@@ -524,7 +524,7 @@ Owner-run checks per milestone (say which ones in the pull request):
 | Check | How |
 |---|---|
 | All tests and storms at 10x | `INKPDF_STRESS=10 cargo test --release -p inkpdf --lib -- --include-ignored` (about 40 s) |
-| Real-input checks | `tools/e2e/run.ps1` in the foreground on a quiet machine (smoke, modes, overview, thumbs; add one script per milestone) |
+| Real-input checks | `tools/e2e/run.ps1` in the foreground on a quiet machine (`devices.ps1`, `pages.ps1`: 50 checks, about a minute; buttons are pressed by name through the app's `--layout` file) |
 | Latency and idle CPU | `tools/e2e/latency.ps1` and the numbers in section 1; idle window 0% (Windows; Linux and Android: `--stats` on hardware) |
 | Linux and Android | `tools/e2e/linux-smoke.sh` (virtual display), the CI `android` and `android-emulator` jobs, and a try on a real tablet with a stylus (`adb logcat -s inkpdf` if it misbehaves) |
 | Soak | open and close the overview, add/delete/undo pages and draw for 30 rounds; memory, handles and threads must be flat after the texture cache fills (budget 768 MB) |
@@ -541,9 +541,10 @@ Owner-run checks per milestone (say which ones in the pull request):
 
 ## 9. Parked or scrapped
 
-**F1 and F2 (old foundations).** F1, the `pdf` façade, became K1 (its leak-closing part was done by S2). F2, `--dump-layout` for the PowerShell
-e2e scripts, is parked: it only helps scripts that hard-code positions for a maximised 4K window, and `--record`/`--replay` cover
-reproducing a session. Do it only if `tools/e2e/run.ps1` keeps breaking on other screen sizes.
+**F1 and F2 (old foundations).** F1, the `pdf` façade, became K1 (its leak-closing part was done by S2). F2 is done (2026-10-30) as
+`--layout FILE` (`app/layout.rs`): the app keeps a file saying where every button, bar action, overview page and contents entry is, and
+the real-input scripts press them by name. That was needed after all: by 1.3.7 the scripts' remembered 4K positions failed 26 of 71
+checks (new buttons, Select first, the bar's tip buttons gone). The four scripts became two (`devices.ps1`, `pages.ps1`).
 
 **An own PDF renderer and a second PDF engine.** Not planned (owner, 2026-10-29): pure Rust only, so no pdfium or MuPDF, and writing a
 renderer is years of long-tail work (fonts, CMaps, JBIG2, transparency, shadings). K3 records the criteria for reconsidering it.

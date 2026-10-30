@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **The real-input checks press buttons by name.** `--layout FILE` makes the app keep a file saying where every toolbar button, bar
+  action, overview page and contents entry is (`app/layout.rs`); `tools/e2e` reads it instead of remembering positions in a maximised
+  4K window, which had gone stale (26 of 71 checks failed against 1.3.7 because the buttons had moved, not because anything was
+  broken). The four scripts are now two, `devices.ps1` and `pages.ps1`: 50 checks, about a minute, all passing. They start the app in
+  the light look so the colours they count do not depend on Windows' theme.
+
 ## 1.3.7
 
 - **The system's own file dialogs on Windows and Linux** (Save As, and a new Open button, the folder at the left of the toolbar, as on Android),

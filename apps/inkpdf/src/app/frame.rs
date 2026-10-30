@@ -112,6 +112,9 @@ impl State {
         self.layers.sync_committed(&mut paint!(self));
         self.layers.sync_ui(&mut paint!(self));
         self.layers.overview_frame(&mut paint!(self));
+        if let Some(layout) = &mut self.layout {
+            layout.report(&self.ed);
+        }
         let ranges = self.layers.visible_ink_ranges(&paint!(self));
         let buf = std::mem::take(&mut self.layers.overlay_buf);
         let overlays = ink_layer::overlays(&self.ed, pen_clock, buf);

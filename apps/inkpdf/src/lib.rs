@@ -116,7 +116,7 @@ impl ApplicationHandler for App {
     }
 }
 
-const USAGE: &str = "usage: inkpdf [file.pdf] [--gpu integrated|discrete|auto|NAME] [--list-gpus] [--smoothing 0..1] [--mode desktop|tablet|auto] [--bench] [--stats] [--record FILE] [--replay FILE] [--exit-after SECONDS] [--topmost] [--fullscreen]";
+const USAGE: &str = "usage: inkpdf [file.pdf] [--gpu integrated|discrete|auto|NAME] [--list-gpus] [--smoothing 0..1] [--mode desktop|tablet|auto] [--bench] [--stats] [--record FILE] [--replay FILE] [--layout FILE] [--exit-after SECONDS] [--topmost] [--fullscreen]";
 
 fn parse_args() -> Result<app::Options, String> {
     let mut options = app::Options {
@@ -132,6 +132,7 @@ fn parse_args() -> Result<app::Options, String> {
         mode: None,
         record: None,
         replay: None,
+        layout: None,
     };
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -154,6 +155,7 @@ fn parse_args() -> Result<app::Options, String> {
             }
             "--record" => options.record = Some(args.next().ok_or("--record needs a file to write the input to")?.into()),
             "--replay" => options.replay = Some(args.next().ok_or("--replay needs a recorded file")?.into()),
+            "--layout" => options.layout = Some(args.next().ok_or("--layout needs a file to keep the buttons' places in")?.into()),
             "--list-gpus" => {
                 for gpu in gpu::list_gpus() {
                     println!("{gpu}");
@@ -237,6 +239,7 @@ pub fn run_android(android: winit::platform::android::activity::AndroidApp) {
         mode: None,
         record: None,
         replay: None,
+        layout: None,
     };
     serve(event_loop, options);
 }

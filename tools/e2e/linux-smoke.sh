@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Linux counterpart of smoke.ps1, small on purpose: starts the built app on a virtual X display (software Vulkan) and
+# Linux counterpart of devices.ps1, small on purpose: starts the built app on a virtual X display (software Vulkan) and
 # checks two things a person does:
 #
 #  1. a PDF is opened, drawn on with the mouse (desktop mode: the left button is a stylus) and saved with Ctrl+S: the file

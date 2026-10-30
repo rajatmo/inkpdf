@@ -14,6 +14,7 @@ mod config;
 mod files;
 mod frame;
 mod ink_layer;
+mod layout;
 mod overview;
 mod pages;
 mod replay;
@@ -75,6 +76,8 @@ pub struct Options {
     pub record: Option<PathBuf>,
     /// Play this recorded input, then close (--replay).
     pub replay: Option<PathBuf>,
+    /// Keep this file saying where every button is (--layout), for the real-input checks.
+    pub layout: Option<PathBuf>,
 }
 
 /// The frame loop's own business: its clock, what it is waiting for, how long things took.
@@ -177,6 +180,8 @@ pub struct State {
     recorder: Option<replay::Recorder>,
     /// A recording being played (`--replay`).
     player: Option<replay::Player>,
+    /// Where the buttons are, kept in a file for the real-input checks (`--layout`).
+    layout: Option<layout::Reporter>,
 }
 
 impl State {
@@ -254,6 +259,7 @@ impl State {
             last_appearance: crate::settings::Appearance::default(),
             recorder: opts.record.map(replay::Recorder::new),
             player: opts.replay.as_deref().map(replay::Player::load).transpose()?,
+            layout: opts.layout.map(layout::Reporter::new),
         };
         // (A recording starts from the window as it is, so that it replays from the same.)
         let (size, dpr) = ([size.width.max(1) as f32, size.height.max(1) as f32], window_scale);

@@ -137,7 +137,8 @@ crate, `wgpu` or `winit`. More: [ARCHITECTURE.md](apps/inkpdf/ARCHITECTURE.md) (
 **Testing.** `cargo test` runs the unit tests, the tool contract suite (the same hostile event streams against every tool),
 the layering test and seeded stress storms (`INKPDF_STRESS=10 cargo test --release` runs them ten times larger).
 `tools/e2e/linux-smoke.sh` runs the built app on a virtual display; `tools/e2e/run.ps1` drives it on Windows with a synthetic
-stylus and finger (it takes over the mouse and keyboard while it runs). Windows' synthetic pen injector drops the eraser flag, so
+stylus and finger, pressing buttons by name through the app's `--layout` file (it takes over the mouse and keyboard while it
+runs). Windows' synthetic pen injector drops the eraser flag, so
 the eraser end is covered by unit tests only: please try it on real hardware.
 
 ## Authors

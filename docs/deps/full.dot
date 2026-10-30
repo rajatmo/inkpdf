@@ -60,7 +60,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 }
 "app" -> "clock" [color="#55555599", penwidth=2.30, tooltip="7 uses"];
 "app" -> "doc" [color="#55555599", penwidth=1.80, tooltip="3 uses"];
-"app" -> "editor" [color="#55555599", penwidth=1.96, tooltip="4 uses"];
+"app" -> "editor" [color="#55555599", penwidth=2.09, tooltip="5 uses"];
 "app" -> "gpu" [color="#55555599", penwidth=2.09, tooltip="5 uses"];
 "app" -> "indexer" [color="#55555599", penwidth=1.59, tooltip="2 uses"];
 "app" -> "ink" [color="#55555599", penwidth=1.80, tooltip="3 uses"];
@@ -77,7 +77,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "app" -> "store" [color="#55555599", penwidth=1.59, tooltip="2 uses"];
 "app" -> "text" [color="#55555599", penwidth=1.80, tooltip="3 uses"];
 "app" -> "tiles" [color="#55555599", penwidth=2.09, tooltip="5 uses"];
-"app" -> "toolbar" [color="#55555599", penwidth=2.09, tooltip="5 uses"];
+"app" -> "toolbar" [color="#55555599", penwidth=2.20, tooltip="6 uses"];
 "app" -> "tools" [color="#55555599", penwidth=1.59, tooltip="2 uses"];
 "doc" -> "coords" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "doc" -> "ink" [color="#55555599", penwidth=1.30, tooltip="1 uses"];

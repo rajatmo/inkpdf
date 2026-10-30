@@ -247,7 +247,7 @@ impl Toolbar {
     }
 
     /// Every button and where it is.
-    fn items(&self) -> &[(Item, [f32; 4])] {
+    pub(crate) fn items(&self) -> &[(Item, [f32; 4])] {
         &self.items[..self.len]
     }
 

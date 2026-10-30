@@ -175,7 +175,7 @@ impl ContextBar {
         ContextBar { rect: [left, top, left + width, top + height], items, count: placed, gaps: gap_x, gap_count: placed_gaps, compact, unit, dpr }
     }
 
-    fn items(&self) -> &[(ContextItem, [f32; 4])] {
+    pub(crate) fn items(&self) -> &[(ContextItem, [f32; 4])] {
         &self.items[..self.count]
     }
 

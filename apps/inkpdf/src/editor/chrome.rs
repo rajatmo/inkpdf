@@ -38,6 +38,8 @@ pub struct Chrome {
     pub overview: Option<super::overview::OverviewState>,
     /// The Save As dialog, while it is up (see [`super::save_as`]).
     pub save_as: Option<super::save_as::SaveAsState>,
+    /// The card under the theme button is open (see [`super::theme_menu`]).
+    pub theme_menu: bool,
     /// The press under way on the window's own controls, if any.
     pub(crate) act: Act,
 }
@@ -46,6 +48,7 @@ impl Chrome {
     /// A new document: no press is under way, and no prompt is up.
     pub(super) fn clear_press_and_prompt(&mut self) {
         self.act = Act::Idle;
+        self.theme_menu = false;
         self.overview = None;
         self.save_as = None;
         self.prompt = None;

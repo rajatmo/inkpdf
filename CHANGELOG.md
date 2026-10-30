@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- The **Select tool** is the first button of the tools and the one the program starts on (a settings file that names another tool keeps it).
+- Whether the **pages follow the theme** is a card that drops down from the theme button (which still goes system, light, dark), with one switch;
+  it goes away on a press elsewhere, Esc or another button. It replaces the separate button. Works with the left mouse button and keyboard, the
+  stylus tip and a finger.
+
 ## 1.3.0
 
 Extensions: a tool can be added without touching the program; Android files; polish.

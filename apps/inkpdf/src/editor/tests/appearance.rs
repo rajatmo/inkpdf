@@ -5,6 +5,7 @@ use crate::motion::Prefs;
 use crate::palette::{DARK, LIGHT, Scheme};
 use crate::requests::Request;
 use crate::settings::Appearance;
+use crate::tools::Key;
 
 fn drain(ed: &mut Editor) -> Vec<Request> {
     std::iter::from_fn(|| ed.requests().pop()).collect()
@@ -125,14 +126,82 @@ fn the_theme_button_works_with_the_left_button_alone_and_with_the_tip_alone() {
 }
 
 #[test]
-fn the_dark_pages_button_switches_the_setting_with_either_device() {
+fn the_theme_button_drops_a_card_down_and_its_row_switches_whether_the_pages_follow_with_every_device() {
     let mut ed = editor();
-    let at = ed.toolbar().centre_of(Item::DarkPages);
-    mouse_click_at(&mut ed, at);
-    assert!(ed.dark_pages());
-    pen_tap(&mut ed, at);
+    assert!(!ed.theme_menu_open() && ed.theme_layout().is_none());
+    let theme = ed.toolbar().centre_of(Item::Theme);
+    mouse_click_at(&mut ed, theme);
+    assert!(ed.theme_menu_open(), "the button drops the card");
+    assert_eq!(ed.appearance(), Appearance::Light, "and goes on to the next look");
+    // The mouse presses the row.
+    let row = ed.theme_layout().expect("the card").centre();
+    mouse_click_at(&mut ed, row);
+    assert!(ed.dark_pages() && ed.theme_menu_open(), "the row switched it on and the card stays");
+    // The stylus tip too.
+    pen_tap(&mut ed, row);
     assert!(!ed.dark_pages());
     assert!(drain(&mut ed).contains(&Request::SettingsChanged));
+    // A finger, in an editor the pen has not been near.
+    let mut finger = editor();
+    let theme = finger.toolbar().centre_of(Item::Theme);
+    finger.pointer_event(touch(1, Phase::Down, theme, 8.0));
+    finger.pointer_event(touch(1, Phase::Up, theme, 8.0));
+    let row = finger.theme_layout().expect("the card").centre();
+    finger.pointer_event(touch(2, Phase::Down, row, 8.0));
+    finger.pointer_event(touch(2, Phase::Up, row, 8.0));
+    assert!(finger.dark_pages(), "a finger");
+    assert_eq!(finger.ink.len(), 0);
+}
+
+#[test]
+fn the_card_goes_on_a_press_elsewhere_escape_or_another_button_and_not_on_a_press_on_itself_or_its_button() {
+    let open = |ed: &mut Editor| {
+        let theme = ed.toolbar().centre_of(Item::Theme);
+        pen_tap(ed, theme);
+        assert!(ed.theme_menu_open());
+    };
+    // On the page.
+    let mut ed = editor();
+    open(&mut ed);
+    let page = on_page(&ed, 300.0, 400.0);
+    mouse_click_at(&mut ed, page);
+    assert!(!ed.theme_menu_open(), "a press on the page puts it away");
+    // On the card, and on the theme button again (which goes to the next look and keeps it).
+    open(&mut ed);
+    let row = ed.theme_layout().expect("card").centre();
+    pen_tap(&mut ed, row);
+    assert!(ed.theme_menu_open());
+    let before = ed.appearance();
+    let theme = ed.toolbar().centre_of(Item::Theme);
+    pen_tap(&mut ed, theme);
+    assert!(ed.theme_menu_open() && ed.appearance() != before);
+    // Escape.
+    assert!(ed.press(Key::Escape));
+    assert!(!ed.theme_menu_open());
+    // Another toolbar button.
+    open(&mut ed);
+    let pages = ed.toolbar().centre_of(Item::Search);
+    pen_tap(&mut ed, pages);
+    assert!(!ed.theme_menu_open());
+    // A new document.
+    ed.close_search();
+    open(&mut ed);
+    ed.load(Layout::new(&[[612.0, 792.0]]), vec![]);
+    assert!(!ed.theme_menu_open());
+}
+
+#[test]
+fn the_setting_is_kept_through_a_look_that_is_light_and_the_pages_are_dark_only_when_it_is_on_and_the_look_is_dark() {
+    let mut ed = editor();
+    let theme = ed.toolbar().centre_of(Item::Theme);
+    pen_tap(&mut ed, theme);
+    let row = ed.theme_layout().expect("card").centre();
+    pen_tap(&mut ed, row);
+    assert!(ed.dark_pages() && !ed.dark_pages_active(), "the look is light");
+    pen_tap(&mut ed, theme);
+    assert_eq!(ed.appearance(), Appearance::Dark);
+    assert!(ed.dark_pages_active());
+    assert_eq!(ed.theme_view().map(|v| (v.pages_follow, v.dark)), Some((true, true)));
 }
 
 #[test]

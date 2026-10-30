@@ -464,7 +464,6 @@ fn poke(ed: &mut Editor, rng: &mut Rng, hostile: bool) -> String {
                 Item::DeletePage,
                 Item::ModeSwitch,
                 Item::Theme,
-                Item::DarkPages,
                 Item::Search,
             ];
             let at = ed.toolbar().centre_of(rng.pick(&items));

@@ -18,6 +18,9 @@ impl Editor {
         match ev.phase {
             Phase::Down => {
                 let first_finger = self.fingers.fingers() == 0 && matches!(self.chrome.act, Act::Idle);
+                if first_finger {
+                    self.dismiss_theme_menu(first.pos);
+                }
                 if first_finger && self.press_panel(Device::Touch, ev.id, first.pos) {
                     return;
                 }
@@ -40,7 +43,7 @@ impl Editor {
                 if self.act_belongs_to(Device::Touch, ev.id)
                     && matches!(
                         self.chrome.act,
-                        Act::Toolbar { .. } | Act::Context { .. } | Act::Search { .. } | Act::Slider { .. } | Act::Swallow { .. }
+                        Act::Toolbar { .. } | Act::Context { .. } | Act::Search { .. } | Act::Theme { .. } | Act::Slider { .. } | Act::Swallow { .. }
                     )
                 {
                     self.pointer_moved(Device::Touch, ev.id, &ev.samples);
@@ -60,7 +63,7 @@ impl Editor {
                     self.chrome.act = Act::Idle;
                     return;
                 }
-                if matches!(self.chrome.act, Act::Context { dev: Device::Touch, id, .. } | Act::Search { dev: Device::Touch, id, .. } if id == ev.id)
+                if matches!(self.chrome.act, Act::Context { dev: Device::Touch, id, .. } | Act::Search { dev: Device::Touch, id, .. } | Act::Theme { dev: Device::Touch, id, .. } if id == ev.id)
                 {
                     self.release_context(Device::Touch, ev.id, lifted.then_some(last.pos));
                     self.chrome.act = Act::Idle;
@@ -101,6 +104,7 @@ impl Editor {
             Act::Toolbar { dev: Device::Touch, .. }
                 | Act::Context { dev: Device::Touch, .. }
                 | Act::Search { dev: Device::Touch, .. }
+                | Act::Theme { dev: Device::Touch, .. }
                 | Act::Slider { dev: Device::Touch, .. }
                 | Act::Swallow { dev: Device::Touch, .. }
         ) {

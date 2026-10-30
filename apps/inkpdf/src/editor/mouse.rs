@@ -129,6 +129,7 @@ impl Editor {
             self.end_act();
         }
         self.tools.end_all(&mut self.ws);
+        self.dismiss_theme_menu(self.cursor);
         let bar = self.toolbar();
         if button == MouseButton::Left && self.press_panel(Device::Mouse, 0, self.cursor) {
             // The tool panel took the press.

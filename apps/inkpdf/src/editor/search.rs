@@ -139,7 +139,11 @@ impl Editor {
             return None;
         }
         let bar = self.toolbar();
-        let top = self.context_bar().map_or(bar.bottom(), |c| c.rect[3]) + 8.0 * self.ws.dpr;
+        let mut top = self.context_bar().map_or(bar.bottom(), |c| c.rect[3]) + 8.0 * self.ws.dpr;
+        // (Under the theme card, which is at the same edge, while that is open.)
+        if let Some(theme) = self.theme_layout() {
+            top = top.max(theme.card[3] + 8.0 * self.ws.dpr);
+        }
         Some(SearchLayout::new(&bar, self.ws.view.viewport, top, self.search.hits.len().min(crate::toolbar::SEARCH_ROWS)))
     }
 

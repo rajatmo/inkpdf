@@ -13,7 +13,7 @@ impl Editor {
     pub(super) fn end_act(&mut self) {
         self.tools.end_all(&mut self.ws);
         match std::mem::take(&mut self.chrome.act) {
-            Act::Idle | Act::Toolbar { .. } | Act::Context { .. } | Act::Search { .. } | Act::Swallow { .. } => {}
+            Act::Idle | Act::Toolbar { .. } | Act::Context { .. } | Act::Search { .. } | Act::Theme { .. } | Act::Swallow { .. } => {}
             // Letting go of a slider keeps what it set; the panel stays open for the next one.
             Act::Slider { .. } => self.ws.requests.push(Request::SettingsChanged),
         }

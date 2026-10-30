@@ -41,6 +41,9 @@ impl Editor {
             // The bar comes down into place as it comes in.
             let came = self.motions.bar_amount();
             ui.apply(coming, Xform::slide([0.0, -(1.0 - came) * 8.0 * self.ws.dpr], came));
+            if let (Some(card), Some(view)) = (self.theme_layout(), self.theme_view()) {
+                card.draw(&view, ui);
+            }
             if let (Some(card), Some(view)) = (self.search_layout(), self.search_view()) {
                 card.draw(&view, ui);
             }
@@ -198,6 +201,9 @@ impl Editor {
     /// Pressing a button. A tool's button selects the tool and opens its panel (the laser has
     /// none), and pressing it again puts the panel away.
     pub(super) fn activate(&mut self, item: Item) {
+        if item != Item::Theme {
+            self.close_theme_menu();
+        }
         if let Item::Tool(tool) = item {
             // (The panel with the settings is the bar's: the tool's button only chooses the tool.)
             self.set_tool(tool);
@@ -215,8 +221,11 @@ impl Editor {
                 Item::Fullscreen => self.ws.requests.push(Request::Fullscreen),
                 // The other mode (the posture decides again when the machine is turned into a tablet or back).
                 Item::ModeSwitch => self.set_mode(if self.mode == Mode::Desktop { Mode::Tablet } else { Mode::Desktop }),
-                Item::Theme => self.cycle_appearance(),
-                Item::DarkPages => self.set_dark_pages(!self.dark_pages()),
+                // (The look goes round, and its card drops down: whether the pages follow it.)
+                Item::Theme => {
+                    self.cycle_appearance();
+                    self.open_theme_menu();
+                }
                 Item::Close => self.ws.requests.push(Request::Close),
                 Item::AddPage => {
                     let page = self.ws.view.current_page(&self.ws.layout);

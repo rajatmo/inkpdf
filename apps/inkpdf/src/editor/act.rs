@@ -26,6 +26,12 @@ pub(crate) enum Act {
         id: u32,
         item: Option<SearchItem>,
     },
+    /// A press on the card under the theme button (`hit`: on its row).
+    Theme {
+        dev: Device,
+        id: u32,
+        hit: bool,
+    },
     /// Dragging one of the sliders in the pen panel.
     Slider {
         dev: Device,

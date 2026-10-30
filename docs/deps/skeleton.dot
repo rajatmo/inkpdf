@@ -72,7 +72,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "editor" -> "clock" [color="#6a5acd99", penwidth=1.60, tooltip="1 uses"];
 "editor" -> "links" [color="#6a5acd99", penwidth=1.60, tooltip="3 uses"];
 "editor" -> "motion" [color="#6a5acd99", penwidth=1.60, tooltip="4 uses"];
-"editor" -> "toolbar" [color="#6a5acd99", penwidth=1.60, tooltip="12 uses"];
+"editor" -> "toolbar" [color="#6a5acd99", penwidth=1.60, tooltip="13 uses"];
 "editor" -> "tools" [color="#6a5acd99", penwidth=1.60, tooltip="9 uses"];
 "figure" -> "geometry" [color="#3a8f5c99", penwidth=1.60, tooltip="1 uses"];
 "figure" -> "plane" [color="#3a8f5c99", penwidth=1.60, tooltip="1 uses"];

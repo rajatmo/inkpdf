@@ -30,6 +30,7 @@ impl Editor {
         self.tools.end_all(&mut self.ws);
         let Some(first) = ev.samples.first() else { return };
         let pos = first.pos;
+        self.dismiss_theme_menu(pos);
         self.ws.view.stop();
         if self.press_panel(Device::Pen, ev.id, pos) {
             return;

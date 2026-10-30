@@ -15,6 +15,7 @@ mod prompt;
 mod save_as;
 mod search_card;
 mod theme;
+mod theme_card;
 mod tool_panel;
 
 #[cfg(test)]
@@ -44,6 +45,7 @@ pub use prompt::{PromptLayout, PromptView};
 pub use save_as::{ListingView, SaveAsHit, SaveAsLayout, SaveAsView};
 pub use search_card::{ROWS as SEARCH_ROWS, SearchItem, SearchLayout, SearchRow, SearchView};
 pub use theme::{Align, Image, Label, Ui};
+pub use theme_card::{ThemeLayout, ThemeView};
 #[cfg(test)]
 pub use tool_panel::ToolPanel;
 pub use tool_panel::{Channel, PanelState, PanelView, Slider};
@@ -95,8 +97,6 @@ pub enum Item {
     Fullscreen,
     /// The look of the interface: the system's, light, dark (each press goes to the next).
     Theme,
-    /// Whether the pages go dark when the look is dark.
-    DarkPages,
 }
 
 /// Everything the toolbars' look depends on.
@@ -114,6 +114,8 @@ pub struct State {
     pub appearance: Appearance,
     pub dark: bool,
     pub dark_pages: bool,
+    /// The card under the theme button is open.
+    pub theme_menu: bool,
     /// The search card is open.
     pub search: bool,
     pub tool: Tool,
@@ -139,6 +141,7 @@ impl Default for State {
             appearance: Appearance::default(),
             dark: false,
             dark_pages: false,
+            theme_menu: false,
             search: false,
             tool: Tool::Pen,
             pen_colour: PALETTE[0],
@@ -163,7 +166,7 @@ const LEFT: [Option<Item>; 10] = [
     Some(Item::Pages),
     Some(Item::Search),
 ];
-const RIGHT: [Option<Item>; 4] = [Some(Item::Theme), Some(Item::DarkPages), Some(Item::ModeSwitch), Some(Item::Fullscreen)];
+const RIGHT: [Option<Item>; 3] = [Some(Item::Theme), Some(Item::ModeSwitch), Some(Item::Fullscreen)];
 
 /// Buttons at most: the left pill's, the right pill's and as many tools as a toolbar can hold. (A toolbar has the buttons of the tools there are.)
 pub const BUTTONS: usize = 9 + 4 + crate::tool::MAX_TOOLS;
@@ -366,16 +369,8 @@ impl Toolbar {
                         Appearance::Light => &icons.theme_light,
                         Appearance::Dark => &icons.theme_dark,
                     };
-                    icon.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink);
-                }
-                // In the accent colour when the pages go dark; dimmer while the look is light and it has nothing to do yet.
-                Item::DarkPages => {
-                    let colour = match (state.dark_pages, state.dark) {
-                        (true, _) => ui.pal.accent,
-                        (false, true) => ui.pal.ink,
-                        (false, false) => ui.pal.ink_dim,
-                    };
-                    icons.dark_pages.draw(&mut ui.lines, cx, cy, half, line, colour);
+                    // (The accent while its card is open.)
+                    icon.draw(&mut ui.lines, cx, cy, half, line, if state.theme_menu { ui.pal.accent } else { ui.pal.ink });
                 }
                 Item::Fullscreen => {
                     let icon = if state.fullscreen { &icons.exit_fullscreen } else { &icons.fullscreen };

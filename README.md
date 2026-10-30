@@ -50,8 +50,8 @@ driver (`mesa-vulkan-drivers` on most distributions) and, on X11, `libxkbcommon-
    delete pages. Every step can be undone.
 5. The I-beam tool selects the page's text: drag over it, press twice for a word, three times for a line, then copy it or mark it from
    the bar under the tools. The magnifier (or Ctrl+F) searches: every place is lit on the page and listed.
-6. The two buttons at the top right, left of the mode button, are the look: the first goes from the system's to light to dark; the
-   second (a page half in shade) makes the pages dark when the look is dark. Both are remembered.
+6. The button at the top right, left of the mode button, is the look: each press goes from the system's to light to dark, and drops a card
+   down with one switch, "Pages follow the theme", which makes the pages dark too when the look is dark. Both are remembered.
 
 The full guide is [apps/inkpdf/installer/readme.txt](apps/inkpdf/installer/readme.txt).
 

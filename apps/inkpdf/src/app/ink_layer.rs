@@ -99,8 +99,9 @@ pub(super) struct UiStamp {
     bar_in: u32,
     /// The colours it was drawn in (they move while the scheme fades).
     pal: Palette,
-    /// The search card, if it is open.
+    /// The search card, if it is open, and the card under the theme button.
     search: Option<crate::toolbar::SearchView>,
+    theme_menu: Option<crate::toolbar::ThemeView>,
 }
 
 /// Line work drawn over the committed ink.
@@ -210,6 +211,7 @@ impl UiLayers {
             bar_in: ed.motions.bar_amount().to_bits(),
             pal: ed.palette(),
             search: ed.search_view(),
+            theme_menu: ed.theme_view(),
         };
         if self.ui_built.as_ref() == Some(&stamp) {
             return;

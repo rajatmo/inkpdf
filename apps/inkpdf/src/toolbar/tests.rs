@@ -29,7 +29,6 @@ fn every_item_is_hit_at_its_centre_and_there_are_no_others() {
             Item::Tool(Tool::Text),
             Item::Tool(Tool::named("laser")),
             Item::Theme,
-            Item::DarkPages,
             Item::ModeSwitch,
             Item::Fullscreen
         ]

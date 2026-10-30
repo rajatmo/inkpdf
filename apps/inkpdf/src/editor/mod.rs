@@ -41,6 +41,7 @@ mod save_as;
 mod search;
 mod select;
 mod text_pages;
+mod theme_menu;
 mod toolbar_ui;
 mod touch;
 
@@ -207,6 +208,7 @@ impl Editor {
             appearance: self.ws.appearance,
             dark: self.scheme() == crate::palette::Scheme::Dark,
             dark_pages: self.ws.dark_pages,
+            theme_menu: self.chrome.theme_menu,
             search: self.search.open,
             tool: self.ws.tool,
             pen_colour: self.colour_of(self.ws.pen),

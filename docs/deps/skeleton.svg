@@ -567,7 +567,7 @@
 <!-- editor&#45;&gt;toolbar -->
 <g id="edge14" class="edge">
 <title>editor&#45;&gt;toolbar</title>
-<g id="a_edge14"><a xlink:title="12 uses">
+<g id="a_edge14"><a xlink:title="13 uses">
 <path fill="none" stroke="#6a5acd" stroke-width="1.6" stroke-opacity="0.600000" d="M518.87,-176.33C513.77,-185.92 508.05,-198.25 505,-210 483.91,-291.27 484.96,-392.1 486.75,-436.8"/>
 <polygon fill="#6a5acd" fill-opacity="0.600000" stroke="#6a5acd" stroke-width="1.6" stroke-opacity="0.600000" points="484.66,-437.08 487.02,-442.98 488.86,-436.89 484.66,-437.08"/>
 </a>

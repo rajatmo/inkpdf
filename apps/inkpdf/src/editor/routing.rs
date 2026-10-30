@@ -114,6 +114,11 @@ impl Editor {
             Some(Modal::Overview) => return self.overview_key(key),
             None => {}
         }
+        // Esc puts away the card under the theme button.
+        if self.chrome.theme_menu && key == Key::Escape {
+            self.close_theme_menu();
+            return true;
+        }
         // The card of the search has the keyboard while it is open.
         if self.search.open && self.search_key(key) {
             return true;
@@ -265,6 +270,7 @@ impl Editor {
         bar.contains(p)
             || self.context_bar().is_some_and(|c| c.contains(p))
             || self.search_layout().is_some_and(|c| c.contains(p))
+            || self.theme_layout().is_some_and(|c| c.contains(p))
             || self.drawer().is_some_and(|d| crate::ink::rect_contains(d, p))
             || self
                 .chrome

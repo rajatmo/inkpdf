@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.3.1
 
 - The **Select tool** is the first button of the tools and the one the program starts on (a settings file that names another tool keeps it).
 - Whether the **pages follow the theme** is a card that drops down from the theme button (which still goes system, light, dark), with one switch;

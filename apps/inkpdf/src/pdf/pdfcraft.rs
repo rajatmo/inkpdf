@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use pdfcraft_annot::appearance::parse_da;
-use pdfcraft_annot::{Meta, NewAnnotation as AnnotNew, Shape, Style as AnnotStyle, add_annotation, delete_annotation, page_refs};
+use pdfcraft_annot::{Markup, Meta, NewAnnotation as AnnotNew, Shape, Style as AnnotStyle, add_annotation, delete_annotation, page_refs};
 use pdfcraft_cos::{Dict, Document, ObjRef, Object, SaveOptions, pdf_date, write_full, write_incremental};
 use pdfcraft_organize::{OrganizeError as OrgError, bookmarks, delete_pages, duplicate_pages, insert_blank_page, move_pages, page_count};
 use pdfcraft_render::{
@@ -17,6 +17,7 @@ use super::{
     RenderPool, RenderRequest, Rendered, TextSource,
 };
 use crate::coords::PageGeom;
+use crate::ink::MarkupKind;
 use crate::pagetext::PageTextView;
 
 /// Most links read from one file, so a hostile file cannot fill memory.
@@ -57,6 +58,15 @@ fn config_of(look: PageLook) -> RenderConfig {
             },
             ..RenderConfig::default()
         },
+    }
+}
+
+fn markup_of(kind: MarkupKind) -> Markup {
+    match kind {
+        MarkupKind::Highlight => Markup::Highlight,
+        MarkupKind::Underline => Markup::Underline,
+        MarkupKind::StrikeOut => Markup::StrikeOut,
+        MarkupKind::Squiggly => Markup::Squiggly,
     }
 }
 
@@ -266,6 +276,10 @@ impl PdfDocument for PdfcraftDoc {
                 let kind = match d.name(b"Subtype") {
                     Some(b"Ink") => AnnotKind::Ink,
                     Some(b"FreeText") => AnnotKind::Text,
+                    Some(b"Highlight") => AnnotKind::Markup(MarkupKind::Highlight),
+                    Some(b"Underline") => AnnotKind::Markup(MarkupKind::Underline),
+                    Some(b"StrikeOut") => AnnotKind::Markup(MarkupKind::StrikeOut),
+                    Some(b"Squiggly") => AnnotKind::Markup(MarkupKind::Squiggly),
                     _ => continue,
                 };
                 let name = match d.get(b"NM").map(|o| doc.resolve(o)).as_deref() {
@@ -293,6 +307,27 @@ impl PdfDocument for PdfcraftDoc {
                         text: s.to_text(),
                         font_size: size,
                         rect: [rect[0], rect[1], rect[2], rect[3]],
+                        quads: Vec::new(),
+                    });
+                    continue;
+                }
+                if matches!(kind, AnnotKind::Markup(_)) {
+                    let c = numbers(doc, d, b"C");
+                    let colour = if c.len() == 3 { [c[0], c[1], c[2]] } else { [1.0, 0.94, 0.0] };
+                    let quads = numbers(doc, d, b"QuadPoints").chunks_exact(8).map(|q| [q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7]]).collect();
+                    out.push(Annotation {
+                        page,
+                        index,
+                        kind,
+                        name,
+                        colour,
+                        opacity,
+                        width: 0.0,
+                        strokes: Vec::new(),
+                        text: String::new(),
+                        font_size: 0.0,
+                        rect: [0.0; 4],
+                        quads,
                     });
                     continue;
                 }
@@ -326,6 +361,7 @@ impl PdfDocument for PdfcraftDoc {
                     text: String::new(),
                     font_size: 0.0,
                     rect: [0.0; 4],
+                    quads: Vec::new(),
                 });
             }
         }
@@ -340,6 +376,7 @@ impl PdfDocument for PdfcraftDoc {
         let shape = match &new.shape {
             NewShape::Ink { strokes } => Shape::Ink { strokes: strokes.clone() },
             NewShape::Text { rect, font_size } => Shape::Typewriter { rect: *rect, font_size: *font_size },
+            NewShape::Markup { kind, quads } => Shape::TextMarkup { kind: markup_of(*kind), quads: quads.clone() },
         };
         let annot = AnnotNew {
             page: new.page,

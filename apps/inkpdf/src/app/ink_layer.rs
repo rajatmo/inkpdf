@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use std::ops::Range;
 
 use crate::editor::Editor;
-use crate::ink::{InkStore, P, Stroke};
+use crate::ink::{InkStore, MarkupKind, P, Stroke};
 use crate::palette::Palette;
 use crate::scene::Capsule;
 use crate::smooth::curve_through;
@@ -309,12 +309,43 @@ fn stroke_capsules(s: &Stroke, offset: [f32; 2], colour: [u8; 4], out: &mut Vec<
     if s.text.is_some() {
         return;
     }
+    if let Some(kind) = s.markup {
+        for q in s.quads() {
+            markup_capsules(kind, [q[0] + offset[0], q[1] + offset[1], q[2] + offset[0], q[3] + offset[1]], colour, out);
+        }
+        return;
+    }
     let at = |p: &P| [p[0] + offset[0], p[1] + offset[1]];
     let curve = if s.figure.is_some() { s.pts.clone() } else { curve_through(&s.pts, CURVE_STEP) };
     match curve.as_slice() {
         [] => {}
         [p] => out.push(Capsule::new(at(p), at(p), s.style.width, colour)),
         pts => out.extend(pts.windows(2).map(|w| Capsule::new(at(&w[0]), at(&w[1]), s.style.width, colour))),
+    }
+}
+
+/// One box of a text markup as capsules: a highlighter is one fat capsule (its rounded ends are a marker's), an underline and a strike-out a
+/// line a tenth of the box's height thick along its bottom and through its middle, a squiggly a zig-zag along the bottom.
+fn markup_capsules(kind: MarkupKind, q: [f32; 4], colour: [u8; 4], out: &mut Vec<Capsule>) {
+    let (w, h) = (q[2] - q[0], q[3] - q[1]);
+    if !(w > 0.0 && h > 0.0 && w.is_finite() && h.is_finite()) {
+        return;
+    }
+    let thin = (h * 0.09).max(0.6);
+    match kind {
+        MarkupKind::Highlight => {
+            let ends = (h / 2.0).min(w / 2.0);
+            out.push(Capsule::new([q[0] + ends, q[1] + h / 2.0], [q[2] - ends, q[1] + h / 2.0], h, colour));
+        }
+        MarkupKind::Underline => out.push(Capsule::new([q[0], q[3] - thin], [q[2], q[3] - thin], thin, colour)),
+        MarkupKind::StrikeOut => out.push(Capsule::new([q[0], q[1] + h / 2.0], [q[2], q[1] + h / 2.0], thin, colour)),
+        MarkupKind::Squiggly => {
+            let (step, amp) = ((h * 0.3).max(1.0), h * 0.1);
+            let base = q[3] - thin - amp;
+            let n = ((w / step).ceil() as usize).clamp(1, 4000);
+            let point = |i: usize| [(q[0] + i as f32 * step).min(q[2]), base + if i.is_multiple_of(2) { -amp } else { amp }];
+            out.extend((0..n).map(|i| Capsule::new(point(i), point(i + 1), thin, colour)));
+        }
     }
 }
 
@@ -375,6 +406,39 @@ mod tests {
         let dark = InkStamp { dark: true, ..stamp(&ink) };
         assert_eq!(plan_refresh(&stamp(&ink), &dark, &ink, 1), Refresh::Rebuild);
         assert_eq!(plan_refresh(&dark, &dark, &ink, 1), Refresh::Current);
+    }
+
+    #[test]
+    fn each_kind_of_markup_is_drawn_over_the_box_it_marks_and_nowhere_else() {
+        let q = [100.0, 200.0, 180.0, 216.0];
+        let red = [255, 0, 0, 120];
+        for kind in MarkupKind::ALL {
+            let mut out = Vec::new();
+            markup_capsules(kind, q, red, &mut out);
+            assert!(!out.is_empty(), "{kind:?} draws something");
+            for c in &out {
+                assert_eq!(c.color, red);
+                for p in [c.a, c.b] {
+                    assert!(
+                        p[0] >= q[0] - 0.01 && p[0] <= q[2] + 0.01 && p[1] >= q[1] - 0.01 && p[1] <= q[3] + 0.01,
+                        "{kind:?} stays in its box: {p:?}"
+                    );
+                }
+            }
+        }
+        let mut hi = Vec::new();
+        markup_capsules(MarkupKind::Highlight, q, red, &mut hi);
+        assert_eq!((hi.len(), hi[0].width), (1, 16.0), "a highlighter is one capsule as high as the box");
+        let (mut under, mut strike) = (Vec::new(), Vec::new());
+        markup_capsules(MarkupKind::Underline, q, red, &mut under);
+        markup_capsules(MarkupKind::StrikeOut, q, red, &mut strike);
+        assert!(under[0].a[1] > strike[0].a[1], "the underline is below the strike-out");
+        // A box with no size, or one that is not a number, draws nothing.
+        let mut none = Vec::new();
+        for bad in [[0.0, 0.0, 0.0, 10.0], [0.0, 0.0, 10.0, 0.0], [f32::NAN, 0.0, 10.0, 10.0], [10.0, 10.0, 0.0, 0.0]] {
+            markup_capsules(MarkupKind::Squiggly, bad, red, &mut none);
+        }
+        assert!(none.is_empty());
     }
 
     #[test]

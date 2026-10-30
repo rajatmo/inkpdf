@@ -14,7 +14,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::coords::PageGeom;
 use crate::figure::Figure;
-use crate::ink::{InkStore, P, PageStroke, Style, TextBlock};
+use crate::ink::{InkStore, MarkupKind, P, PageStroke, Style, TextBlock};
 use crate::links::Link;
 use crate::outline::OutlineItem;
 use crate::pdf::{self, AnnotKind, NewAnnotation, NewShape, OrganizeError, PdfDocument};
@@ -49,6 +49,8 @@ struct Found {
     figure: Option<String>,
     /// For a text annotation (FreeText): its text and size, and where its box is, in user space.
     text: Option<FoundText>,
+    /// For a text markup: its kind and its boxes, in user space, as the file has them.
+    markup: Option<(MarkupKind, Vec<[f64; 8]>)>,
 }
 
 struct FoundText {
@@ -82,8 +84,18 @@ fn find_ours(doc: &dyn PdfDocument) -> Vec<Found> {
                         strokes: Vec::new(),
                         figure: None,
                         text: Some(FoundText { text, size, rect }),
+                        markup: None,
                     })
                 }
+                AnnotKind::Markup(kind) => Some(Found {
+                    page: a.page,
+                    index: a.index,
+                    style: Style { rgba, width: 1.0 },
+                    strokes: Vec::new(),
+                    figure: None,
+                    text: None,
+                    markup: Some((kind, a.quads)),
+                }),
                 AnnotKind::Ink => Some(Found {
                     page: a.page,
                     index: a.index,
@@ -91,6 +103,7 @@ fn find_ours(doc: &dyn PdfDocument) -> Vec<Found> {
                     strokes: a.strokes,
                     figure: a.name.split_once(FIGURE_MARK).map(|(_, f)| f.to_string()),
                     text: None,
+                    markup: None,
                 }),
             }
         })
@@ -118,7 +131,17 @@ pub fn load(bytes: &Arc<Vec<u8>>, geoms: &[PageGeom], layout: &Layout) -> Result
             let corners = [[t.rect[0], t.rect[1]], [t.rect[2], t.rect[1]], [t.rect[2], t.rect[3]], [t.rect[0], t.rect[3]]].map(to_doc);
             let top_left = [corners.iter().map(|c| c[0]).fold(f32::MAX, f32::min), corners.iter().map(|c| c[1]).fold(f32::MAX, f32::min)];
             let block = TextBlock { text: t.text.clone(), size: t.size };
-            strokes.push((f.page as u32, f.style, crate::text::outline(top_left, &t.text, t.size), None, Some(block)));
+            strokes.push((f.page as u32, f.style, crate::text::outline(top_left, &t.text, t.size), None, Some(block), None));
+            continue;
+        }
+        if let Some((kind, quads)) = &f.markup {
+            // Each box, wherever the page's rotation put its corners: the box that holds them.
+            for q in quads {
+                let corners = [[q[0], q[1]], [q[2], q[3]], [q[4], q[5]], [q[6], q[7]]].map(|c| to_doc([c[0] as f32, c[1] as f32]));
+                let lo = corners.iter().fold([f32::MAX; 2], |m, c| [m[0].min(c[0]), m[1].min(c[1])]);
+                let hi = corners.iter().fold([f32::MIN; 2], |m, c| [m[0].max(c[0]), m[1].max(c[1])]);
+                strokes.push((f.page as u32, f.style, vec![lo, hi], None, None, Some(*kind)));
+            }
             continue;
         }
         for pts in &f.strokes {
@@ -129,7 +152,7 @@ pub fn load(bytes: &Arc<Vec<u8>>, geoms: &[PageGeom], layout: &Layout) -> Result
                 Some(figure) => (figure.points(), Some(figure)),
                 None => (doc_pts, None),
             };
-            strokes.push((f.page as u32, f.style, pts, figure, None));
+            strokes.push((f.page as u32, f.style, pts, figure, None, None));
         }
     }
     // The page renderer must not also draw them: delete from the highest index down so the
@@ -162,6 +185,42 @@ fn unix_now() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64)
 }
 
+/// The boxes of a text markup waiting to be written as one annotation.
+struct Marks {
+    kind: MarkupKind,
+    style: Style,
+    /// In the page's user space.
+    quads: Vec<[f64; 8]>,
+}
+
+/// Write the markup that was gathered (if any) as an annotation of its own.
+fn finish_markup(
+    doc: &mut dyn PdfDocument,
+    marks: &mut Option<Marks>,
+    page: u32,
+    serial: &std::cell::Cell<u32>,
+    stamp: u128,
+    now: &str,
+) -> Result<(), String> {
+    let Some(m) = marks.take() else { return Ok(()) };
+    if m.quads.is_empty() {
+        return Ok(());
+    }
+    serial.set(serial.get() + 1);
+    let c = m.style.rgba;
+    doc.add_annotation(&NewAnnotation {
+        page: page as usize,
+        shape: NewShape::Markup { kind: m.kind, quads: m.quads },
+        colour: [f64::from(c[0]) / 255.0, f64::from(c[1]) / 255.0, f64::from(c[2]) / 255.0],
+        opacity: f64::from(c[3]) / 255.0,
+        width: 0.0,
+        text: String::new(),
+        author: "InkPDF".into(),
+        name: format!("{NAME_PREFIX}{stamp:x}-{}", serial.get()),
+        date: now.to_string(),
+    })
+}
+
 /// The file with `store`'s ink written into the pages in `pages` (as the document numbers them),
 /// as an update appended to `base`. `doc_of_file` says, for each page of the file (from the first, as many as the
 /// document can show), which page of the document it now is, or `None` if it was deleted (and is to be left out of the
@@ -180,7 +239,7 @@ pub fn save(
     let mut doc = pdf::native().open(base)?;
     let now = pdf::native().date(unix_now());
     let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_nanos());
-    let mut serial = 0_u32;
+    let serial = std::cell::Cell::new(0_u32);
 
     // Delete our previous annotations on the changed pages, highest index first, while the pages
     // are still numbered as the file has them (a page deleted needs none: it goes, with them).
@@ -239,13 +298,14 @@ pub fn save(
 
     for &page in pages {
         let (Some(geom), Some(rect)) = (geoms.get(page as usize), layout.page(page as usize)) else { continue };
+        let mut marks: Option<Marks> = None;
         let mut run: Vec<Vec<[f64; 2]>> = Vec::new();
         let mut run_style: Option<Style> = None;
-        let mut flush = |doc: &mut dyn PdfDocument,
-                         run: &mut Vec<Vec<[f64; 2]>>,
-                         style: Option<Style>,
-                         figure: Option<&str>,
-                         text: Option<(&TextBlock, [f64; 4])>|
+        let flush = |doc: &mut dyn PdfDocument,
+                     run: &mut Vec<Vec<[f64; 2]>>,
+                     style: Option<Style>,
+                     figure: Option<&str>,
+                     text: Option<(&TextBlock, [f64; 4])>|
          -> Result<(), String> {
             let Some(style) = style else { return Ok(()) };
             // Typed text is a FreeText annotation (so any reader shows it as text); the rest is ink.
@@ -255,7 +315,7 @@ pub fn save(
                 None => (NewShape::Ink { strokes: std::mem::take(run) }, String::new(), f64::from(style.width)),
             };
             let c = style.rgba;
-            serial += 1;
+            serial.set(serial.get() + 1);
             let tag = figure.map_or_else(String::new, |f| format!("{FIGURE_MARK}{f}"));
             let new = NewAnnotation {
                 page: page as usize,
@@ -265,12 +325,36 @@ pub fn save(
                 width,
                 text,
                 author: "InkPDF".into(),
-                name: format!("{NAME_PREFIX}{stamp:x}-{serial}{tag}"),
+                name: format!("{NAME_PREFIX}{stamp:x}-{}{tag}", serial.get()),
                 date: now.clone(),
             };
             doc.add_annotation(&new)
         };
         for s in store.strokes().iter().filter(|s| s.page == page) {
+            if let Some(kind) = s.markup {
+                flush(&mut *doc, &mut run, run_style, None, None)?;
+                run_style = None;
+                if marks.as_ref().is_some_and(|m| m.kind != kind || m.style != s.style) {
+                    finish_markup(&mut *doc, &mut marks, page, &serial, stamp, &now)?;
+                }
+                // One annotation for the markup: each box as its four corners as they look on the page (top-left, top-right,
+                // bottom-left, bottom-right), put into the page's user space.
+                let user = |x: f32, y: f32| {
+                    let u = geom.view_to_user([x - rect.x, y - rect.y]);
+                    [f64::from(u[0]), f64::from(u[1])]
+                };
+                let quads: Vec<[f64; 8]> = s
+                    .quads()
+                    .map(|q| {
+                        let (tl, tr, bl, br) = (user(q[0], q[1]), user(q[2], q[1]), user(q[0], q[3]), user(q[2], q[3]));
+                        [tl[0], tl[1], tr[0], tr[1], bl[0], bl[1], br[0], br[1]]
+                    })
+                    .collect();
+                // (Boxes of one kind and colour that follow one another are one annotation, as a reader's own would be.)
+                marks.get_or_insert_with(|| Marks { kind, style: s.style, quads: Vec::new() }).quads.extend(quads);
+                continue;
+            }
+            finish_markup(&mut *doc, &mut marks, page, &serial, stamp, &now)?;
             if let Some(block) = &s.text {
                 flush(&mut *doc, &mut run, run_style, None, None)?;
                 run_style = None;
@@ -308,6 +392,7 @@ pub fn save(
             }
         }
         flush(&mut *doc, &mut run, run_style, None, None)?;
+        finish_markup(&mut *doc, &mut marks, page, &serial, stamp, &now)?;
     }
     doc.save_incremental(&now)
 }
@@ -370,6 +455,48 @@ mod tests {
         // The dot came back as a near-zero-length stroke at the same place.
         let dot = &loaded.strokes[2].2;
         assert!((dot[0][0] - (o[0] + 300.0)).abs() < 1e-2 && (dot[0][1] - (o[1] + 400.0)).abs() < 1e-2);
+    }
+
+    #[test]
+    fn a_markup_is_saved_as_a_markup_annotation_and_read_back_as_ours_and_hidden_from_the_renderer() {
+        for rotation in [0, 90] {
+            let (bytes, mut geoms, _) = setup();
+            geoms[0].rotation = rotation;
+            let layout = Layout::new(&[if rotation == 90 { [792.0, 612.0] } else { [612.0, 792.0] }]);
+            let o = page_origin(&layout);
+            let mark = Style { rgba: [255, 235, 0, 110], width: 1.0 };
+            let boxes = [[o[0] + 100.0, o[1] + 100.0, o[0] + 200.0, o[1] + 114.0], [o[0] + 100.0, o[1] + 130.0, o[0] + 160.0, o[1] + 144.0]];
+            let mut store = InkStore::new();
+            store.add_markup(0, mark, MarkupKind::Highlight, &boxes);
+            store.add_markup(0, Style { rgba: [32, 96, 224, 255], ..mark }, MarkupKind::Squiggly, &boxes[..1]);
+            let saved = Arc::new(save(&bytes, &store, &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save"));
+            let found = find_ours(&*pdf::native().open(&saved).expect("open"));
+            assert_eq!(
+                found.iter().filter_map(|f| f.markup.as_ref().map(|(k, q)| (*k, q.len()))).collect::<Vec<_>>(),
+                [(MarkupKind::Highlight, 2), (MarkupKind::Squiggly, 1)]
+            );
+            let loaded = load(&saved, &geoms, &layout).expect("load");
+            assert_eq!(loaded.strokes.len(), 3, "a box is a stroke: two highlighted, one wavy");
+            for ((page, style, pts, _, _, kind), (want_kind, want_box, want_style)) in loaded.strokes.iter().zip([
+                (MarkupKind::Highlight, boxes[0], mark),
+                (MarkupKind::Highlight, boxes[1], mark),
+                (MarkupKind::Squiggly, boxes[0], Style { rgba: [32, 96, 224, 255], ..mark }),
+            ]) {
+                assert_eq!((*page, kind.as_ref()), (0, Some(&want_kind)));
+                assert_eq!((style.rgba[0], style.rgba[3]), (want_style.rgba[0], want_style.rgba[3]), "its colour and opacity come back");
+                assert_eq!(pts.len(), 2);
+                for (got, want) in [pts[0][0], pts[0][1], pts[1][0], pts[1][1]].iter().zip(want_box) {
+                    assert!((got - want).abs() < 0.05, "rotation {rotation}: {pts:?} vs {want_box:?}");
+                }
+            }
+            // The renderer does not draw them as well (the ink layer does).
+            assert!(find_ours(&*pdf::native().open(&loaded.render_bytes).expect("open")).is_empty());
+            // And saving again leaves one set, not two.
+            let mut again = InkStore::new();
+            again.load(loaded.strokes);
+            let twice = Arc::new(save(&saved, &again, &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save again"));
+            assert_eq!(find_ours(&*pdf::native().open(&twice).expect("open")).len(), 2);
+        }
     }
 
     #[test]
@@ -447,7 +574,7 @@ mod tests {
     }
 
     fn loaded_texts(loaded: &Loaded) -> Vec<(String, f32, Vec<[f32; 2]>)> {
-        loaded.strokes.iter().filter_map(|(_, _, pts, _, t)| t.as_ref().map(|t| (t.text.clone(), t.size, pts.clone()))).collect()
+        loaded.strokes.iter().filter_map(|(_, _, pts, _, t, _)| t.as_ref().map(|t| (t.text.clone(), t.size, pts.clone()))).collect()
     }
 
     #[test]
@@ -720,7 +847,7 @@ mod tests {
         let loaded = load(&saved, &geoms, &layout).expect("load");
         let kinds: Vec<bool> = loaded.strokes.iter().map(|s| s.3.is_some()).collect();
         assert_eq!(kinds, [false, true, true, true, true, true, true, false], "order and kind are kept");
-        for ((_, _, pts, figure, _), want) in loaded.strokes.iter().filter(|s| s.3.is_some()).zip(figures) {
+        for ((_, _, pts, figure, _, _), want) in loaded.strokes.iter().filter(|s| s.3.is_some()).zip(figures) {
             let figure = figure.as_ref().expect("shape");
             assert_eq!(std::mem::discriminant(figure), std::mem::discriminant(want), "{want:?} came back as {figure:?}");
             assert_eq!(figure.anchor_count(), want.anchor_count());

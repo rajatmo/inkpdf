@@ -243,6 +243,35 @@ pub(super) fn check_annotations(b: &dyn PdfBackend) {
     let listed = b.open(&arc(doc.save_incremental(&b.date(0)).expect("update"))).expect("open").annotations();
     assert_eq!(listed.iter().map(|a| a.name.as_str()).collect::<Vec<_>>(), ["other-1"]);
     assert!(b.date(0).starts_with("D:1970"), "a date in the file's own format: {}", b.date(0));
+    // A text markup: its kind, its boxes, its colour and its opacity come back, for each of the four kinds.
+    let mut doc = b.open(&base).expect("open");
+    for (n, kind) in MarkupKind::ALL.into_iter().enumerate() {
+        let y = 700.0 - 40.0 * n as f64;
+        doc.add_annotation(&NewAnnotation {
+            page: 0,
+            shape: NewShape::Markup {
+                kind,
+                quads: vec![[72.0, y + 12.0, 200.0, y + 12.0, 72.0, y, 200.0, y], [72.0, y - 14.0, 150.0, y - 14.0, 72.0, y - 26.0, 150.0, y - 26.0]],
+            },
+            colour: [1.0, 0.9, 0.0],
+            opacity: 0.4,
+            width: 0.0,
+            text: String::new(),
+            author: "InkPDF".into(),
+            name: format!("inkpdf-mark-{n}"),
+            date: b.date(0),
+        })
+        .expect("add markup");
+    }
+    let back = b.open(&arc(doc.save_incremental(&b.date(0)).expect("update"))).expect("open").annotations();
+    assert_eq!(back.len(), 4);
+    for (n, (a, kind)) in back.iter().zip(MarkupKind::ALL).enumerate() {
+        let y = 700.0 - 40.0 * n as f64;
+        assert_eq!((a.kind, a.name.clone()), (AnnotKind::Markup(kind), format!("inkpdf-mark-{n}")));
+        assert_eq!(a.quads.len(), 2, "both boxes");
+        assert!(a.quads[0].iter().zip([72.0, y + 12.0, 200.0, y + 12.0, 72.0, y, 200.0, y]).all(|(p, q)| (p - q).abs() < 1e-3), "{:?}", a.quads[0]);
+        assert!((a.opacity - 0.4).abs() < 1e-3 && (a.colour[1] - 0.9).abs() < 1e-3);
+    }
 }
 
 pub(super) fn check_organize(b: &dyn PdfBackend) {

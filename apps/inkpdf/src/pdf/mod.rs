@@ -15,6 +15,7 @@ mod contract;
 use std::sync::{Arc, OnceLock};
 
 use crate::coords::PageGeom;
+use crate::ink::MarkupKind;
 use crate::pagetext::PageTextView;
 
 pub use pdfcraft::{device_pixels, effective_scale};
@@ -128,6 +129,8 @@ pub enum AnnotKind {
     Ink,
     /// Typed text (a FreeText annotation).
     Text,
+    /// A text markup (highlight, underline, strike-out, squiggly): its boxes are in `Annotation::quads`.
+    Markup(MarkupKind),
 }
 
 /// An annotation the file has that carries a name (the program marks its own by it), as read.
@@ -149,13 +152,26 @@ pub struct Annotation {
     pub text: String,
     pub font_size: f64,
     pub rect: [f64; 4],
+    /// A markup's boxes in the page's user space, each as the file writes them: the corners top-left, top-right, bottom-left, bottom-right
+    /// (`x, y` for each).
+    pub quads: Vec<[f64; 8]>,
 }
 
 /// What to add to a page.
 #[derive(Clone, Debug, PartialEq)]
 pub enum NewShape {
-    Ink { strokes: Vec<Vec<[f64; 2]>> },
-    Text { rect: [f64; 4], font_size: f64 },
+    Ink {
+        strokes: Vec<Vec<[f64; 2]>>,
+    },
+    Text {
+        rect: [f64; 4],
+        font_size: f64,
+    },
+    /// A text markup over boxes (corners as in [`Annotation::quads`]).
+    Markup {
+        kind: MarkupKind,
+        quads: Vec<[f64; 8]>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]

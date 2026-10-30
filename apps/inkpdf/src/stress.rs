@@ -894,7 +894,7 @@ fn stress_the_ink_store_undoes_and_redoes_exactly_whatever_was_done() {
         let initial: Vec<PageStroke> = (0..rng.below(30))
             .map(|_| {
                 let (page, style, pts) = random_stroke(&mut rng, 3);
-                (page, style, pts, None, None)
+                (page, style, pts, None, None, None)
             })
             .collect();
         store.load(initial);
@@ -1372,7 +1372,7 @@ fn stress_shapes_drawn_by_the_pen_stay_on_their_page_undo_redo_exactly_and_survi
     // (The file keeps the ink page by page, each page's strokes in the order they were drawn.)
     let mut by_page: Vec<_> = ed.ink.strokes().iter().collect();
     by_page.sort_by_key(|s| s.page);
-    for (stroke, (page, style, pts, figure, _)) in by_page.into_iter().zip(&back) {
+    for (stroke, (page, style, pts, figure, _, _)) in by_page.into_iter().zip(&back) {
         assert_eq!((stroke.page, stroke.style.width.round()), (*page, style.width.round()));
         assert_eq!(stroke.pts.len(), pts.len(), "a shape keeps all its points");
         // And its anchors: it can still be edited after reopening.
@@ -1835,7 +1835,8 @@ fn every_tool_together(seed: u64, rounds: usize) {
                 assert_eq!(back.page_count(), doc.page_count(), "round {round}: the pages are all in the file");
                 assert_eq!(strokes.len(), ed.ink.len(), "round {round}: every stroke and text box came back");
                 let want = text_boxes(ed.ink.strokes().iter().filter_map(|s| s.text.as_ref().map(|t| (s.page, t.text.clone(), t.size, s.pts[0]))));
-                let got = text_boxes(strokes.iter().filter_map(|(page, _, pts, _, t)| t.as_ref().map(|t| (*page, t.text.clone(), t.size, pts[0]))));
+                let got =
+                    text_boxes(strokes.iter().filter_map(|(page, _, pts, _, t, _)| t.as_ref().map(|t| (*page, t.text.clone(), t.size, pts[0]))));
                 assert_eq!(want, got, "round {round}: the text did not come back as it was");
                 "save and reopen"
             }

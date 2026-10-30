@@ -59,7 +59,16 @@ impl api::Tool for Dummy {
         true
     }
     fn tick(&mut self, _now_ms: f64) -> bool {
-        TICKS_LEFT.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1)).is_ok()
+        // One tick fewer, unless none are left (a compare-and-swap loop: `fetch_update` is deprecated in newer Rust, and its new
+        // name is not in the oldest Rust this builds with).
+        let mut n = TICKS_LEFT.load(Ordering::SeqCst);
+        while n > 0 {
+            match TICKS_LEFT.compare_exchange(n, n - 1, Ordering::SeqCst, Ordering::SeqCst) {
+                Ok(_) => return true,
+                Err(now) => n = now,
+            }
+        }
+        false
     }
     fn paint(&self, cx: &dyn api::Context, out: &mut dyn api::Painter) {
         if let Some(at) = self.at {

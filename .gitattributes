@@ -3,6 +3,9 @@
 *.toml text eol=lf
 *.md text eol=lf
 *.yml text eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+*.dot text eol=lf
 *.ps1 text eol=crlf
 *.iss text eol=crlf
 *.png binary

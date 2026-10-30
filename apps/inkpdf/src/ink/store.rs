@@ -565,7 +565,7 @@ impl InkStore {
 /// The corners of the boxes of a markup that can be used: both corners of a box are finite, and a point that is left over is dropped.
 fn box_points(pts: impl IntoIterator<Item = P>) -> Vec<P> {
     let pts: Vec<P> = pts.into_iter().collect();
-    pts.chunks_exact(2).filter(|c| c.iter().all(|p| p[0].is_finite() && p[1].is_finite())).flatten().copied().collect()
+    pts.as_chunks::<2>().0.iter().filter(|c| c.iter().all(|p| p[0].is_finite() && p[1].is_finite())).flatten().copied().collect()
 }
 
 /// A stroke's points if usable: finite, at least one, capped; a single point becomes a dot.

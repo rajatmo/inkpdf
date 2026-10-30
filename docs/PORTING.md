@@ -144,5 +144,20 @@ tools/linux/build-portable.sh                                                 # 
 cargo check -p inkpdf-android --target aarch64-linux-android                  # rustup target add aarch64-linux-android first
 ```
 
+## Build all three on one Windows PC
+
+Windows and Android build natively, Android with Android Studio's own SDK, NDK and Java (`tools/android/build-apk.ps1`, the twin of
+`build-apk.sh`); Linux builds in WSL (Ubuntu). Once:
+
+* in Android Studio, SDK Manager > SDK Tools: **NDK (Side by side)** (r27 or newer);
+* on Windows: `rustup target add aarch64-linux-android x86_64-linux-android`;
+* in WSL, from the repository folder: `bash tools/linux/setup-dev.sh` (apt packages as CI's `linux` job and a C toolchain, and Rust;
+  asks for sudo for apt; `--android` also sets up Android inside WSL, for a Linux-only machine).
+
+Then, from PowerShell, `.\tools\cross-build.ps1` (or `-Only windows,linux,android`) runs each platform's tests the way CI does and
+builds the Windows release, an APK with arm64 and x86_64 libraries (the x86_64 one runs in Android Studio's emulator), and the Linux
+portable tarball. The Linux build stays inside WSL (`~/inkpdf-build-linux`); the packages land in `inkpdf-dist` beside the repository. Shell scripts are kept with LF line endings (`.gitattributes`), which bash in WSL
+needs.
+
 Cross-checking Windows from Linux (no Windows needed for compile errors): `rustup target add x86_64-pc-windows-msvc`,
 then `cargo clippy -p inkpdf --all-targets --target x86_64-pc-windows-msvc -- -D warnings`.

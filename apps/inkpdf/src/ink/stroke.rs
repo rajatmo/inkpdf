@@ -102,10 +102,7 @@ impl Stroke {
     /// The boxes a text markup marks (`[x0, y0, x1, y1]`, in document space); none for any other stroke.
     pub fn quads(&self) -> impl Iterator<Item = [f32; 4]> + '_ {
         let marks = self.markup.is_some();
-        self.pts
-            .chunks_exact(2)
-            .filter(move |_| marks)
-            .map(|c| [c[0][0].min(c[1][0]), c[0][1].min(c[1][1]), c[0][0].max(c[1][0]), c[0][1].max(c[1][1])])
+        self.pts.as_chunks::<2>().0.iter().filter(move |_| marks).map(|&[a, b]| [a[0].min(b[0]), a[1].min(b[1]), a[0].max(b[0]), a[1].max(b[1])])
     }
 
     pub fn bbox(&self) -> [f32; 4] {

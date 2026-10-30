@@ -313,7 +313,7 @@ impl PdfDocument for PdfcraftDoc {
                 if matches!(kind, AnnotKind::Markup(_)) {
                     let c = numbers(doc, d, b"C");
                     let colour = if c.len() == 3 { [c[0], c[1], c[2]] } else { [1.0, 0.94, 0.0] };
-                    let quads = numbers(doc, d, b"QuadPoints").chunks_exact(8).map(|q| [q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7]]).collect();
+                    let quads = numbers(doc, d, b"QuadPoints").as_chunks::<8>().0.to_vec();
                     out.push(Annotation {
                         page,
                         index,

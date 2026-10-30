@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+Polish (the first part of milestone 1.3.0).
+
+- The bar under the tools now goes out as it came in (it slides up and fades) when you choose a tool that has none (the pointer), where it
+  used to vanish; with animations off it is gone at once, as before.
+- In the pages overview a picture that arrives after the overview was opened fades in over a moment instead of appearing; one that is
+  already there is simply there.
+- Inside: `stress.rs` is now `stress/` (the storms in files by topic: editor, ink, files, shapes, pages, overview) and
+  `editor/overview.rs` is `editor/overview/` (state, input, actions); no change in behaviour (the same 800 tests).
+
 ## 1.2.0
 
 Text: select it, copy it, mark it, find it.

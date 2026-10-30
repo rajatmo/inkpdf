@@ -29,6 +29,24 @@ pub(super) struct Shown {
     /// The labels are the interface's own (the search card's text), not the overview's or the Save As card's: they are kept while the
     /// interface is not rebuilt, where the others go when the overview does.
     interface_labels: bool,
+    /// Pictures of pages that were not there when the overview first wanted them, and when they came (they fade in), and those still waited for.
+    arrived: std::collections::HashMap<Key, f64>,
+    waited_for: HashSet<Key>,
+    /// Whether a picture is still fading in (the shell goes on drawing frames until it is).
+    pub(super) fading_in: bool,
+}
+
+/// How long a picture takes to fade in when it arrives, in seconds.
+const FADE_IN: f32 = 0.18;
+
+/// How much of a picture that arrived at `arrived_ms` shows at `now_ms`, 0 to 1, when it takes `span` seconds (none: it is just there).
+fn arrival_fade(now_ms: f64, arrived_ms: f64, span: f32) -> f32 {
+    let span = f64::from(span) * 1000.0;
+    if !(span > 0.0 && now_ms.is_finite() && arrived_ms.is_finite()) {
+        return 1.0;
+    }
+    let t = ((now_ms - arrived_ms) / span).clamp(0.0, 1.0) as f32;
+    t * t * (3.0 - 2.0 * t)
 }
 
 impl Shown {
@@ -66,6 +84,9 @@ impl UiLayers {
                 return true;
             }
             self.overview.ghost = None;
+            self.overview.waited_for.clear();
+            self.overview.arrived.clear();
+            self.overview.fading_in = false;
             let stale_labels = !self.overview.labels.is_empty() && !self.overview.interface_labels;
             if !self.overview.images.is_empty() || stale_labels {
                 self.overview.images.clear();
@@ -113,6 +134,8 @@ impl UiLayers {
             return;
         }
         let viewport = cx.ed.view.viewport;
+        let now_ms = crate::clock::now_ms();
+        self.overview.fading_in = false;
         // (The ink in the pictures is drawn once the overview is all there, and not while it goes out.)
         let appear = if cx.ed.overview_open() { cx.ed.overview_appear() } else { 0.0 };
         let mut used = HashSet::new();
@@ -146,10 +169,25 @@ impl UiLayers {
             // blank), nor yet for one that is still being rendered. What is drawn on the page shows either way.
             // (It is kept under the page of the file that draws the page.)
             let key = cx.doc.and_then(|d| d.render_page(image.page as usize)).map(|p| Key::Thumb { page: p });
+            if let Some(key) = key.filter(|&k| !cx.gpu.has(k)) {
+                self.overview.waited_for.insert(key);
+            }
             if let Some(key) = key.filter(|&k| cx.gpu.has(k)) {
                 cx.gpu.touch(key, cx.frame);
                 let uv = [(shown[0] - full[0]) / w, (shown[1] - full[1]) / h, (shown[2] - full[0]) / w, (shown[3] - full[1]) / h];
-                let a = image.alpha.clamp(0.0, 1.0);
+                // A picture that was waited for fades in over a moment; one that was there from the start is just there.
+                if self.overview.waited_for.remove(&key) {
+                    self.overview.arrived.insert(key, now_ms);
+                }
+                let came = match self.overview.arrived.get(&key) {
+                    Some(&at) => {
+                        let came = arrival_fade(now_ms, at, cx.ed.motions.prefs().time(FADE_IN));
+                        self.overview.fading_in |= came < 1.0;
+                        came
+                    }
+                    None => 1.0,
+                };
+                let a = image.alpha.clamp(0.0, 1.0) * came;
                 self.overview.quads.push(Quad { uv, color: [a; 4], ..Quad::page(key, shown) });
             }
             let Some(page) = cx.ed.layout.page(image.page as usize) else { continue };
@@ -177,7 +215,30 @@ impl UiLayers {
             }
         }
         self.overview.images = images;
+        // (What is gone from the GPU, or has finished coming, is forgotten.)
+        self.overview.arrived.retain(|k, at| cx.gpu.has(*k) && now_ms - *at < 1000.0 * f64::from(FADE_IN) + 50.0);
         self.overview.quads.append(&mut thumb_texts);
         self.overview.keys.extend(thumb_keys);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_picture_that_arrives_fades_in_smoothly_and_with_no_time_it_is_just_there() {
+        assert_eq!(arrival_fade(1000.0, 1000.0, 0.18), 0.0);
+        assert_eq!(arrival_fade(1180.0, 1000.0, 0.18), 1.0);
+        assert_eq!(arrival_fade(9999.0, 1000.0, 0.18), 1.0, "and stays");
+        let mut last = 0.0;
+        for step in 0..=18 {
+            let a = arrival_fade(1000.0 + f64::from(step) * 10.0, 1000.0, 0.18);
+            assert!((0.0..=1.0).contains(&a) && a >= last, "never back: {a} after {last}");
+            last = a;
+        }
+        assert_eq!(arrival_fade(1000.0, 1000.0, 0.0), 1.0, "reduced motion");
+        assert_eq!(arrival_fade(f64::NAN, 1000.0, 0.18), 1.0, "a clock that is not a number");
+        assert_eq!(arrival_fade(900.0, 1000.0, 0.18), 0.0, "a clock that went back");
     }
 }

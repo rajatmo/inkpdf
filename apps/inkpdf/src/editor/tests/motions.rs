@@ -206,3 +206,40 @@ fn the_tool_panel_unfolds_and_folds_over_a_moment_and_the_bar_comes_in_when_a_to
     frames(&mut ed, 30);
     assert_eq!(ed.motions.bar_amount(), 1.0);
 }
+
+#[test]
+fn the_bar_under_the_tools_goes_out_as_it_was_when_the_tool_has_none_and_with_motion_reduced_is_just_gone() {
+    let lines = |ed: &Editor| {
+        let mut ui = crate::toolbar::Ui::default();
+        ed.draw_interface(&mut ui);
+        ui.lines.len()
+    };
+    let mut ed = moving_editor();
+    let with_bar = lines(&ed);
+    ed.set_tool(Tool::Laser);
+    ed.step_view(0.016);
+    let going = ed.motions.bar_amount();
+    assert!(going > 0.0 && going < 1.0, "on its way out: {going}");
+    assert!(lines(&ed) > with_bar - 40 && ed.context_bar().is_none(), "still drawn, though it takes no presses");
+    let mut last = going;
+    for _ in 0..60 {
+        ed.step_view(0.016);
+        let now = ed.motions.bar_amount();
+        assert!(now <= last + 1e-6, "never back");
+        last = now;
+    }
+    assert_eq!(ed.motions.bar_amount(), 0.0);
+    let bare = lines(&ed);
+    assert!(bare < with_bar, "after it is out nothing of it is drawn: {bare} lines against {with_bar}");
+    // Back in again, with the pen: it comes in as before.
+    ed.set_tool(Tool::Pen);
+    ed.step_view(0.016);
+    assert!(ed.motions.bar_amount() > 0.0 && ed.motions.bar_amount() < 1.0);
+    // Reduced: gone at once.
+    let mut still = editor();
+    still.step_view(0.016);
+    still.set_tool(Tool::Laser);
+    still.step_view(0.016);
+    assert_eq!(still.motions.bar_amount(), 0.0);
+    assert_eq!(lines(&still), bare);
+}

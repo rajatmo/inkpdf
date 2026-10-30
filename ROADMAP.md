@@ -6,7 +6,7 @@ task** from section 6, do it on a branch, and leave the CI result as the proof.
 
 - **Written:** 2026-10-29, at version **1.0.0** (commits `e734263` "v1.0.0: the interface moves" and `c4e8a6a` "Demo GIF for 1.0.0"); **re-planned the same day** after Linux and Android landed on `main` (unreleased) and the owner chose the order in section 6.
 - **Owner:** Rajat Mandal (`rajatmo`). The owner reviews and pushes; do not push to `main`, open pull requests instead (unless the task says so).
-- **Status (2026-10-30):** **1.1.0 and 1.2.0 are finished on branches** (`pdf-seam`: F3, K1 to K3; `theme`, on top of it: T1 to T7, then X1 to X6; versions bumped, changelog written); the owner merges them and tags the releases. Milestone 1.3.0 is a plan, not a record. The platform work is on `main` (`docs/PORTING.md`).
+- **Status (2026-10-30):** **1.1.0 and 1.2.0 are finished on branches** (`pdf-seam`: F3, K1 to K3; `theme`, on top of it: T1 to T7, then X1 to X6, then P1 and part of P2; versions bumped to 1.2.0, changelog written); the owner merges them and tags the releases. Milestone 1.3.0 is half done (P1, most of P2; P3 waits for the owner's call on how a bookmark flag is told from the file's own; P4 is the owner's say-so); it is not released, the version stays 1.2.0. The platform backlog (A3, A4, L2, L3) is untouched: it needs devices. The platform work is on `main` (`docs/PORTING.md`).
 
 ## 1. What InkPDF is, and the rules that do not bend
 
@@ -400,11 +400,11 @@ emulator test, owner runs the checks. **Release 1.2.0.**
 
 ### Milestone 1.3.0: polish
 
-**P1.** Split the oversized files without changing behaviour: `stress.rs` (about 2,300 lines; one file per storm), `editor/overview.rs`.
-**P2.** The motion gaps: exit animation for the bar under the tools (needs a held view like `Presence<PanelView>`), thumbnail
+**P1.** *(Done 2026-10-30: `stress/` by topic and `editor/overview/` as state, input and actions; the storms are grouped, not one file each.)* Split the oversized files without changing behaviour: `stress.rs` (about 2,300 lines; one file per storm), `editor/overview.rs`.
+**P2.** *(Partly done 2026-10-30: the bar's exit animation (the editor keeps its last look, `held_bar`) and the thumbnails' fade-in (`app/overview.rs`, `arrival_fade`) are in. Left: the overview's CPU while the wheel scrolls, which needs measuring first.)* The motion gaps: exit animation for the bar under the tools (needs a held view like `Presence<PanelView>`), thumbnail
 fade-in when a picture arrives (per-key tween in `app/overview.rs`), the overview's CPU while scrolling with the wheel (measured 2.5%
 of a core; look at rebuilding the whole `Ui` each frame during a glide).
-**P3.** Overview extras: bookmark flags per thumbnail (writes an outline entry; needs the seam's outline writer) and the
+**P3.** *(Not done: it needs the seam to write bookmarks (pdfcraft has `add_bookmark`/`delete_bookmark`/`set_bookmark_color`), a way to tell the bookmarks the program made from the file's own (a colour or a title form: **ask the owner**), and a history step for a flag. The "All pages" filter has nothing to filter by until flags exist.)* Overview extras: bookmark flags per thumbnail (writes an outline entry; needs the seam's outline writer) and the
 "All pages" filter (title only today).
 **P4 (optional, ask first).** Things pdfcraft already makes cheap: a "Make searchable" OCR option (opt-in, models and licence notice),
 filling form fields, printing. Only on the owner's say-so.

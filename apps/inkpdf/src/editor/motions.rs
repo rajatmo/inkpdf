@@ -121,8 +121,8 @@ impl Motions {
         if bar {
             self.bar_in.go(1.0, p.time(seconds::MEDIUM), Curve::Decelerate);
         } else {
-            // (There is nothing of it to fade out: it is just not there.)
-            self.bar_in.jump(0.0);
+            // (It goes out as it was: the editor keeps what it looked like and draws that while it does.)
+            self.bar_in.go(0.0, p.time(seconds::SHORT), Curve::Accelerate);
         }
         if p.reduced {
             self.prompt.snap();
@@ -143,7 +143,7 @@ impl Motions {
 
     /// How far the bar under the tools has come in, 0 to 1.
     pub fn bar_amount(&self) -> f32 {
-        if self.prefs.reduced { 1.0 } else { self.bar_in.value() }
+        self.bar_in.value()
     }
 
     /// The overview was just put away: it goes out over a moment.

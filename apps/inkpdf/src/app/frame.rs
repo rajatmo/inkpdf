@@ -152,7 +152,9 @@ impl State {
         self.update_title();
         match result {
             Drawn::Skipped => self.timing.wake_at = Some(now + RETRY_AFTER),
-            Drawn::Presented if animating || fading || !settled || pending > 0 || self.timing.bench.is_some() => self.window.request_redraw(),
+            Drawn::Presented if animating || fading || self.layers.overview.fading_in || !settled || pending > 0 || self.timing.bench.is_some() => {
+                self.window.request_redraw()
+            }
             Drawn::Presented => {}
         }
         if self.timing.exit_at.is_some_and(|t| now >= t) {

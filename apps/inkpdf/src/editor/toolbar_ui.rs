@@ -24,12 +24,14 @@ impl Editor {
                 .and_then(|(view, amount)| Some((view, amount, bar.tool_panel(view.tool, self.ws.view.viewport[0], view.editing.is_some())?)));
             // The bar under the tools; with the panel unfolded they are one card, drawn before the panel's contents. The card
             // grows to hold the panel as the panel comes in, and the panel's contents appear when there is room for them.
-            if let (Some(context), Some(view)) = (self.context_bar(), &self.context_view()) {
+            // (A bar that is going out is drawn as it was, from what was kept.)
+            let held = self.held_bar.filter(|_| self.motions.bar_amount() > 0.0);
+            if let Some((context, view)) = self.context_bar().zip(self.context_view()).or(held) {
                 let end = unfolded.as_ref().filter(|(_, amount, _)| *amount > 0.02).map(|(_, amount, panel)| {
                     let full = context.card(panel.rect[3] + 0.2 * panel.unit())[3].max(panel.rect[3]);
                     context.rect[3] + (full - context.rect[3]) * amount
                 });
-                context.draw(view, end, ui);
+                context.draw(&view, end, ui);
             }
             if let Some((view, amount, panel)) = &unfolded {
                 let contents = ui.mark();

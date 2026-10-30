@@ -125,6 +125,7 @@ fn weight(slot: &Option<ContextItem>) -> f32 {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct ContextBar {
     /// `[x0, y0, x1, y1]` in pixels.
     pub rect: [f32; 4],

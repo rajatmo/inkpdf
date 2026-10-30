@@ -61,7 +61,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
   "tiles" [fillcolor="white"];
 }
 "app" -> "browse" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
-"app" -> "clock" [color="#55555599", penwidth=2.20, tooltip="6 uses"];
+"app" -> "clock" [color="#55555599", penwidth=2.30, tooltip="7 uses"];
 "app" -> "doc" [color="#55555599", penwidth=1.80, tooltip="3 uses"];
 "app" -> "editor" [color="#55555599", penwidth=1.96, tooltip="4 uses"];
 "app" -> "gpu" [color="#55555599", penwidth=2.09, tooltip="5 uses"];

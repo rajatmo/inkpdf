@@ -92,6 +92,8 @@ pub struct Editor {
     grave: u64,
     /// What was kept by page and went with the pages of each deletion, until it is undone or the file is written.
     graves: HashMap<u64, pages::Grave>,
+    /// The bar under the tools as it last was, kept while it goes out (see [`Editor::step_motions`]).
+    held_bar: Option<(toolbar::ContextBar, toolbar::ContextState)>,
     /// The search card: what was typed, what it found (see [`search`]).
     pub search: search::Search,
     /// The tools that own their interaction (see [`crate::tools`]).
@@ -124,6 +126,7 @@ impl Editor {
             pull_fired: false,
             grave: 0,
             graves: HashMap::new(),
+            held_bar: None,
             search: search::Search::default(),
             tools: ToolSet::new(),
             chrome: Chrome::default(),
@@ -292,9 +295,18 @@ impl Editor {
         let (state, bar) = (self.toolbar_state(), self.toolbar());
         let rest = toolbar::Look::resting(&state, &bar);
         self.motions.retarget_toolbar(&rest, state.pressed.and_then(|item| bar.slot(item)));
-        self.motions.retarget_drawers(self.chrome.prompt, self.panel_view(), self.context_bar().is_some());
+        let context = self.context_bar().zip(self.context_view());
+        if context.is_some() {
+            self.held_bar = context;
+        }
+        self.motions.retarget_drawers(self.chrome.prompt, self.panel_view(), context.is_some());
         self.motions.retarget_theme(self.scheme() == crate::palette::Scheme::Dark);
-        self.motions.step(dt)
+        let moving = self.motions.step(dt);
+        // (Once it is all the way out there is nothing of it to draw.)
+        if context.is_none() && self.motions.bar_amount() <= 0.0 {
+            self.held_bar = None;
+        }
+        moving
     }
 
     /// The window changed size: the view follows it.

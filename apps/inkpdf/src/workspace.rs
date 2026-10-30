@@ -74,7 +74,7 @@ impl Workspace {
             ink: InkStore::new(),
             selection: Vec::new(),
             erasing: HashSet::new(),
-            tool: Tool::Pen,
+            tool: Tool::Select,
             intent: Intent::default(),
             clipboard: Vec::new(),
             pasted: 0,

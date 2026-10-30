@@ -92,7 +92,7 @@ impl Default for Settings {
             search_case: false,
             search_words: false,
             palette: PALETTE,
-            tool: Tool::Pen,
+            tool: Tool::Select,
             pen: ToolStyle::PEN,
             smoothing: DEFAULT_AMOUNT,
             shape: Shape::default(),
@@ -264,7 +264,7 @@ mod tests {
         // What the previous version wrote.
         let old = "color 0 1c1e24\ncolor 1 2060e0\ncolor 2 e03434\ncolor 3 26a054\ncolor 4 f4941c\nwidth 4.00\nsmoothing 0.30\n";
         let s = Settings::parse(old);
-        assert_eq!((s.pen.width, s.smoothing, s.tool), (4.0, 0.3, Tool::Pen));
+        assert_eq!((s.pen.width, s.smoothing, s.tool), (4.0, 0.3, Tool::Select), "the tool is the default one, the selection of text");
         assert_eq!((s.shape, s.shape_style), (Shape::Line, ToolStyle::SHAPES), "the new settings are the defaults");
     }
 

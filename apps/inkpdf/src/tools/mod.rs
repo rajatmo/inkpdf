@@ -199,27 +199,29 @@ impl ToolSet {
         }
     }
 
-    /// The tool, if there is one of that name (the pen's if not: a name from a settings file that an extension has left).
+    /// The tool, if there is one of that name (the selection's if not: a name from a settings file that an extension has left).
     pub fn get(&self, id: ToolId) -> &dyn Tool {
         match id {
+            ToolId::Pen => &self.pen,
             ToolId::Geometry => &self.shape,
             ToolId::Text => &self.text,
             ToolId::Select => &self.select,
             other => match self.ext.iter().find(|t| t.id() == other) {
                 Some(t) => t,
-                None => &self.pen,
+                None => &self.select,
             },
         }
     }
 
     pub fn get_mut(&mut self, id: ToolId) -> &mut dyn Tool {
         match id {
+            ToolId::Pen => &mut self.pen,
             ToolId::Geometry => &mut self.shape,
             ToolId::Text => &mut self.text,
             ToolId::Select => &mut self.select,
             other => match self.ext.iter().position(|t| t.id() == other) {
                 Some(at) => &mut self.ext[at],
-                None => &mut self.pen,
+                None => &mut self.select,
             },
         }
     }

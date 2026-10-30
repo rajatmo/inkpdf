@@ -84,7 +84,7 @@ mod tests {
         let state = State { can_undo: true, unsaved: true, tool: Tool::Text, hover: Some(Item::Undo), ..State::default() };
         let look = Look::resting(&state, &bar);
         let slot = |item| bar.slot(item).expect("a button");
-        assert_eq!(look.tool, 2.0);
+        assert_eq!(look.tool, 3.0, "the text tool, the fourth button");
         assert_eq!(look.unsaved, 1.0);
         assert_eq!((look.hover[slot(Item::Undo)], look.enabled[slot(Item::Undo)]), (1.0, 1.0));
         assert_eq!((look.hover[slot(Item::Redo)], look.enabled[slot(Item::Redo)]), (0.0, 0.0));

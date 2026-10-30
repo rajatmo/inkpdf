@@ -72,19 +72,19 @@ fn a_press_spreads_from_the_middle_of_the_button_and_is_gone_when_it_has() {
 #[test]
 fn the_mark_of_the_tool_in_use_slides_to_the_tool_chosen() {
     let mut ed = moving_editor();
-    assert_eq!(ed.toolbar_look().tool, 0.0);
+    assert_eq!(ed.toolbar_look().tool, 1.0, "the pen, the second button (the tests start on it)");
     ed.set_tool(Tool::Text);
     ed.step_view(0.016);
     let early = ed.toolbar_look().tool;
-    assert!(early > 0.0 && early < 2.0, "between the pen and the text button: {early}");
+    assert!(early > 1.0 && early < 3.0, "between the pen and the text button: {early}");
     let mut last = early;
     for _ in 0..40 {
         ed.step_view(0.016);
         let now = ed.toolbar_look().tool;
-        assert!(now >= last && now <= 2.0, "never past it: {now}");
+        assert!(now >= last && now <= 3.0, "never past it: {now}");
         last = now;
     }
-    assert_eq!(last, 2.0);
+    assert_eq!(last, 3.0);
 }
 
 #[test]

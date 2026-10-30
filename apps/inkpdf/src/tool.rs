@@ -38,7 +38,7 @@ impl Tool {
 
 impl Default for Tool {
     fn default() -> Self {
-        Tool::Pen
+        Tool::Select
     }
 }
 
@@ -57,7 +57,7 @@ pub const MAX_TOOLS: usize = 8;
 impl Registry {
     /// The program's own tools.
     pub fn builtin() -> Registry {
-        Registry { tools: [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Select].into_iter().map(|t| (t, None)).collect(), open_button: false }
+        Registry { tools: [Tool::Select, Tool::Pen, Tool::Geometry, Tool::Text].into_iter().map(|t| (t, None)).collect(), open_button: false }
     }
 
     /// Add a tool of an extension, drawn on its button from the SVG `icon` (a name already there, or more tools than fit, is refused).
@@ -247,23 +247,25 @@ mod tests {
             assert_eq!(Tool::from_name(tool.name()), Some(tool));
         }
         // The program's own tools come first, in the toolbar's order, each making its own kind of item (or none).
-        let builtin = [Tool::Pen, Tool::Geometry, Tool::Text, Tool::Select];
+        let builtin = [Tool::Select, Tool::Pen, Tool::Geometry, Tool::Text];
         assert_eq!(&Tool::all()[..4], &builtin);
-        assert_eq!(builtin.map(|t| t.kind()), [Some(Kind::Ink), Some(Kind::Shape), Some(Kind::Text), None]);
-        assert_eq!(builtin.map(Tool::makes_items), [true, true, true, false]);
+        assert_eq!(builtin.map(|t| t.kind()), [None, Some(Kind::Ink), Some(Kind::Shape), Some(Kind::Text)]);
+        assert_eq!(builtin.map(Tool::makes_items), [false, true, true, true]);
         assert_eq!(builtin.map(Tool::has_bar), [true, true, true, true], "the text selection has its marks in the bar");
         // An extension's tool is only a name: it makes none of the program's items and has no bar.
         let laser = Tool::from_name("laser").expect("the laser extension");
         assert_eq!((laser.kind(), laser.has_bar()), (None, false));
         assert_eq!(Tool::from_name("brush"), None);
-        assert_eq!(Tool::default(), Tool::Pen);
+        assert_eq!(Tool::default(), Tool::Select, "the program starts on the selection of text");
+        assert_eq!(Tool::all()[0], Tool::default(), "which is the first button");
     }
 
     #[test]
     fn a_registry_lists_tools_once_in_order_and_holds_no_more_than_a_toolbar_can() {
         let r = Registry::builtin().with(Tool::named("a"), "<path/>").with(Tool::named("a"), "<path/>").with(Tool::named("b"), "<path/>");
-        assert_eq!(r.tools().map(Tool::name).collect::<Vec<_>>(), ["pen", "geometry", "text", "select", "a", "b"]);
+        assert_eq!(r.tools().map(Tool::name).collect::<Vec<_>>(), ["select", "pen", "geometry", "text", "a", "b"]);
         assert_eq!((r.position(Tool::named("b")), r.position(Tool::named("zzz"))), (Some(5), None));
+        assert_eq!(r.position(Tool::Select), Some(0));
         assert_eq!(r.icon(Tool::named("a")), Some("<path/>"));
         assert_eq!(r.icon(Tool::Pen), None, "the toolbar draws the program's own");
         let full = (0..50).fold(Registry::builtin(), |r, i| r.with(Tool::named(Box::leak(format!("t{i}").into_boxed_str())), "<path/>"));

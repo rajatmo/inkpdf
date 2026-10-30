@@ -127,7 +127,10 @@ impl Editor {
     /// An editor for tests: the program's tools and the reference extension (see [`crate::tool::reference_extensions`]).
     #[cfg(test)]
     pub fn reference(viewport: [f32; 2], dpr: f32, prefs: crate::motion::Prefs) -> Self {
-        Self::with_extensions(viewport, dpr, prefs, &crate::tool::reference_extensions())
+        let mut ed = Self::with_extensions(viewport, dpr, prefs, &crate::tool::reference_extensions());
+        // (The tests were written for the pen, which the program no longer starts on.)
+        ed.ws.tool = crate::tool::Tool::Pen;
+        ed
     }
 
     /// The same, with the tools of `extensions` instead of the ones this build has (a test's own, or a fork's).

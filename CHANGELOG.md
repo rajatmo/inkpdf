@@ -1,7 +1,24 @@
 # Changelog
 
-## Unreleased
+## 1.1.0
 
+A dark look, and the PDF engine behind a seam of its own.
+
+- **Dark theme.** The interface has a light and a dark look. By default it follows the system's (Windows, and on Linux the desktop's
+  `color-scheme`; on Android it is light for now, because the system's setting cannot be read yet); the new button at the top right (a
+  half-shaded circle, a sun or a moon) goes from "system" to "light" to "dark" and round, on every device, and is remembered. The
+  colours fade from one look to the other (at once when animations are off), and on Windows the title bar follows. `INKPDF_THEME=light|dark`
+  chooses the look for one run.
+- **Dark pages.** The button beside it (a page with part of it in shade) draws the pages themselves on a dark paper with light text
+  when the look is dark. Photographs keep their colours. Ink you drew in dark colours is shown turned over (black ink shows white), and
+  typed text too; the file is never changed, so what is saved is exactly what you drew, in the colours you chose.
+- Settings gain `appearance` and `dark-pages` lines; a settings file from before 1.1 reads as "system, pages as they are".
+- Inside: every colour is a role of a `Palette` (`palette.rs`, with the light palette's values exactly the old ones, checked by a
+  golden test of everything drawn, plus contrast checks for both looks and a test that no colour literal creeps back into `toolbar/`
+  or `tools/`); the editor resolves the look from the user's choice and the system's; the PDF seam takes a `PageLook` and the pdfcraft
+  side maps it to reading colours (a pool is rebuilt when it changes). New tests: the palette, the look through settings, the fade,
+  both buttons with the mouse and with the stylus, the ink mapping, a dark render through the conformance suite, saved files unchanged by the look,
+  and a pixel check of the dark look in `tools/e2e/linux-smoke.sh`.
 - Inside: the PDF engine sits behind one seam (`pdf::PdfBackend`), so the program speaks its own types and only `pdf/pdfcraft.rs` names pdfcraft
   (a test says so); the editor takes its motion preference explicitly (no more `cfg!(test)` in the program).
 - **InkPDF runs on Linux and on Android**, beside Windows, from the same code. Every operating system gets its own small pen reader behind

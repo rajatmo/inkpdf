@@ -6,7 +6,7 @@ task** from section 6, do it on a branch, and leave the CI result as the proof.
 
 - **Written:** 2026-10-29, at version **1.0.0** (commits `e734263` "v1.0.0: the interface moves" and `c4e8a6a` "Demo GIF for 1.0.0"); **re-planned the same day** after Linux and Android landed on `main` (unreleased) and the owner chose the order in section 6.
 - **Owner:** Rajat Mandal (`rajatmo`). The owner reviews and pushes; do not push to `main`, open pull requests instead (unless the task says so).
-- **Status:** nothing in the milestones of section 6 has been started; the platform work they build on is on `main` (`docs/PORTING.md`). Every task below is a plan, not a record.
+- **Status (2026-10-30):** **1.1.0 is finished on branches** (`pdf-seam`: F3, K1 to K3; `theme`, on top of it: T1 to T7, version bumped, changelog written); the owner merges them and tags the release. Milestones 1.2.0 and 1.3.0 are plans, not records. The platform work is on `main` (`docs/PORTING.md`).
 
 ## 1. What InkPDF is, and the rules that do not bend
 
@@ -264,13 +264,13 @@ the project being abandoned, binary size on Android), each with the number that 
 
 ### Milestone 1.1.0, part 2: theme (T), parallel to K
 
-**T1. Capture a golden snapshot of today's colours *before* changing anything.**
+**T1. Capture a golden snapshot of today's colours *before* changing anything.** *(Done 2026-10-30: `editor/tests/golden.rs` draws fifteen scenes and hashes them against `golden_light.txt`; `INKPDF_UPDATE_GOLDEN=1` rewrites it when a change to the light look is meant. When T5 added two buttons the nine scenes that draw the toolbar were rewritten on purpose; the others did not change.)*
 Add a test (e.g. `toolbar/tests` or a new `theme_golden` test module) that draws every `Ui` producer with fixed inputs
 (toolbar for several states, context bar, tool panel with the colour editor, prompt, overview with edit mode, menu, drag) and
 compares a stable hash or text dump of the panels/lines/labels against a checked-in golden file (it is plain data, so it runs the same on Linux, Windows and Android). Commit this first; it is
 the proof that the refactor changes nothing for the light theme.
 
-**T2. `palette` (base layer).**
+**T2. `palette` (base layer).** *(Done 2026-10-30. Two source-reading tests: no colour literal in `toolbar/` or `tools/`.)*
 *Goal:* all colours come from named roles; today's values are the light scheme.
 *Work:* new `palette.rs`: `Scheme { Light, Dark }`, `Palette` with roles (surface/panel, panel edge, shadow, scrim, paper,
 ink, dim ink, accent, accent wash, hover wash, pressed wash, separator, track, rim, danger, danger wash, neutral wash, window
@@ -283,13 +283,13 @@ things the editor hands to `toolbar`); it must be part of the `UiStamp`.
 *Done when:* T1's golden test passes with `Palette::of(Light)` (identical output), and a new source-reading test (in the style of
 `architecture.rs`) fails if a colour literal reappears in `toolbar/`.
 
-**T3. The dark scheme and its checks.**
+**T3. The dark scheme and its checks.** *(Done 2026-10-30: contrast tests for both schemes in `palette.rs`.)*
 *Work:* fill `Palette::of(Dark)` (surface about `#1e2128`-ish, ink light, accent lifted for contrast, shadows weaker, window
 background dark, scrim as before). Page paper stays white (dark pages is separate).
 *Tests:* contrast ratios (WCAG relative luminance) for ink on panel, dim ink on panel (>= 3), accent on panel, white on accent,
 danger on panel, in **both** schemes; a test that every role is defined and `mix` is monotone and exact at its ends.
 
-**T4. Appearance in settings and in the editor.**
+**T4. Appearance in settings and in the editor.** *(Done 2026-10-30. What was found: winit reports the system's theme (`Window::theme()`, `ThemeChanged`) only on Windows and macOS (on Wayland only an override); X11 and Android report nothing. So the platform layer answers `Platform::color_scheme()`: Windows from winit, Linux by asking `gsettings get org.gnome.desktop.interface color-scheme`, Android `None` (light) until the JNI work of A4 can read the configuration's night mode; `INKPDF_THEME=light|dark` overrides everywhere. The shell re-reads it at start, on `ThemeChanged` and when the window gains focus. Untested on a real Windows or Android machine.)*
 *Work:* `settings.rs` gets `appearance: Appearance { System, Light, Dark }` (define the enum in `settings`, not in `palette`) and
 `dark_pages: bool`, serialised in `to_text`/`parse` with the existing key=value style; **old settings files must still load**
 (there are tests like `settings_from_before_the_shape_tool_still_read`: copy that pattern). The editor resolves
@@ -302,7 +302,7 @@ a `Tween` in `Motions` (reduced motion: instant) and include the palette (or its
 *Tests:* a table test over appearance (3) × system scheme (2) × dark_pages (2) = 12 cases for the effective scheme and filter;
 settings round-trip and old-file test; reduced motion switches at once.
 
-**T5. The theme button and the dark-pages drop-down.**
+**T5. The theme button and the dark-pages drop-down.** *(Done 2026-10-30, simpler than planned: two plain buttons in the right pill, `Item::Theme` (cycles system, light, dark; its icon shows which) and `Item::DarkPages` (a toggle, in the accent colour when on, dim while the look is light), instead of a drop-down; no drop-down means no new panel to fold and nothing a stylus tip cannot reach. The toggle is not inert in the light look: the setting is kept and shows. The four icons are hand-written SVG (`icons/svg/theme-*.svg`, `dark-pages.svg`): **their `.tex` sources do not exist**. Tests: both buttons with the mouse and with the stylus tip, the stress storm taps them. A drop-down can still be built on these two items if the right pill gets crowded.)*
 *Work:* a new `Item::Theme` on the right pill (`RIGHT` array in `toolbar/mod.rs`, bump `BUTTONS`, the tests that count them,
 `Look`/`Motions` arrays are sized by `BUTTONS`) cycling the three states on press (every device: it is a normal toolbar press via
 `Editor::activate`). Pressing it also shows a small pill under it holding one toggle (`Item::DarkPages`) as a `Presence`/slide
@@ -315,7 +315,7 @@ existing ones** (`Icon::from_svg` in `toolbar/icons.rs`) and note that the `.tex
 the toggle is inert in light and keeps its value through a trip through light; the equivalence storm in `stress.rs`
 (`stress_motion_changes_how_long_things_take_and_never_where_they_end_up`) gets theme toggles added.
 
-**T6. Dark pages.**
+**T6. Dark pages.** *(Done 2026-10-30. Deviations: `pdf::PageLook` is passed when the pool is made (`render_pool(bytes, threads, look)`), `Doc::set_look` builds a new pool, and the shell drops the old pictures at once instead of tagging keys with bit 63, so a page shows its paper colour for a moment while the new pictures arrive; bit 63 is still free if that flash proves ugly. The ink mapping is lightness turned over, hue kept, lifted to contrast 4.5 on the paper (`palette::on_dark_page`), not the engine's rule. The overview's paper and the paper under a page not yet drawn follow. Tests: a dark render through the conformance suite, saved files unchanged, the mapping against every pen colour.)*
 *Work (needs K1):* the `PdfBackend` (K1) takes a page look (off, or reading colours built from the palette's page roles, e.g. text
 `#e6e6e6` on background `#121212`, `only_black: false`, `line_art: true`) and sets `RenderConfig.reading_colors`; `doc.rs` builds a
 new `RenderPool` when the look changes (the pool is created from `RenderConfig`). Texture keys must tell the looks apart:
@@ -328,7 +328,7 @@ text colour, light → background, hues kept) at the places that build capsules 
 black when the look goes off; key tags differ by look and round-trip through `from_tag`; a render with reading colours on
 differs from off (use a generated PDF, `inkpdf-gen`).
 
-**T7. Docs, GIF, e2e.** README (theme screenshots), CHANGELOG, `ARCHITECTURE.md` (a Palette section), owner re-records
+**T7. Docs, GIF, e2e.** *(Done 2026-10-30 except what only the owner can do: re-recording `docs/demo.gif`, running `tools/e2e/run.ps1` on Windows (no dark pixel check was added to it) and looking at an emulator screenshot (no emulator here). `tools/e2e/linux-smoke.sh` has a dark-pixel check. Version bumped to 1.1.0.)* README (theme screenshots), CHANGELOG, `ARCHITECTURE.md` (a Palette section), owner re-records
 `docs/demo.gif`/`demo.mp4`, owner runs `tools/e2e/run.ps1` in dark mode (add pixel checks: dark toolbar pixel, dark page
 background); add the same checks to `tools/e2e/linux-smoke.sh` (a dark pixel under the virtual display) and look at an emulator
 screenshot (`tools/android/emulator-test.sh`). **Release 1.1.0.**

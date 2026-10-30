@@ -82,7 +82,10 @@ work); undo, redo, save; the bin deletes the page you are looking at, at once, w
 asked (the last page there is stays; undo brings it back, with its ink, until you save); + adds a
 page after the one you are looking at; the four small pages open the pages overview (below); then the pen, shape, text and pointer tools
 (a tool's button only chooses it; its settings are in the bar under the tools); a monitor or a tablet, which shows the
-mode in use (the tablet in blue) and switches to the other when pressed; full screen. (Under the tools:
+mode in use (the tablet in blue) and switches to the other when pressed; full screen. Left of the mode button are
+two for the look: the first goes from the system's look to light to dark and round (a half-shaded circle, a sun, a moon),
+and the second (a page half in shade) turns the pages dark too, with light text on a dark paper, when the look is dark
+(your file is not changed, and ink you drew in a dark colour is shown light on a dark page). (Under the tools:
 the bar described above.)
 
 PAGES OVERVIEW. The four-pages button opens a card over the document: a picture of every page (with its ink), its
@@ -97,7 +100,8 @@ near the top or bottom scrolls. A finger scrolls; use the arrows of the bar to m
 opens its menu: add a page before, add a page after, duplicate, delete. Every one of these is a step of the history. At a
 desk: Ctrl+A chooses every page, Ctrl+D duplicates the chosen ones, Delete deletes them, Ctrl+Z and Ctrl+Y undo and redo,
 and Esc steps out one level at a time (a drag, the chosen pages, edit mode, the overview).
-Your tools and their settings are kept in %APPDATA%\InkPDF\settings.txt.
+Your tools, their settings and the look are kept in %APPDATA%\InkPDF\settings.txt. (INKPDF_THEME=light or dark
+chooses the look for one run.)
 
 When InkPDF is your default PDF app (Settings > Apps > Default apps), Explorer shows the first
 page of each PDF as its icon.

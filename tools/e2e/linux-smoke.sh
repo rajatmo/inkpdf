@@ -12,7 +12,11 @@
 #
 #   tools/e2e/linux-smoke.sh [path/to/inkpdf] [path/to/inkpdf-gen]
 #
-# Needs: xvfb (xvfb-run), xdotool, mesa-vulkan-drivers (lavapipe), libxkbcommon-x11-0, a system font (fonts-liberation).
+#  3. dark look and dark pages (settings made up for the run): a pixel of the toolbar's panel and one of the page's paper are dark, where
+#     in the light look they are white.
+#
+# Needs: xvfb (xvfb-run), xdotool, imagemagick (import, convert), mesa-vulkan-drivers (lavapipe), libxkbcommon-x11-0, a system font
+# (fonts-liberation).
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -80,6 +84,20 @@ sleep 3
 wait "\$pid"
 DRIVE
 
+# The dark look: settings made up for the run say dark with dark pages, and a screenshot is taken of the window with the page in it.
+mkdir -p "$work/dark/.config/InkPDF"
+printf 'appearance dark\ndark-pages on\n' >"$work/dark/.config/InkPDF/settings.txt"
+cat >"$work/dark.sh" <<DRIVE
+set -eu
+export HOME="$work/dark"
+unset XDG_CONFIG_HOME
+"$app" "$work/t.pdf" --mode desktop --exit-after 10 2>"$work/log3.txt" &
+pid=\$!
+sleep 6
+import -window root "$work/dark.png"
+wait "\$pid"
+DRIVE
+
 # Record a short session, then play it back: the recording has the mouse's events, and the playback runs and ends by itself.
 cat >"$work/record.sh" <<DRIVE
 set -eu
@@ -102,6 +120,7 @@ xvfb-run -a -s "-screen 0 1280x960x24" bash "$work/play.sh"
 
 xvfb-run -a -s "-screen 0 1280x960x24" bash "$work/open.sh"
 xvfb-run -a -s "-screen 0 1280x960x24" bash "$work/new.sh"
+xvfb-run -a -s "-screen 0 1280x960x24" bash "$work/dark.sh"
 
 fail=0
 check() { if eval "$2"; then echo "ok:   $1"; else echo "FAIL: $1"; fail=1; fi; }
@@ -115,4 +134,8 @@ check "with its stroke" "grep -aq '/Subtype /Ink' '$saved'"
 check "and nothing else was written there" "test \"\$(ls '$work/home/Documents' | wc -l)\" = 1"
 check "the input was recorded" "grep -q 'button pressed left' '$work/input.txt'"
 check "and played back to the end" "grep -q '^opened r.pdf' '$work/play.err' && ! grep -qi panic '$work/play.err'"
+# A pixel of the toolbar's panel (under the left pill's icons) and one of the page's margin, as red+green+blue.
+sum_at() { convert "$work/dark.png" -crop "1x1+$1+$2" txt:- | tail -1 | grep -o 'srgb([0-9,]*)' | tr -dc '0-9,' | awk -F, '{print $1+$2+$3}'; }
+check "the dark look draws the toolbar's panel dark" "test \"\$(sum_at 155 64)\" -lt 240"
+check "and, with dark pages, the page's paper dark" "test \"\$(sum_at 60 300)\" -lt 240"
 exit "$fail"

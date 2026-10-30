@@ -10,6 +10,8 @@ just the page and your pen.
 - **Your notes are real PDF annotations.** Ink and shapes are saved as standard Ink annotations and typed text as
   Free Text annotations, so any PDF reader shows them. Nothing else is kept, and nothing is uploaded.
 - **Light on the machine.** Pages are drawn on the GPU, and an idle window costs no CPU.
+- **Light or dark.** The interface follows the system's look or your choice, and the pages can go dark too (dark paper, light text;
+  your file is never changed).
 - **Pen, finger, mouse or keyboard.** Every feature works with just the left mouse button and keyboard at a desk,
   or just the stylus tip on a tablet.
 
@@ -44,6 +46,8 @@ driver (`mesa-vulkan-drivers` on most distributions) and, on X11, `libxkbcommon-
    a PDF you opened is updated in place.
 4. The pages button opens an overview of every page and the table of contents: jump to a page, reorder, duplicate or
    delete pages. Every step can be undone.
+5. The two buttons at the top right, left of the mode button, are the look: the first goes from the system's to light to dark; the
+   second (a page half in shade) makes the pages dark when the look is dark. Both are remembered.
 
 The full guide is [apps/inkpdf/installer/readme.txt](apps/inkpdf/installer/readme.txt).
 
@@ -65,7 +69,7 @@ InkPDF picks a **mode** from how the machine is used: **desktop** (keyboard and 
 
 ## Your files and settings
 
-- Settings (colours, thickness, last tool) are one small text file: `%APPDATA%\InkPDF\settings.txt` on Windows,
+- Settings (colours, thickness, last tool, light or dark) are one small text file: `%APPDATA%\InkPDF\settings.txt` on Windows,
   `~/.config/InkPDF/settings.txt` on Linux, the app's private folder on Android. With `portable.txt` beside the program
   they are kept beside it instead.
 - A saved PDF is the original with your annotations added; it opens anywhere.
@@ -121,7 +125,7 @@ tools/                 Android and Linux packaging, end-to-end checks, dependenc
 
 Layering is enforced by a test (`src/architecture.rs`): nothing below the adapters touches a file, the environment, an OS, a PDF
 crate, `wgpu` or `winit`. More: [ARCHITECTURE.md](apps/inkpdf/ARCHITECTURE.md) (layers, patterns, latency),
-[docs/PORTING.md](docs/PORTING.md) (Linux and Android), [docs/PDF-BACKEND.md](docs/PDF-BACKEND.md) (the PDF engine seam, the upgrade rule, the numbers), [docs/REFACTOR.md](docs/REFACTOR.md) and
+[docs/PORTING.md](docs/PORTING.md) (Linux and Android), `palette.rs` (every colour, by role), [docs/PDF-BACKEND.md](docs/PDF-BACKEND.md) (the PDF engine seam, the upgrade rule, the numbers), [docs/REFACTOR.md](docs/REFACTOR.md) and
 [docs/SIMPLIFY.md](docs/SIMPLIFY.md) (design reviews), [docs/deps](docs/deps) (dependency graphs), [ROADMAP.md](ROADMAP.md),
 [CHANGELOG.md](CHANGELOG.md).
 

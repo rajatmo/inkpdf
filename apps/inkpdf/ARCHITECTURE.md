@@ -209,6 +209,24 @@ number, the PDF's table of contents on the left when there is one, and an edit m
 * `outline.rs` — the table of contents, read with `pdfcraft_organize::bookmarks`, flat, with `visible` (folding) and
   `section_of` (the entry that holds a page).
 
+## Colour: roles, two looks, and the page's own colours
+
+* `palette.rs` (base) is every colour of the interface by the job it does (`Palette`: panel, ink, accent, the washes, danger, selection,
+  the paper of the overview, …). `LIGHT` has exactly the values the program always had (a golden test, `editor/tests/golden.rs`, hashes
+  what fifteen scenes draw and fails if the light look changes); `DARK` is the same roles on a dark slate, with contrast tests for both.
+  `Palette::mix` makes the colours in between, which is how the look fades.
+* A drawing function reads colours from `ui.pal` (the interface) or `ws.theme` (the tools' handles, guides and selection): never a
+  literal. `architecture.rs` fails if a colour literal appears in `toolbar/` or `tools/`. `Ui` carries the palette it is drawn in, and
+  the shell's `UiStamp` holds it, so the interface is rebuilt on the GPU while the look fades and not otherwise.
+* Which look: `settings::Appearance` (system, light, dark) and the system's (`Platform::color_scheme`, read at start, when winit says it
+  changed and when the window gains focus; Windows from winit's `Window::theme()`, Linux from `gsettings`, Android not yet) resolve to a
+  `Scheme` in `editor/appearance.rs`; `Motions` owns the fade (one `Tween`; reduced motion: instant).
+* The pages are not the interface's colours. With dark pages on and the look dark (`Workspace::dark_pages_active`), `pdf::PageLook::Dark`
+  makes the pdfcraft pool render with reading colours (`DARK_PAPER`, `DARK_TEXT`); `Doc::set_look` builds a new pool, and the shell drops
+  the old pictures. What the user drew (ink, shapes, typed text) is shown through `palette::on_dark_page` (lightness turned over, hue kept,
+  lifted until it can be read on the paper) at the few places that build capsules and text bitmaps (`Workspace::on_page`); the stored colours
+  are never touched, so a saved file is the same with the look on or off (a test).
+
 ## Motion: time lives in one place, drawing stays time-free
 
 Everything in the interface that moves (a button's wash, a press spreading, the mark of the tool in use sliding, the bar and

@@ -5,12 +5,9 @@ use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;
 use std::path::PathBuf;
 
-use windows_sys::Win32::Storage::FileSystem::GetLogicalDrives;
 use windows_sys::Win32::System::Com::CoTaskMemFree;
-use windows_sys::Win32::UI::Shell::{FOLDERID_Desktop, FOLDERID_Documents, FOLDERID_Downloads, FOLDERID_Profile, SHGetKnownFolderPath};
+use windows_sys::Win32::UI::Shell::{FOLDERID_Documents, FOLDERID_Profile, SHGetKnownFolderPath};
 use windows_sys::core::GUID;
-
-use crate::browse::Place;
 
 /// Where Windows keeps the folder `id`, if it can say.
 fn known_folder(id: &GUID) -> Option<PathBuf> {
@@ -42,25 +39,4 @@ pub fn documents_dir() -> PathBuf {
         std::env::var_os("SystemDrive")
             .map_or_else(|| PathBuf::from("C:\\"), |d| PathBuf::from(format!("{}\\", d.to_string_lossy().trim_end_matches('\\'))))
     })
-}
-
-/// The places the save dialog offers in one press: the user's folders, then the drives (from the bit mask Windows keeps,
-/// so that a disconnected network drive is not waited for).
-pub fn places() -> Vec<Place> {
-    let mut places = Vec::new();
-    for (label, id) in
-        [("Documents", &FOLDERID_Documents), ("Desktop", &FOLDERID_Desktop), ("Downloads", &FOLDERID_Downloads), ("Home", &FOLDERID_Profile)]
-    {
-        if let Some(path) = known_folder(id).filter(|p| p.is_dir()) {
-            places.push(Place { label: label.to_string(), path });
-        }
-    }
-    // SAFETY: takes no arguments.
-    let drives = unsafe { GetLogicalDrives() };
-    for (i, letter) in ('A'..='Z').enumerate() {
-        if drives & (1 << i) != 0 {
-            places.push(Place { label: format!("{letter}:"), path: PathBuf::from(format!("{letter}:\\")) });
-        }
-    }
-    places
 }

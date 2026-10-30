@@ -11,7 +11,6 @@ use crate::text;
 
 use super::Toolbar;
 use super::icons::icons;
-use super::save_as::visible_name;
 use super::theme::{Align, Label, Ui};
 
 /// Rows of results the card shows at most.
@@ -234,6 +233,25 @@ impl SearchLayout {
             say(ui, &shown, size, ui.pal.ink, [text_x, y], Align::Left);
         }
     }
+}
+
+/// The part of `name` to show so that the caret is in it and it fits (`fits` says whether a text is narrow enough): the
+/// text before the caret loses its beginning first, and what is after it its end. Returns a range of bytes.
+pub fn visible_name(name: &str, caret: usize, fits: impl Fn(&str) -> bool) -> std::ops::Range<usize> {
+    let caret = caret.min(name.len());
+    let mut start = 0;
+    while start < caret && !fits(&name[start..caret]) {
+        start += name[start..].chars().next().map_or(1, char::len_utf8);
+    }
+    let mut end = caret;
+    while end < name.len() {
+        let next = end + name[end..].chars().next().map_or(1, char::len_utf8);
+        if !fits(&name[start..next]) {
+            break;
+        }
+        end = next;
+    }
+    start..end
 }
 
 #[cfg(test)]

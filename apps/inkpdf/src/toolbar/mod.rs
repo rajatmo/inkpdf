@@ -12,7 +12,6 @@ mod icons;
 mod look;
 mod overview;
 mod prompt;
-mod save_as;
 mod search_card;
 mod theme;
 mod theme_card;
@@ -42,7 +41,6 @@ pub use overview::{
     OverviewView, PageMotion, TocHit, TocRow, draw as draw_overview,
 };
 pub use prompt::{PromptLayout, PromptView};
-pub use save_as::{ListingView, SaveAsHit, SaveAsLayout, SaveAsView};
 pub use search_card::{ROWS as SEARCH_ROWS, SearchItem, SearchLayout, SearchRow, SearchView};
 pub use theme::{Align, Image, Label, Ui};
 pub use theme_card::{ThemeLayout, ThemeView};

@@ -147,19 +147,6 @@ fn loading_a_document_clears_the_prompt() {
 }
 
 #[test]
-fn the_prompt_is_above_the_save_as_dialog_so_it_hears_the_mouse_first() {
-    use crate::browse::Place;
-    let mut ed = editor();
-    let places = vec![Place { label: "Documents".into(), path: "/home/me/Documents".into() }];
-    ed.ask_save_as("/home/me/Documents".into(), "Untitled.pdf", places);
-    ed.ask_unsaved();
-    let cancel = button(&ed, Choice::Cancel);
-    mouse_click_at(&mut ed, cancel);
-    assert_eq!(ed.requests.answer(), Some(Choice::Cancel));
-    assert!(ed.chrome.prompt.is_none() && ed.chrome.save_as.is_some(), "the dialog it was asked over stays");
-}
-
-#[test]
 fn putting_the_prompt_up_puts_the_overview_away() {
     let mut ed = editor();
     ed.open_overview();

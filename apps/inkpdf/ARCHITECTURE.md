@@ -58,7 +58,7 @@ ones below; no two modules may reach each other, directly or through others.
 | session | `editor` |
 | tools | `tools` |
 | ui | `toolbar` |
-| domain | `tool`, `browse`, `input`, `requests`, `workspace`, `selection`, `settings`, `store` |
+| domain | `tool`, `input`, `requests`, `workspace`, `selection`, `settings`, `store` |
 | model | `figure`, `ink`, `laser`, `links`, `outline`, `pages`, `page_table`, `pagetext` |
 | base | `plane`, `motion`, `scene`, `clock`, `geometry`, `colour`, `coords`, `view`, `text`, `smooth`, `clipboard`, `palette` |
 
@@ -94,24 +94,18 @@ ones below; no two modules may reach each other, directly or through others.
    * `Editor` derefs to the document state read-only outside tests, so only the editor and the tools change it, and the
      shell asks for changes in the editor's terms (`set_dpr`, `document_saved`, `requests()`, ...);
    * the editor reads the time from its own clock, not from the pointer layer.
-### The Save As card
+### Save As and Open
 
-An in-app modal like the prompt and the pages overview (a system save window stays hidden when raised from a pen tap and looks
-different on every platform). It is three parts and a thread, one per layer, so none of it needs a platform:
-
-* `browse.rs` (domain): `Entry`, `Place`, the file-name rules (`clean_name`: no `/ \ : * ? " < > |`, no device names, no trailing
-  dot, `.pdf` added) and the ordering. No file system.
-* `editor/save_as.rs` (session): `SaveAsState`, a state machine that takes pointers, keys and the wheel from any device, and asks
-  the shell through `Request::ListFolder` and `Request::SaveTo` (answered by `Editor::folder_listed` and `Editor::save_as_done`,
-  or `SaveAsCancelled`). The shell keeps what was waiting on it (`Then`) across the dialog.
-* `toolbar/save_as.rs` (ui): `SaveAsLayout` (where everything is, hit testing, scrolling) and the drawing as panels, lines and labels.
-* `app/folders.rs` (adapter): folders are read through the `FileStore` on a thread of their own and handed back through a channel.
-* `Platform::documents_dir()` and `Platform::places()` (the shell holds the platform as a `Box<dyn Platform>`, see `platform/mod.rs`) say where it opens: Documents as the OS names it, then the other places.
+The system's own file dialogs (`platform/dialog.rs`: Windows' and, through the desktop portal, Linux's; Android's is an `Intent`, see
+`platform/saf.rs`). A dialog blocks until it is answered, so `Platform::pick` opens it on a thread of its own, over the window, starting in
+the folder the document is in (else Documents) and offering its name; the answer waits to be taken by `Platform::take_picked` (the shell is
+woken through the `Waker` it gave `set_waker`) and is a `Picked`, the same on every platform. `app/files.rs` keeps what was waiting on a
+save (`Then`) across the dialog.
 
 ### Platforms (`src/platform/`)
 
 Everything that differs by operating system is behind `platform/mod.rs`, chosen at compile time. The shell holds one
-`Box<dyn Platform>` (built by `platform::native()`): where documents go (`documents_dir`, `places`, `config_dir`, `file_store`), the
+`Box<dyn Platform>` (built by `platform::native()`): where documents go (`documents_dir`, `config_dir`, `file_store`), the
 system font if its widths are the ones PDF readers use (`system_font`: Arial on Windows, nothing elsewhere, where the built-in
 Liberation Sans is used), what the user asked of motion and the machine's posture (`motion_prefs`, `detect_mode`), side effects
 (`open_url`, `error_box`, `set_text_input`, `clipboard`) and the pen reader (`install_pointer`). The window crosses the seam as a
@@ -136,8 +130,8 @@ clock's source) is handed to them.
 ### Storage and the PDF
 
 * `store.rs` (domain) is the port: `DocId` (a path, or an address a platform made, such as an Android `content://` URI) and the
-  `FileStore` trait (`read`, `write_atomic`, `list`). `path_store.rs` (adapter) is the file system behind it: the atomic save (written
-  beside the old file and swapped in), the read-only refusal and the folder listing.
+  `FileStore` trait (`read`, `write_atomic`). `path_store.rs` (adapter) is the file system behind it: the atomic save (written
+  beside the old file and swapped in) and the read-only refusal.
 * `doc.rs` is the renderer's pool and the saved bytes; it reads and writes only through a `FileStore`. The pure bookkeeping of the pages
   (their size and geometry, which page of the renderer's file draws each, copies, and the deleted pages kept for undo) is `page_table.rs`
   (model), tested with no PDF.

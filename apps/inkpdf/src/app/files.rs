@@ -13,7 +13,7 @@ use crate::platform::Pick;
 use crate::requests::Choice;
 use crate::store::DocId;
 
-use super::{InkStamp, State, folders};
+use super::{InkStamp, State};
 
 /// What to do once any unsaved work has been dealt with.
 #[derive(Debug, PartialEq)]
@@ -38,10 +38,6 @@ impl State {
     /// wait for the answer (see [`Self::answered`]). While a prompt is up, further requests are
     /// ignored.
     pub(super) fn after_settling(&mut self, then: Then) {
-        // (The Save As dialog is a prompt too: what is asked while it is up waits for the person to finish with it.)
-        if self.ed.save_as_open() {
-            return;
-        }
         self.ed.settle();
         if !self.ed.ink.is_dirty() {
             self.run(then);
@@ -145,26 +141,22 @@ impl State {
         self.after_settling(Then::Blank);
     }
 
-    /// Put the Save As dialog up, and let `then` (if there is one) wait for it. It starts in the folder the document is in, or in
+    /// Put the system's Save As dialog up, and let `then` (if there is one) wait for it. It starts in the folder the document is in, or in
     /// the Documents folder for a document that has no file yet, offering the document's name, or `Untitled.pdf`.
     pub(super) fn begin_save_as(&mut self, then: Option<Then>) {
-        if self.ed.save_as_open() {
-            return;
-        }
         self.ed.settle();
         self.session.save_then = then;
-        // A system with a picker of its own (Android) chooses the place and the name itself; what it answers is taken by `take_picked`.
-        if self.platform.has_picker() {
-            let name = self.session.doc.as_ref().map_or_else(|| format!("{UNTITLED}.pdf"), |d| d.name.clone());
-            let name = if name.to_lowercase().ends_with(".pdf") { name } else { format!("{name}.pdf") };
-            self.platform.pick(Pick::Save, &name);
-            return;
-        }
+        // The system's dialog chooses the place and the name; what it answers is taken by `take_picked`.
+        let name = self.session.doc.as_ref().map_or_else(|| format!("{UNTITLED}.pdf"), |d| d.name.clone());
+        let name = if name.to_lowercase().ends_with(".pdf") { name } else { format!("{name}.pdf") };
+        let dir = self.picker_dir();
+        self.platform.pick(&*self.window, Pick::Save, &name, &dir);
+    }
+
+    /// Where the system's dialog starts: the folder the document is in, else the Documents folder.
+    fn picker_dir(&self) -> PathBuf {
         let file = self.session.doc.as_ref().and_then(|d| d.path().map(Path::to_path_buf));
-        let dir = file.as_deref().and_then(Path::parent).filter(|p| p.is_dir()).map_or_else(|| self.platform.documents_dir(), Path::to_path_buf);
-        let name = file.as_deref().and_then(Path::file_name).map_or_else(|| format!("{UNTITLED}.pdf"), |n| n.to_string_lossy().into_owned());
-        self.ed.ask_save_as(dir, &name, self.platform.places());
-        self.window.request_redraw();
+        file.as_deref().and_then(Path::parent).filter(|p| p.is_dir()).map_or_else(|| self.platform.documents_dir(), Path::to_path_buf)
     }
 
     /// The Save As dialog was confirmed with the file `id`: the document is written there, and becomes that file.
@@ -176,7 +168,6 @@ impl State {
         match result {
             Ok(()) => {
                 self.ed.document_saved();
-                self.ed.save_as_done(Ok(()));
                 self.title.clear();
                 self.window.request_redraw();
                 if let Some(then) = self.session.save_then.take() {
@@ -185,21 +176,9 @@ impl State {
             }
             Err(e) => {
                 eprintln!("save failed: {e}");
-                // (With no dialog of our own to show it in, the system's picker was used: say it in a box.)
-                if self.ed.save_as_open() {
-                    self.ed.save_as_done(Err(format!("Could not save: {e}")));
-                } else {
-                    self.session.save_then = None;
-                    self.platform.error_box(&*self.window, &format!("Could not save:\n{e}"));
-                }
+                self.session.save_then = None;
+                self.platform.error_box(&*self.window, &format!("Could not save:\n{e}"));
             }
-        }
-    }
-
-    /// The folders the dialog asked for that have been read: handed to the editor.
-    fn take_listings(&mut self) {
-        while let Ok(listed) = self.session.listings.1.try_recv() {
-            self.ed.folder_listed(&listed.dir, listed.result);
         }
     }
 
@@ -257,11 +236,6 @@ impl State {
     }
 
     pub(super) fn request_close(&mut self) {
-        // Closing the window puts the Save As dialog away first (what it was for is not going to happen).
-        if self.ed.save_as_open() {
-            self.ed.cancel_save_as();
-            self.session.save_then = None;
-        }
         self.after_settling(Then::Exit);
     }
 
@@ -292,7 +266,6 @@ impl State {
 
     /// Do what the editor asked for after an input event, in the order it asked.
     pub(super) fn service(&mut self) {
-        self.take_listings();
         self.take_picked();
         while let Some(request) = self.ed.requests().pop() {
             match request {
@@ -307,13 +280,8 @@ impl State {
                 Request::SaveAs => self.begin_save_as(None),
                 Request::Open => {
                     self.ed.settle();
-                    self.platform.pick(Pick::Open, "");
-                }
-                Request::ListFolder(dir) => folders::spawn(dir, self.session.files.clone(), self.window.clone(), self.session.listings.0.clone()),
-                Request::SaveTo(id) => self.save_to(id),
-                Request::SaveAsCancelled => {
-                    self.session.save_then = None;
-                    self.window.request_redraw();
+                    let dir = self.picker_dir();
+                    self.platform.pick(&*self.window, Pick::Open, "", &dir);
                 }
                 Request::Fullscreen => self.toggle_fullscreen(),
                 Request::Close => self.close_document(),

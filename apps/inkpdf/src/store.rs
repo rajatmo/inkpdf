@@ -1,11 +1,9 @@
-//! Where a document's bytes are kept, as a port: the program asks a [`FileStore`] to read, write and list, and names a file by a
+//! Where a document's bytes are kept, as a port: the program asks a [`FileStore`] to read and write, and names a file by a
 //! [`DocId`], so a file need not be a path (Android hands out `content://` addresses, and a sandbox forbids paths). What stores
 //! files by path is `path_store`; a platform whose files are something else supplies its own store (`Platform::file_store`).
 
 use std::fmt;
 use std::path::{Path, PathBuf};
-
-use crate::browse::Entry;
 
 /// Which file: a path, or an address the platform made (an Android `content://` URI).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -46,16 +44,13 @@ impl fmt::Display for DocId {
     }
 }
 
-/// Reading, writing and listing files. Errors are already worded for the person. A store may be asked from any thread (a folder is
-/// listed off the main one).
+/// Reading and writing files. Errors are already worded for the person. A store may be asked from any thread.
 pub trait FileStore: Send + Sync {
     /// The file's bytes.
     fn read(&self, id: &DocId) -> Result<Vec<u8>, String>;
     /// Replace the file with `bytes`, or make it. All or nothing: a failure part-way leaves the file as it was, and a file the
     /// person has made read-only is refused.
     fn write_atomic(&self, id: &DocId, bytes: &[u8]) -> Result<(), String>;
-    /// The folders and PDFs in a folder, not the hidden ones, in no particular order.
-    fn list(&self, folder: &DocId) -> Result<Vec<Entry>, String>;
 }
 
 #[cfg(test)]

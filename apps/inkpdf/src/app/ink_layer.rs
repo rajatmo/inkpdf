@@ -193,9 +193,6 @@ impl UiLayers {
         if self.sync_overview_ui(cx) {
             return;
         }
-        if self.sync_save_as_ui(cx) {
-            return;
-        }
         let ed = &cx.ed;
         let state = ed.toolbar_state();
         let [w, h] = ed.view.viewport.map(f32::to_bits);

@@ -26,7 +26,6 @@ impl Editor {
         self.cursor = pos;
         match self.modal() {
             Some(Modal::Prompt) => return self.prompt_pointer(Device::Mouse, 0, Phase::Move, pos),
-            Some(Modal::SaveAs) => return self.save_as_pointer(Device::Mouse, 0, Phase::Move, pos),
             Some(Modal::Overview) => return self.overview_pointer(Device::Mouse, 0, Phase::Move, pos),
             None => {}
         }
@@ -97,7 +96,6 @@ impl Editor {
                 let (phase, at) = (if pressed { Phase::Down } else { Phase::Up }, self.cursor);
                 match modal {
                     Modal::Prompt => self.prompt_pointer(Device::Mouse, 0, phase, at),
-                    Modal::SaveAs => self.save_as_pointer(Device::Mouse, 0, phase, at),
                     Modal::Overview => self.overview_pointer(Device::Mouse, 0, phase, at),
                 }
             }
@@ -159,7 +157,6 @@ impl Editor {
     pub fn wheel(&mut self, delta: Wheel) {
         match self.modal() {
             Some(Modal::Prompt) => return,
-            Some(Modal::SaveAs) => return self.save_as_wheel(delta),
             Some(Modal::Overview) => return self.overview_wheel(delta),
             None => {}
         }

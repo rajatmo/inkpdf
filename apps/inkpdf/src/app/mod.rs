@@ -12,7 +12,6 @@
 mod bench;
 mod config;
 mod files;
-mod folders;
 mod frame;
 mod ink_layer;
 mod overview;
@@ -25,7 +24,6 @@ use std::collections::HashSet;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 
 use winit::dpi::LogicalSize;
@@ -116,8 +114,6 @@ struct DocumentSession {
     then: Option<files::Then>,
     /// What is waiting on the Save As dialog: it follows when the file is written, and is dropped if the dialog is cancelled.
     save_then: Option<files::Then>,
-    /// The folders read for the Save As dialog arrive here, from threads of their own (see [`folders`]).
-    listings: (Sender<folders::Listed>, Receiver<folders::Listed>),
 }
 
 /// What is on the GPU for the window, and what it was last built from.
@@ -206,6 +202,7 @@ impl State {
             let window = window.clone();
             Arc::new(move || window.request_redraw())
         };
+        platform.set_waker(wake.clone());
         let pointer = match platform.install_pointer(&*window, wake) {
             Ok(pointer) => Some(pointer),
             Err(e) => {
@@ -237,15 +234,7 @@ impl State {
                 pointer_buf: Vec::new(),
                 other_buf: Vec::new(),
             },
-            session: DocumentSession {
-                doc: None,
-                files: platform.file_store(),
-                indexer: None,
-                failed: HashSet::new(),
-                then: None,
-                save_then: None,
-                listings: std::sync::mpsc::channel(),
-            },
+            session: DocumentSession { doc: None, files: platform.file_store(), indexer: None, failed: HashSet::new(), then: None, save_then: None },
             layers: UiLayers {
                 visible: Vec::new(),
                 ink_built: InkStamp::NEVER,

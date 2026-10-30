@@ -100,10 +100,6 @@ impl super::Platform for FakePlatform {
         "/fake/Documents".into()
     }
 
-    fn places(&self) -> Vec<crate::browse::Place> {
-        vec![crate::browse::Place { label: "Documents".into(), path: "/fake/Documents".into() }]
-    }
-
     fn config_dir(&self) -> Option<std::path::PathBuf> {
         None
     }

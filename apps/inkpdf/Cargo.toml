@@ -1,7 +1,7 @@
 [package]
 name = "inkpdf"
 description = "Pen-first PDF annotator for Windows"
-version = "1.3.6"
+version = "1.3.7"
 authors = ["Rajat Mandal"]
 edition.workspace = true
 license.workspace = true
@@ -48,6 +48,10 @@ pollster = "1"
 bytemuck = { version = "1", features = ["derive"] }
 # Typed text: reads the outlines of a system font (the same font parser the page renderer uses).
 skrifa = "0.47"
+
+# The system's file dialogs on a desktop (Android has none this crate can use: its picker is an Intent, see `platform::saf`).
+[target.'cfg(not(target_os = "android"))'.dependencies]
+rfd = { workspace = true }
 
 # Linux: a window on Wayland or X11, whichever the session runs (decided when the window is made). The Wayland client
 # library is loaded when needed, so one binary starts on either.

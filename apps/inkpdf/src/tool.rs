@@ -61,7 +61,10 @@ pub const MAX_TOOLS: usize = 10;
 impl Registry {
     /// The program's own tools.
     pub fn builtin() -> Registry {
-        Registry { tools: [Tool::Select, Tool::Pen, Tool::Geometry, Tool::Text, Tool::Lasso, Tool::Eraser].into_iter().map(|t| (t, None)).collect(), open_button: false }
+        Registry {
+            tools: [Tool::Select, Tool::Pen, Tool::Geometry, Tool::Text, Tool::Lasso, Tool::Eraser].into_iter().map(|t| (t, None)).collect(),
+            open_button: false,
+        }
     }
 
     /// Add a tool of an extension, drawn on its button from the SVG `icon` (a name already there, or more tools than fit, is refused).

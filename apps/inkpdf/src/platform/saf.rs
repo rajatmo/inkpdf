@@ -5,7 +5,6 @@
 use std::sync::Arc;
 
 use super::{Pick, Picked};
-use crate::browse::Entry;
 use crate::clipboard::TextClipboard;
 use crate::path_store::PathStore;
 use crate::store::{DocId, FileStore};
@@ -58,13 +57,6 @@ impl FileStore for SafStore {
             // document is only ever written whole, from memory, in one call.)
             DocId::Uri(uri) => self.bridge.write(uri, bytes),
             DocId::Path(_) => PathStore.write_atomic(id, bytes),
-        }
-    }
-
-    fn list(&self, folder: &DocId) -> Result<Vec<Entry>, String> {
-        match folder {
-            DocId::Uri(_) => Err("the system's picker chooses the folder here".to_string()),
-            DocId::Path(_) => PathStore.list(folder),
         }
     }
 }
@@ -169,8 +161,6 @@ mod tests {
         store.write_atomic(&path, b"%PDF path").expect("write a path");
         assert_eq!(store.read(&path).expect("read a path"), b"%PDF path");
         assert_eq!(bridge.files.lock().unwrap().len(), 1, "one address (the refused one is not kept), and the path is not among them");
-        assert_eq!(store.list(&DocId::Path(dir.clone())).expect("list").len(), 1);
-        assert!(store.list(&uri).is_err(), "an address has no folder to list: the picker chooses");
         let _ = std::fs::remove_dir_all(dir);
     }
 

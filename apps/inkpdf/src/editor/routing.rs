@@ -66,9 +66,7 @@ impl Editor {
 
     /// Whether the keyboard is heard: a text box is being typed into.
     pub fn is_typing(&self) -> bool {
-        // (The Save As dialog types the file's name.)
         match self.modal() {
-            Some(Modal::SaveAs) => true,
             Some(Modal::Prompt) => false,
             Some(Modal::Overview) => false,
             None => self.search.open || (self.ws.tool == Tool::Text && self.tools.text.is_typing()),
@@ -110,7 +108,6 @@ impl Editor {
     fn key(&mut self, key: Key<'_>) -> bool {
         match self.modal() {
             Some(Modal::Prompt) => return false,
-            Some(Modal::SaveAs) => return self.save_as_key(key),
             Some(Modal::Overview) => return self.overview_key(key),
             None => {}
         }
@@ -161,7 +158,7 @@ impl Editor {
     pub fn shortcut(&mut self, key: &str, shift: bool) -> bool {
         let letter = key.to_ascii_lowercase();
         match self.modal() {
-            Some(Modal::Prompt | Modal::SaveAs) => return false,
+            Some(Modal::Prompt) => return false,
             // The overview takes the document's own shortcuts (undo, redo, save) and leaves the rest of them alone.
             Some(Modal::Overview) if !matches!((letter.as_str(), self.mode), ("z" | "y" | "s", Mode::Desktop)) => {
                 return self.mode == Mode::Desktop && self.overview_shortcut(&letter);

@@ -44,7 +44,11 @@ fn the_main_toolbar_holds_only_the_tools() {
         tb.items().iter().filter(|(_, r)| rect_contains(tb.pills[1], [(r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0])).map(|(i, _)| *i).collect();
     assert_eq!(
         in_middle,
-        [Item::Tool(Tool::Select), Item::Tool(Tool::Pen), Item::Tool(Tool::Geometry), Item::Tool(Tool::Text),
+        [
+            Item::Tool(Tool::Select),
+            Item::Tool(Tool::Pen),
+            Item::Tool(Tool::Geometry),
+            Item::Tool(Tool::Text),
             Item::Tool(Tool::Lasso),
             Item::Tool(Tool::Eraser),
             Item::Tool(Tool::named("laser"))

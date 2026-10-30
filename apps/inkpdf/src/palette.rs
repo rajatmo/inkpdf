@@ -52,12 +52,6 @@ pub struct Palette {
     /// A ring and cross where a drag has snapped to another shape's anchor; the grey of an eraser's or lasso's guide.
     pub snap: Rgba,
     pub guide: Rgba,
-    /// The folder and page icons of the Save As card, and the ink of a file's name.
-    pub folder: Rgba,
-    pub folder_tab: Rgba,
-    pub page: Rgba,
-    pub page_rim: Rgba,
-    pub file_ink: Rgba,
     /// The colour the window is cleared to behind the pages (each 0 to 1).
     pub window: [f64; 3],
     /// The colour of a shadow, of a scrim over the document, and of a wash: their alpha is the caller's (see [`Palette::shadow`]).
@@ -129,11 +123,6 @@ impl Palette {
             search_current: c(a.search_current, b.search_current),
             snap: c(a.snap, b.snap),
             guide: c(a.guide, b.guide),
-            folder: c(a.folder, b.folder),
-            folder_tab: c(a.folder_tab, b.folder_tab),
-            page: c(a.page, b.page),
-            page_rim: c(a.page_rim, b.page_rim),
-            file_ink: c(a.file_ink, b.file_ink),
             window: [w(a.window[0], b.window[0]), w(a.window[1], b.window[1]), w(a.window[2], b.window[2])],
             shadow_rgb: r(a.shadow_rgb, b.shadow_rgb),
             wash_rgb: r(a.wash_rgb, b.wash_rgb),
@@ -171,11 +160,6 @@ pub const LIGHT: Palette = Palette {
     search_current: [255, 120, 0, 170],
     snap: [226, 40, 150, 255],
     guide: [90, 90, 96, 230],
-    folder: [240, 178, 52, 255],
-    folder_tab: [226, 160, 36, 255],
-    page: [222, 226, 235, 255],
-    page_rim: [170, 176, 192, 255],
-    file_ink: [112, 118, 134, 255],
     window: [0.93, 0.936, 0.947],
     shadow_rgb: [16, 20, 44],
     wash_rgb: [20, 24, 40],
@@ -206,11 +190,6 @@ pub const DARK: Palette = Palette {
     search_current: [255, 120, 0, 170],
     snap: [226, 40, 150, 255],
     guide: [90, 90, 96, 230],
-    folder: [240, 178, 52, 255],
-    folder_tab: [226, 160, 36, 255],
-    page: [70, 76, 90, 255],
-    page_rim: [122, 128, 144, 255],
-    file_ink: [160, 166, 182, 255],
     window: [0.085, 0.09, 0.105],
     shadow_rgb: [0, 0, 0],
     wash_rgb: [235, 238, 245],
@@ -339,7 +318,6 @@ mod tests {
             assert!(contrast(p.ink, over(p.accent_wash, p.panel)) >= 4.5, "{name}: ink on the accent wash of an active button");
             assert!(contrast(p.ink, over(p.hover_wash, p.panel)) >= 6.0, "{name}: ink on the wash of a button the pointer is over");
             assert!(contrast(p.ink, over(p.pressed_wash, p.panel)) >= 5.0, "{name}: ink on a pressed button");
-            assert!(contrast(p.file_ink, p.panel) >= 3.0, "{name}: the name of a file on the card ({:.1})", contrast(p.file_ink, p.panel));
             assert!(contrast(p.rim, p.panel) >= 1.0 && over(p.rim, p.panel) != p.panel, "{name}: a rim shows on a panel");
         }
         assert!(luminance(DARK.panel) < 0.05 && luminance(LIGHT.panel) > 0.9, "the dark scheme is dark and the light one is light");
@@ -370,11 +348,6 @@ mod tests {
             p.search_hit,
             p.search_current,
             p.guide,
-            p.folder,
-            p.folder_tab,
-            p.page,
-            p.page_rim,
-            p.file_ink,
             p.shadow(255),
             p.wash(255),
             p.press(255),

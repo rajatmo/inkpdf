@@ -13,4 +13,3 @@ overview = 284ada8ff7aaccad
 overview, edit mode = 741fde45ab453507
 overview, edit mode, two pages chosen = 8c4e204b86f615de
 overview, hovering a page = b6b18bddd31adebf
-the Save As card = c6d0ba2b3a48d164

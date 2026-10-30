@@ -55,15 +55,7 @@ pub struct ContextState {
 
 impl Default for ContextState {
     fn default() -> Self {
-        Self {
-            tool: Tool::Pen,
-            selection: false,
-            paste: false,
-            actions: [None; MAX_ACTIONS],
-            style_open: false,
-            palette: super::PALETTE,
-            colour: 0,
-        }
+        Self { tool: Tool::Pen, selection: false, paste: false, actions: [None; MAX_ACTIONS], style_open: false, palette: super::PALETTE, colour: 0 }
     }
 }
 

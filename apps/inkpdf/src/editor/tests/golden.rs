@@ -6,7 +6,6 @@
 use std::fmt::Write as _;
 
 use super::*;
-use crate::browse::{Entry, Place};
 use crate::palette::{DARK, LIGHT, Palette};
 use crate::toolbar::{OverviewControl, Ui};
 
@@ -140,19 +139,6 @@ fn scenarios(pal: Palette) -> Vec<(&'static str, Ui)> {
     all.push(("overview, edit mode, two pages chosen", overview(&ed, pal)));
     ed.mouse_moved(centre(ed.overview_layout().cell(0, 0.0)));
     all.push(("overview, hovering a page", overview(&ed, pal)));
-
-    // The Save As card.
-    let mut ed = base(1);
-    let places =
-        vec![Place { label: "Documents".into(), path: "/home/me/Documents".into() }, Place { label: "Home".into(), path: "/home/me".into() }];
-    ed.ask_save_as("/home/me/Documents".into(), "Untitled.pdf", places);
-    ed.folder_listed(
-        std::path::Path::new("/home/me/Documents"),
-        Ok(vec![Entry { name: "Invoices".into(), folder: true }, Entry { name: "old.pdf".into(), folder: false }]),
-    );
-    let mut ui = Ui::with_palette(pal);
-    ed.draw_save_as(&mut ui);
-    all.push(("the Save As card", ui));
 
     all
 }

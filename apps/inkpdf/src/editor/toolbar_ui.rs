@@ -11,7 +11,7 @@ use super::{Act, Editor, Request};
 impl Editor {
     /// Everything the interface over the page is made of, now: the toolbars with the bar under the tools and the tool's panel unfolded
     /// from it (or the prompt, which takes the window and puts the toolbars out of the way), each as far in as its motion has come. (The
-    /// pages overview and the Save As card are drawn by [`Editor::draw_overview`] and [`Editor::draw_save_as`].)
+    /// pages overview is drawn by [`Editor::draw_overview`].)
     pub fn draw_interface(&self, ui: &mut Ui) {
         let (state, look) = (self.toolbar_state(), self.toolbar_look());
         // The prompt takes over the window: the toolbars step out of the way.

@@ -10,9 +10,8 @@ use winit::raw_window_handle::HasWindowHandle;
 mod host;
 mod reader;
 
-use super::unix_dirs::{existing_places, first_folder, home_dir};
+use super::unix_dirs::{first_folder, home_dir};
 use super::{PointerSource, Waker};
-use crate::browse::Place;
 use crate::input::Mode;
 
 pub use super::stubs::{SystemClipboard, attach_parent_console, error_box, motion_prefs, report_fatal, system_font};
@@ -85,12 +84,6 @@ pub fn documents_dir() -> PathBuf {
         }
     }
     first_folder(&[PathBuf::from(SHARED).join("Documents"), PathBuf::from("/sdcard/Documents")], home_dir().as_deref())
-}
-
-/// The places the save dialog offers in one press.
-pub fn places() -> Vec<Place> {
-    let shared = PathBuf::from(SHARED);
-    existing_places(vec![("Documents", shared.join("Documents")), ("Downloads", shared.join("Download")), ("Storage", shared)], |p| p.is_dir())
 }
 
 /// What the app remembers is kept in its private folder (no other app, and no file manager, sees it).

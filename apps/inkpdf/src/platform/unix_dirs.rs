@@ -1,10 +1,8 @@
 //! Finding the user's folders on a Unix-like system (Linux, and Android's fallback): the configuration folder, the folders a desktop
-//! names in `user-dirs.dirs`, and the places the save dialog offers.
+//! names in `user-dirs.dirs`.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-
-use crate::browse::Place;
 
 /// The user's configuration folder on a desktop: `$XDG_CONFIG_HOME`, else `~/.config`.
 #[cfg_attr(target_os = "android", allow(dead_code, reason = "Android keeps its settings in the app's own folder"))]
@@ -53,17 +51,6 @@ pub fn first_folder(candidates: &[PathBuf], home: Option<&Path>) -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("/"))
 }
 
-/// `places` that exist as folders, each once (the first label a folder is given is the one it keeps).
-pub fn existing_places(places: Vec<(&str, PathBuf)>, exists: impl Fn(&Path) -> bool) -> Vec<Place> {
-    let mut out: Vec<Place> = Vec::new();
-    for (label, path) in places {
-        if exists(&path) && !out.iter().any(|p| p.path == path) {
-            out.push(Place { label: label.to_string(), path });
-        }
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,21 +80,5 @@ mod tests {
         let somewhere = first_folder(std::slice::from_ref(&missing), Some(&missing));
         assert!(somewhere.is_dir(), "never a folder that is not there: {somewhere:?}");
         std::fs::remove_dir_all(&dir).unwrap();
-    }
-
-    #[test]
-    fn places_that_are_not_there_or_are_the_same_folder_twice_are_left_out() {
-        let there = |p: &Path| p != Path::new("/gone");
-        let places = existing_places(
-            vec![
-                ("Documents", "/home/me/Documents".into()),
-                ("Desktop", "/gone".into()),
-                ("Home", "/home/me".into()),
-                ("Also home", "/home/me".into()),
-            ],
-            there,
-        );
-        let labels: Vec<&str> = places.iter().map(|p| p.label.as_str()).collect();
-        assert_eq!(labels, ["Documents", "Home"]);
     }
 }

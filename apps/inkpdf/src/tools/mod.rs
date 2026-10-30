@@ -245,7 +245,8 @@ impl ToolSet {
     /// Whether any tool has a gesture, or work not yet made part of the document, under way.
     #[cfg(test)]
     pub fn busy(&self) -> bool {
-        [&self.pen as &dyn Tool, &self.shape, &self.text, &self.select, &self.lasso, &self.eraser].iter().any(|t| t.busy()) || self.ext.iter().any(|t| t.busy())
+        [&self.pen as &dyn Tool, &self.shape, &self.text, &self.select, &self.lasso, &self.eraser].iter().any(|t| t.busy())
+            || self.ext.iter().any(|t| t.busy())
     }
 
     /// Time has passed: whether any extension's tool is still moving by itself (the frames go on while one is).

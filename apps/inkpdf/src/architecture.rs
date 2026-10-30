@@ -147,7 +147,7 @@ enum Layer {
 }
 
 /// Every top-level module of the program, and its layer. A new module is placed here or the test fails.
-const LAYERS: [(&str, Layer); 42] = [
+const LAYERS: [(&str, Layer); 41] = [
     ("plane", Layer::Base),
     ("motion", Layer::Base),
     ("scene", Layer::Base),
@@ -169,7 +169,6 @@ const LAYERS: [(&str, Layer); 42] = [
     ("pagetext", Layer::Model),
     ("doctext", Layer::Model),
     ("tool", Layer::Domain),
-    ("browse", Layer::Domain),
     ("input", Layer::Domain),
     ("requests", Layer::Domain),
     ("workspace", Layer::Domain),
@@ -319,7 +318,6 @@ fn the_domain_knows_nothing_of_tools_the_session_or_the_shell() {
         "workspace.rs",
         "selection.rs",
         "clipboard.rs",
-        "browse.rs",
         "requests.rs",
     ];
     let domain: Vec<&str> = domain.iter().copied().filter(|p| src().join(p).exists()).collect();

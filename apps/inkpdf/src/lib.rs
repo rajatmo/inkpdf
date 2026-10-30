@@ -9,7 +9,6 @@
 mod app;
 #[cfg(test)]
 mod architecture;
-mod browse;
 mod clipboard;
 mod clock;
 mod colour;

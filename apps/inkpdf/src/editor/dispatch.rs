@@ -45,12 +45,6 @@ impl Editor {
     pub(crate) fn pointer_event(&mut self, ev: PointerEvent) {
         match self.modal() {
             Some(Modal::Prompt) => return self.prompt_event(&ev),
-            Some(Modal::SaveAs) => {
-                if ev.device != Device::Mouse {
-                    self.save_as_event(&ev);
-                }
-                return;
-            }
             Some(Modal::Overview) => {
                 if ev.device == Device::Pen {
                     self.pen_seen(&ev);

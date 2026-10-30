@@ -7,9 +7,8 @@ use std::path::PathBuf;
 use winit::raw_window_handle::HasWindowHandle;
 
 pub use super::unix_dirs::xdg_config_dir as config_dir;
-use super::unix_dirs::{existing_places, first_folder, home_dir, parse_user_dirs};
+use super::unix_dirs::{first_folder, home_dir, parse_user_dirs};
 use super::{PointerSource, Waker};
-use crate::browse::Place;
 use crate::input::Mode;
 
 pub use super::stubs::{SystemClipboard, attach_parent_console, error_box, motion_prefs, report_fatal, set_text_input, system_font};
@@ -29,22 +28,6 @@ fn named_folder(key: &str, default: &str) -> Option<PathBuf> {
 /// Where a new document is first offered a place to be saved: the Documents folder, wherever this desktop keeps it.
 pub fn documents_dir() -> PathBuf {
     first_folder(&named_folder("XDG_DOCUMENTS_DIR", "Documents").into_iter().collect::<Vec<_>>(), home_dir().as_deref())
-}
-
-/// The places the save dialog offers in one press.
-pub fn places() -> Vec<Place> {
-    let home = home_dir();
-    let mut all = vec![
-        ("Documents", named_folder("XDG_DOCUMENTS_DIR", "Documents")),
-        ("Desktop", named_folder("XDG_DESKTOP_DIR", "Desktop")),
-        ("Downloads", named_folder("XDG_DOWNLOAD_DIR", "Downloads")),
-        ("Home", home),
-    ]
-    .into_iter()
-    .filter_map(|(label, path)| Some((label, path?)))
-    .collect::<Vec<_>>();
-    all.push(("Computer", PathBuf::from("/")));
-    existing_places(all, |p| p.is_dir())
 }
 
 /// The look the desktop has: `INKPDF_THEME` if set, else what GNOME's settings say (`color-scheme`, or a theme named `-dark`), which most

@@ -21,12 +21,11 @@
 //!
 //! A new OS therefore adds one `PointerSource`; it changes nothing above this module.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use winit::raw_window_handle::HasWindowHandle;
+use winit::raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
-use crate::browse::Place;
 use crate::clipboard::TextClipboard;
 use crate::input::{Mode, PointerEvent};
 use crate::motion::Prefs;
@@ -35,6 +34,10 @@ use crate::store::FileStore;
 
 /// Asks the event loop for a frame from any thread (a native input callback uses it to wake a sleeping loop).
 pub type Waker = Arc<dyn Fn() + Send + Sync>;
+
+/// A window as the system's dialogs want it: its handle and its display's.
+pub trait WindowHandles: HasWindowHandle + HasDisplayHandle {}
+impl<T: HasWindowHandle + HasDisplayHandle + ?Sized> WindowHandles for T {}
 
 /// What the system's file picker was asked for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -58,8 +61,6 @@ pub struct Picked {
 pub trait Platform {
     /// Where a new document is first offered a place to be saved.
     fn documents_dir(&self) -> PathBuf;
-    /// The places the save dialog offers in one press.
-    fn places(&self) -> Vec<Place>;
     /// The folder the app keeps what it remembers in (the user's configuration folder), if there is one.
     fn config_dir(&self) -> Option<PathBuf>;
     /// The mode the machine's posture calls for.
@@ -99,8 +100,11 @@ pub trait Platform {
     fn has_picker(&self) -> bool {
         false
     }
-    /// Ask the system's picker for a file (see [`Platform::has_picker`]); the answer is taken with [`Platform::take_picked`].
-    fn pick(&self, _kind: Pick, _name: &str) {}
+    /// Ask the system's picker for a file (see [`Platform::has_picker`]), over `window`, starting in the folder `dir` and offering `name` when
+    /// saving; the answer is taken with [`Platform::take_picked`].
+    fn pick(&self, _window: &dyn WindowHandles, _kind: Pick, _name: &str, _dir: &Path) {}
+    /// How to wake the event loop when the picker has answered (it may do so from another thread).
+    fn set_waker(&self, _wake: Waker) {}
     /// What the picker answered since this was last asked, if it has.
     fn take_picked(&self) -> Option<Picked> {
         None
@@ -119,6 +123,9 @@ pub trait Platform {
 mod contract;
 #[cfg(test)]
 pub(crate) mod fake;
+
+#[cfg(not(target_os = "android"))]
+mod dialog;
 
 #[cfg(target_os = "android")]
 mod android;
@@ -159,15 +166,15 @@ fn bridge() -> Option<Arc<dyn saf::Bridge>> {
 pub use os::{attach_parent_console, report_fatal};
 
 /// This build's operating system as a [`Platform`]: each fact is the one the OS's own module names.
-struct Native;
+#[derive(Default)]
+struct Native {
+    #[cfg(not(target_os = "android"))]
+    dialogs: dialog::Dialogs,
+}
 
 impl Platform for Native {
     fn documents_dir(&self) -> PathBuf {
         os::documents_dir()
-    }
-
-    fn places(&self) -> Vec<Place> {
-        os::places()
     }
 
     fn config_dir(&self) -> Option<PathBuf> {
@@ -234,17 +241,35 @@ impl Platform for Native {
     }
 
     fn has_picker(&self) -> bool {
-        bridge().is_some()
+        true
     }
 
-    fn pick(&self, kind: Pick, name: &str) {
+    fn pick(&self, window: &dyn WindowHandles, kind: Pick, name: &str, dir: &Path) {
         if let Some(bridge) = bridge() {
             bridge.pick(kind, name);
+            return;
         }
+        #[cfg(not(target_os = "android"))]
+        self.dialogs.pick(window, kind, name, dir);
+        #[cfg(target_os = "android")]
+        let _ = (window, dir);
+    }
+
+    fn set_waker(&self, wake: Waker) {
+        #[cfg(not(target_os = "android"))]
+        self.dialogs.set_waker(wake);
+        #[cfg(target_os = "android")]
+        let _ = wake;
     }
 
     fn take_picked(&self) -> Option<Picked> {
-        bridge()?.take_picked().as_deref().and_then(saf::parse_picked)
+        if let Some(bridge) = bridge() {
+            return bridge.take_picked().as_deref().and_then(saf::parse_picked);
+        }
+        #[cfg(not(target_os = "android"))]
+        return self.dialogs.take();
+        #[cfg(target_os = "android")]
+        None
     }
 
     fn take_launched(&self) -> Option<crate::store::DocId> {
@@ -258,7 +283,7 @@ impl Platform for Native {
 
 /// The platform this program was built for.
 pub fn native() -> Box<dyn Platform> {
-    Box::new(Native)
+    Box::new(Native::default())
 }
 
 /// The most events one [`PointerSource::pump`] brings in: a flood of input must not hold the frame, so what is left waits for

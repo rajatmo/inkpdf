@@ -45,7 +45,7 @@ driver (`mesa-vulkan-drivers` on most distributions) and, on X11, `libxkbcommon-
 2. Pick a tool in the middle bar (select text, pen, shapes, text, lasso, eraser, pointer), a colour and a thickness. The lasso
    picks up anything drawn (a loop, or a tap); a bar under the tools has duplicate, copy, paste and delete for what is picked up.
    The eraser takes away whatever it passes over.
-3. Press the disk button (or Ctrl+S) to save. A new page asks where to save it (it opens in your Documents folder);
+3. Press the disk button (or Ctrl+S) to save. A new page asks where to save it, in the system's own Save As window (it opens in your Documents folder);
    a PDF you opened is updated in place.
 4. The pages button opens an overview of every page and the table of contents: jump to a page, reorder, duplicate or
    delete pages. Every step can be undone.

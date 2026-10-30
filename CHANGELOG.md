@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.7
+
+- **The system's own file dialogs on Windows and Linux** (Save As, and a new Open button, the folder at the left of the toolbar, as on Android),
+  over the program's window, opening in the folder the document is in or in Documents. **The in-app file browser is gone**, with the code that
+  only it used (folder listing, the "places", the file-name rules, the Save As card's colours). The dialogs run on a thread of their own, so the
+  window goes on drawing while one is up. Linux needs the desktop portal for them (standard on GNOME, KDE and others). One thing to watch: the
+  in-app card was built because a system window raised by a pen tap could stay hidden behind the program; the dialog is now given the window as
+  its parent, which should keep it in front, but that has not been tried on a pen-only machine.
+
 ## 1.3.6
 
 - **Android starts on a blank page**, like the other platforms, not on a welcome PDF (the PDF is no longer in the app). A document another app

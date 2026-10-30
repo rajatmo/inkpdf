@@ -124,6 +124,12 @@ impl Editor {
         Self::with_extensions(viewport, dpr, prefs, &crate::tools::extensions())
     }
 
+    /// An editor for tests: the program's tools and the reference extension (see [`crate::tool::reference_extensions`]).
+    #[cfg(test)]
+    pub fn reference(viewport: [f32; 2], dpr: f32, prefs: crate::motion::Prefs) -> Self {
+        Self::with_extensions(viewport, dpr, prefs, &crate::tool::reference_extensions())
+    }
+
     /// The same, with the tools of `extensions` instead of the ones this build has (a test's own, or a fork's).
     pub fn with_extensions(viewport: [f32; 2], dpr: f32, prefs: crate::motion::Prefs, extensions: &[inkpdf_api::Extension]) -> Self {
         let registry = extensions.iter().fold(crate::tool::Registry::builtin(), |r, e| r.with(crate::tool::Tool::named(e.id), e.icon_svg));

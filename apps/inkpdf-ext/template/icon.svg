@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- The button's icon: stroked paths only (M L C Z, absolute), in a viewBox, in the style of the toolbar's others. -->
+<svg version='1.1' xmlns='http://www.w3.org/2000/svg' width='56.6929pt' height='56.6929pt' viewBox='0 0 56 56'>
+<g id='page1'>
+<path d='M42 28C42 35.7 35.7 42 28 42C20.3 42 14 35.7 14 28C14 20.3 20.3 14 28 14C35.7 14 42 20.3 42 28Z' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+<path d='M28 24V32' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+<path d='M24 28H32' stroke='#000' fill='none' stroke-width='1.594' stroke-linecap='round' stroke-linejoin='round'/>
+</g>
+</svg>

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+Extensions: a tool can be added without touching the program.
+
+- The tools are a registry (`tool::Registry`) instead of a fixed list: the toolbar, the mark that slides between tools, the settings and
+  the keyboard read it, so a tool is a name and an object, and the toolbar has as many buttons as there are tools (up to eight).
+- New crates: `inkpdf-api` (the extension API: plain types and traits, no dependencies) and `inkpdf-ext` (the built-in extensions, one folder
+  each, found by a build script, so adding one edits no existing file). The program adapts an extension's tool to its own (`tools/ext.rs`).
+- **The laser pointer is now an extension**, written against the API alone (its tests are in its own crate); it works as before.
+- `tools/new-extension.sh` makes a new extension from a template; `docs/EXTENSIONS.md` says how. Tests: a tool registered from outside is on
+  the toolbar, takes input, paints and keeps the frames coming; every extension a build has is checked (name, API version, icon); the contract
+  suite and a latency cap run on every extension by themselves; an extension may depend on nothing but the API (a reviewed list) and touches
+  no file, network or process.
+- Inside: the tests of the toolbar and the interface are written against a reference set of tools, so that adding an extension changes none.
+
 Polish (the first part of milestone 1.3.0).
 
 - The bar under the tools now goes out as it came in (it slides up and fades) when you choose a tool that has none (the pointer), where it

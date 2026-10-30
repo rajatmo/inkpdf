@@ -241,7 +241,7 @@ fn stress_hostile_outlines_and_page_trees_open_or_are_refused_and_what_opens_edi
             assert!(entry.title.chars().count() <= 200 && !entry.title.chars().any(char::is_control), "file {i}: a title that is not clean");
             assert!(entry.page.is_none_or(|p| p < doc.page_count()), "file {i}: an entry goes to page {:?} of {}", entry.page, doc.page_count());
         }
-        let mut ed = Editor::new([1100.0, 800.0], 1.0, crate::motion::Prefs::REDUCED);
+        let mut ed = Editor::reference([1100.0, 800.0], 1.0, crate::motion::Prefs::REDUCED);
         ed.load(doc.layout(), strokes);
         ed.outline = items;
         ed.links = doc.take_links();

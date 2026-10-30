@@ -8,7 +8,7 @@ fn stress_shapes_drawn_by_the_pen_stay_on_their_page_undo_redo_exactly_and_survi
     let path = dir.join("shapes.pdf");
     std::fs::write(&path, sample_pdf()).expect("write");
     let (mut doc, _) = Doc::open(&path).expect("open");
-    let mut ed = Editor::new([1100.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
+    let mut ed = Editor::reference([1100.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
     ed.load(doc.layout(), vec![]);
     ed.tool = Tool::Geometry;
     let mut rng = Rng::new(404);

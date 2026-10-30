@@ -8,7 +8,7 @@ fn stress_pages_inserted_anywhere_among_ink_keep_every_stroke_on_its_page_throug
     let path = dir.join("pages.pdf");
     std::fs::write(&path, sample_pdf()).expect("write");
     let (mut doc, _) = Doc::open(&path).expect("open");
-    let mut ed = Editor::new([1100.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
+    let mut ed = Editor::reference([1100.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
     ed.load(doc.layout(), vec![]);
     let mut rng = Rng::new(606);
     let (mut inserted, mut deleted, mut saves, mut moved) = (0, 0, 0, 0);

@@ -92,6 +92,19 @@ impl Registry {
     }
 }
 
+/// The tools tests are written against: the program's own and the laser (the one extension that is the program's own to keep), whatever
+/// other extensions a build has, so that an extension added does not change what a test of the toolbar or the interface sees.
+#[cfg(test)]
+pub fn reference_extensions() -> Vec<inkpdf_api::Extension> {
+    crate::tools::extensions().into_iter().filter(|e| e.id == "laser").collect()
+}
+
+/// The registry that goes with [`reference_extensions`].
+#[cfg(test)]
+pub fn reference_registry() -> Registry {
+    reference_extensions().iter().fold(Registry::builtin(), |r, e| r.with(Tool::named(e.id), e.icon_svg))
+}
+
 /// The registry of this build: the program's own tools and every extension's.
 pub fn registry() -> &'static Registry {
     static REGISTRY: std::sync::OnceLock<Registry> = std::sync::OnceLock::new();

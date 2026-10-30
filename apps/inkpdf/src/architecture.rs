@@ -470,10 +470,10 @@ fn dependencies_of(manifest: &Path) -> Vec<String> {
     for line in text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')) {
         if let Some(name) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
             table = name.to_string();
-        } else if table.ends_with("dependencies") {
-            if let Some((name, _)) = line.split_once('=') {
-                out.push(name.trim().to_string());
-            }
+        } else if table.ends_with("dependencies")
+            && let Some((name, _)) = line.split_once('=')
+        {
+            out.push(name.trim().to_string());
         }
     }
     out

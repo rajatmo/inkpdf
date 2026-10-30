@@ -102,7 +102,7 @@ fn a_second_finger_turns_the_pull_into_a_pinch() {
 
 #[test]
 fn a_document_that_fits_the_window_can_still_be_pulled() {
-    let mut ed = Editor::new([1200.0, 1500.0], 1.0, crate::motion::Prefs::REDUCED);
+    let mut ed = Editor::reference([1200.0, 1500.0], 1.0, crate::motion::Prefs::REDUCED);
     ed.load(Layout::new(&[[300.0, 300.0]]), vec![]);
     assert!(ed.view.at_end(&ed.layout), "it all fits, so it is always at its end");
     drag(&mut ed, [600.0, 800.0], [0.0, -10.0], 16);
@@ -271,7 +271,7 @@ fn moved_pages_carry_their_ink_links_and_selection_and_the_move_is_one_step_that
 
 #[test]
 fn a_rearrangement_of_many_pages_is_undone_exactly_by_undo() {
-    let mut ed = Editor::new([1200.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
+    let mut ed = Editor::reference([1200.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
     ed.load(Layout::new(&[[600.0, 800.0], [300.0, 400.0], [500.0, 700.0], [200.0, 300.0], [450.0, 500.0]]), vec![]);
     let ids: Vec<u64> = (0..5)
         .map(|p| {
@@ -301,7 +301,7 @@ fn a_rearrangement_of_many_pages_is_undone_exactly_by_undo() {
 fn undoing_a_deletion_gives_back_the_links_and_outline_entries_that_went_with_the_pages() {
     use crate::links::{Link, Target};
     use crate::outline::OutlineItem;
-    let mut ed = Editor::new([1200.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
+    let mut ed = Editor::reference([1200.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
     ed.load(Layout::new(&[[612.0, 792.0]; 4]), vec![]);
     let at = |ed: &Editor, page: usize, target: Target| {
         let r = ed.layout.page(page).expect("page");
@@ -343,7 +343,7 @@ fn undoing_a_deletion_gives_back_the_links_and_outline_entries_that_went_with_th
 fn duplicated_pages_copy_their_ink_and_links_and_the_outline_stays_with_the_originals_and_all_of_it_undoes() {
     use crate::links::{Link, Target};
     use crate::outline::OutlineItem;
-    let mut ed = Editor::new([1200.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
+    let mut ed = Editor::reference([1200.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
     ed.load(Layout::new(&[[612.0, 792.0]; 4]), vec![]);
     let r1 = ed.layout.page(1).expect("page");
     let ink =

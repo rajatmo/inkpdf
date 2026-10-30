@@ -209,6 +209,21 @@ number, the PDF's table of contents on the left when there is one, and an edit m
 * `outline.rs` — the table of contents, read with `pdfcraft_organize::bookmarks`, flat, with `visible` (folding) and
   `section_of` (the entry that holds a page).
 
+## Extensions: tools the program does not know
+
+* `tool::Tool` is a **name** (`Tool::Pen`, `Tool::Select`… are constants; an extension's is `Tool::named("laser")`), and `tool::Registry` lists the
+  tools in the toolbar's order with the icon of each extension's. The toolbar lays itself out from a registry (`Toolbar::layout_for`), the
+  mark of the tool in use slides along its tools, settings find a tool by name (a name left by an extension that is gone is no tool: the pen).
+* `inkpdf-api` is the whole of what an extension sees: events, `Context`, `Painter`, `Tool`, `Extension`. `inkpdf-ext` holds the extensions, one
+  folder each, found by its `build.rs`. The program depends on both; **an extension depends only on the API**, so the compiler keeps it out
+  of the program's insides, and `architecture.rs` checks its dependency list (reviewed by the owner), that it touches no file or network, and
+  that the API has no dependencies.
+* `tools/ext.rs` is the one place that turns the program's events into the API's and the workspace into the API's `Context`; `ToolSet`
+  holds the program's own tools as fields and an extension's as a list (`ExtTool`), and the frame loop asks them `tick` so that an idle window
+  still draws nothing. Every contract test (hostile events against every tool) runs on `Tool::all()`, so a new extension is tested by existing
+  tests, and the toolbar's and interface's tests use a reference set of tools so that a new extension changes none of them.
+* How to write one: `docs/EXTENSIONS.md`; to make one: `tools/new-extension.sh`.
+
 ## Text: read behind the frame, kept by file page, selected and searched
 
 * **Reading.** `pdf::TextSource` (one per thread: the file stays parsed between pages) gives a page's text as a `PageTextView`

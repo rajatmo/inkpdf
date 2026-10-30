@@ -11,6 +11,8 @@ per-OS.
   Android can be cross-checked from Linux (`cargo clippy -p inkpdf --all-targets --target x86_64-pc-windows-msvc`,
   `cargo clippy -p inkpdf-android --target aarch64-linux-android`). A change that touches `docs/deps` needs
   `python3 tools/deps/graph.py` run last.
+- **Extensions** (tools) live in `apps/inkpdf-ext/src/<name>/` and use only `apps/inkpdf-api` (see `docs/EXTENSIONS.md`); a new tool is one folder
+  (`tools/new-extension.sh`) and edits no file of the program. Changing `inkpdf-api` breaks every extension: it changes by adding.
 - Layering is enforced by `apps/inkpdf/src/architecture.rs`: a new module goes in its `LAYERS` table and in `ARCHITECTURE.md`,
   and `python3 tools/deps/graph.py` redraws `docs/deps/` (CI runs it with `--check`).
 - Input promise: every tool works with only the left mouse button and keyboard (desktop) or the stylus tip (tablet).

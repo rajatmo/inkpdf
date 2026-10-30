@@ -34,7 +34,7 @@ fn hash(text: &str) -> u64 {
 }
 
 fn base(n: usize) -> Editor {
-    let mut ed = Editor::new([1200.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
+    let mut ed = Editor::reference([1200.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
     ed.load(Layout::new(&vec![[612.0, 792.0]; n]), vec![]);
     ed.fit_mode = false;
     ed.view.zoom = 1.0;

@@ -186,7 +186,7 @@ impl Toolbar {
     /// Along the top of a viewport of `viewport` pixels, sized for `dpr`, with the tools of this build.
     #[cfg(test)]
     pub fn layout(viewport: [f32; 2], dpr: f32) -> Toolbar {
-        Self::layout_for(crate::tool::registry(), viewport, dpr)
+        Self::layout_for(&crate::tool::reference_registry(), viewport, dpr)
     }
 
     /// The same, with the tools `registry` lists.

@@ -43,9 +43,9 @@ jobs:
           sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libxkbcommon-x11-0 libxcb-xinput0 xvfb xdotool fonts-liberation
       # (Formatting is checked once, by the Windows job above.)
       - name: Clippy
-        run: cargo clippy -p inkpdf --all-targets -- -D warnings
+        run: cargo clippy -p inkpdf -p inkpdf-api -p inkpdf-ext --all-targets -- -D warnings
       - name: Tests
-        run: cargo test -p inkpdf --lib
+        run: cargo test -p inkpdf --lib -p inkpdf-api -p inkpdf-ext
       - name: Build
         run: cargo build -p inkpdf --bin inkpdf --bin inkpdf-gen
       - name: Dependency graphs are up to date

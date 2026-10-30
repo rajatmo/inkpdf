@@ -832,7 +832,7 @@ fn laser_trail(ed: &Editor, now: f64) -> Vec<([f32; 2], [f32; 2])> {
 }
 
 fn editor_with_pages(pages: usize) -> Editor {
-    let mut ed = Editor::new([1100.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
+    let mut ed = Editor::reference([1100.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
     ed.load(Layout::new(&vec![[612.0, 792.0]; pages]), vec![]);
     // Every page has some text to select (laid out on a grid, from a hundred points down the page).
     ed.set_text_files((0..pages as u32).map(Some).collect());
@@ -998,7 +998,7 @@ fn every_tool_together(seed: u64, rounds: usize) {
     let path = dir.join("all.pdf");
     std::fs::write(&path, sample_pdf()).expect("write");
     let (mut doc, _) = Doc::open(&path).expect("open");
-    let mut ed = Editor::new([1100.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
+    let mut ed = Editor::reference([1100.0, 900.0], 1.0, crate::motion::Prefs::REDUCED);
     ed.load(doc.layout(), vec![]);
     let mut rng = Rng::new(seed);
     let words = ["Hello", "wörld", "✓ done", "a longer line of text to type", "x", "日本語", "line\nbreak", "  spaced  "];
@@ -1344,7 +1344,7 @@ fn arrive(ed: &mut Editor) {
 /// The same random events, one at a time with everything arriving in between, once with motion reduced and once not: the
 /// document and its overview must be in the same place after each.
 fn run_with(prefs: crate::motion::Prefs, seed: u64, rounds: usize) -> Vec<Outcome> {
-    let mut ed = Editor::new([1280.0, 800.0], 1.25, crate::motion::Prefs::REDUCED);
+    let mut ed = Editor::reference([1280.0, 800.0], 1.25, crate::motion::Prefs::REDUCED);
     ed.load(crate::view::Layout::new(&[[612.0, 792.0]; 12]), vec![]);
     ed.motions.set_prefs(prefs);
     let mut rng = Rng::new(seed);

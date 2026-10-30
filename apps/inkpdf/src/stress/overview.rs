@@ -8,7 +8,7 @@ fn stress_the_pages_overview_under_hostile_input_keeps_the_pages_the_selection_a
     let path = dir.join("outline.pdf");
     std::fs::write(&path, crate::testutil::pdf_with_outline()).expect("write");
     let (mut doc, _) = Doc::open(&path).expect("open");
-    let mut ed = Editor::new([1280.0, 800.0], 1.25, crate::motion::Prefs::REDUCED);
+    let mut ed = Editor::reference([1280.0, 800.0], 1.25, crate::motion::Prefs::REDUCED);
     ed.load(doc.layout(), vec![]);
     ed.outline = doc.take_outline();
     ed.links = doc.take_links();

@@ -9,8 +9,6 @@ use crate::workspace::Workspace;
 use super::paint::Painter;
 use super::{InputPolicy, PageEvent, Tool};
 
-const RED: [u8; 3] = [236, 36, 48];
-
 #[derive(Default)]
 pub struct PointerTool {
     pub laser: Laser,
@@ -94,18 +92,19 @@ impl Tool for PointerTool {
 
     fn paint(&self, ws: &Workspace, out: &mut dyn Painter) {
         let px = ws.dpr / ws.view.zoom;
+        let red = ws.theme.laser;
         let now = out.now_ms();
         for (a, b, life) in self.laser.pieces(now) {
             // Opaque, so the overlap between pieces leaves no beads; it fades by thinning.
-            out.doc_line(a, b, px * (0.8 + 8.2 * life.powf(1.4)), [RED[0], RED[1], RED[2], ((life * 4.0).min(1.0) * 255.0) as u8]);
+            out.doc_line(a, b, px * (0.8 + 8.2 * life.powf(1.4)), [red[0], red[1], red[2], ((life * 4.0).min(1.0) * 255.0) as u8]);
         }
         if let Some(head) = self.laser.head() {
             let at = ws.view.doc_to_screen(head);
             let dpr = ws.dpr;
-            out.screen_line(at, at, 30.0 * dpr, [RED[0], RED[1], RED[2], 56]);
-            out.screen_line(at, at, 18.0 * dpr, [RED[0], RED[1], RED[2], 110]);
-            out.screen_line(at, at, 10.0 * dpr, [RED[0], RED[1], RED[2], 255]);
-            out.screen_line(at, at, 4.0 * dpr, [255, 255, 255, 235]);
+            out.screen_line(at, at, 30.0 * dpr, [red[0], red[1], red[2], 56]);
+            out.screen_line(at, at, 18.0 * dpr, [red[0], red[1], red[2], 110]);
+            out.screen_line(at, at, 10.0 * dpr, [red[0], red[1], red[2], 255]);
+            out.screen_line(at, at, 4.0 * dpr, ws.theme.white_a(235));
         }
     }
 }

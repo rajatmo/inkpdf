@@ -3,7 +3,6 @@
 
 use crate::ink::P;
 
-pub const ACCENT: [u8; 4] = [64, 132, 255, 255];
 /// Length in points of the short pieces a stroke's curve is drawn in.
 pub const CURVE_STEP: f32 = 0.75;
 

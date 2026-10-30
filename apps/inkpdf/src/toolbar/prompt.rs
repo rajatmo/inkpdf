@@ -8,7 +8,7 @@
 use crate::requests::Choice;
 
 use super::icons::icons;
-use super::theme::{ACCENT, INK, Ui};
+use super::theme::Ui;
 use crate::scene::Xform;
 
 /// What is highlighted while the prompt is up.
@@ -20,10 +20,8 @@ pub struct PromptView {
     pub pressed: Option<Choice>,
 }
 
-const DANGER: [u8; 4] = [214, 52, 62, 255];
-const DANGER_WASH: [u8; 4] = [214, 52, 62, 34];
-const NEUTRAL_WASH: [u8; 4] = [20, 24, 40, 20];
-const SCRIM: [u8; 4] = [16, 20, 44, 104];
+/// How dark the scrim over the document is (0 to 255).
+const SCRIM_ALPHA: u8 = 104;
 
 /// Where everything is, for a window of `viewport` pixels at scale `dpr`.
 #[derive(Clone, Copy, Debug)]
@@ -68,7 +66,7 @@ impl PromptLayout {
     /// Drawn `amount` (0 to 1) of the way in: the scrim clears, and the card grows from a little smaller as it does.
     pub fn draw_with(&self, view: PromptView, amount: f32, ui: &mut Ui) {
         let u = self.unit;
-        ui.panel([0.0, 0.0, self.viewport[0], self.viewport[1]], 0.0, SCRIM);
+        ui.panel([0.0, 0.0, self.viewport[0], self.viewport[1]], 0.0, ui.pal.shadow(SCRIM_ALPHA));
         ui.fade(amount);
         let card = ui.mark();
         ui.floating(self.card, 0.5 * u, self.px);
@@ -76,20 +74,20 @@ impl PromptLayout {
         let line = (0.05 * u).max(1.5 * self.px);
         // What is being asked about: the document, with a dot that says it has unsaved changes.
         let centre = [(self.card[0] + self.card[2]) / 2.0, self.card[1] + 1.5 * u];
-        icons.save.draw(&mut ui.lines, centre[0], centre[1], 0.78 * u, 1.3 * line, INK);
-        ui.disc([centre[0] + 0.7 * u, centre[1] - 0.7 * u], 0.36 * u, [255, 255, 255, 255]);
-        ui.disc([centre[0] + 0.7 * u, centre[1] - 0.7 * u], 0.26 * u, ACCENT);
+        icons.save.draw(&mut ui.lines, centre[0], centre[1], 0.78 * u, 1.3 * line, ui.pal.ink);
+        ui.disc([centre[0] + 0.7 * u, centre[1] - 0.7 * u], 0.36 * u, ui.pal.white);
+        ui.disc([centre[0] + 0.7 * u, centre[1] - 0.7 * u], 0.26 * u, ui.pal.accent);
         for (choice, r) in self.buttons {
             let (fill, ink) = match choice {
-                Choice::Save => (ACCENT, [255, 255, 255, 255]),
-                Choice::Discard => (DANGER_WASH, DANGER),
-                Choice::Cancel => (NEUTRAL_WASH, INK),
+                Choice::Save => (ui.pal.accent, ui.pal.white),
+                Choice::Discard => (ui.pal.danger_wash, ui.pal.danger),
+                Choice::Cancel => (ui.pal.neutral_wash, ui.pal.ink),
             };
             ui.panel(r, 0.42 * u, fill);
             if view.pressed == Some(choice) {
-                ui.panel(r, 0.42 * u, [0, 0, 0, 44]);
+                ui.panel(r, 0.42 * u, ui.pal.press(44));
             } else if view.hover == Some(choice) {
-                ui.panel(r, 0.42 * u, [0, 0, 0, 20]);
+                ui.panel(r, 0.42 * u, ui.pal.press(20));
             }
             let icon = match choice {
                 Choice::Save => &icons.save,

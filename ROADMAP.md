@@ -67,7 +67,7 @@ Layers, lowest first (full table with every module in `apps/inkpdf/ARCHITECTURE.
 
 | Layer | Modules (today) |
 |---|---|
-| base | `plane`, `motion`, `scene`, `clock`, `geometry`, `colour`, `coords`, `view`, `text` (`font`, `layout`, `raster`), `smooth`, `clipboard` |
+| base | `plane`, `motion`, `scene`, `clock`, `geometry`, `colour`, `coords`, `view`, `text` (`font`, `layout`, `raster`), `smooth`, `clipboard`, `palette` |
 | model | `figure`, `ink`, `laser`, `links`, `outline`, `pages`, `page_table` |
 | domain | `tool`, `browse`, `input`, `requests`, `workspace`, `selection`, `settings`, `store` |
 | ui | `toolbar` (layout, hit-testing, drawing as plain data; `toolbar/overview/*`) |

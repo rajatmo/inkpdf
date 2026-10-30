@@ -15,7 +15,7 @@ use crate::input::Sample;
 use crate::plane::clamp_into;
 use crate::workspace::Workspace;
 
-use super::super::paint::{ACCENT, Painter, fill_square, polyline};
+use super::super::paint::{Painter, fill_square, polyline};
 use super::{Gesture, ShapeTool};
 
 /// Two taps this close in time (milliseconds) are a double tap.
@@ -172,8 +172,8 @@ impl ShapeTool {
         let (rgba, width) = ws.current_style();
         polyline(out, &outline, width, rgba);
         for &n in &nodes {
-            fill_square(out, n, 5.0 * px, px, ACCENT);
-            fill_square(out, n, 3.2 * px, px, [255, 255, 255, 255]);
+            fill_square(out, n, 5.0 * px, px, ws.theme.selection);
+            fill_square(out, n, 3.2 * px, px, ws.theme.white);
         }
     }
 }

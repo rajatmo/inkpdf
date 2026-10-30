@@ -14,8 +14,6 @@ use crate::tools::paint::CURVE_STEP;
 
 use super::{Paint, UiLayers};
 
-const ACCENT: [u8; 4] = [64, 132, 255, 255];
-
 /// What the GPU's committed-ink buffer was built from: the ink, how many strokes it had, the
 /// selection and the strokes being erased (the last two as hashes of their ids).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -254,7 +252,12 @@ fn selection_overlay(ed: &Editor, out: &mut Overlays) {
     }
     if let Some(b) = ed.ink.bounds_of(&ed.selection) {
         let pad = 5.0 * px;
-        push_rect(&mut out.doc, [b[0] + offset[0] - pad, b[1] + offset[1] - pad, b[2] + offset[0] + pad, b[3] + offset[1] + pad], 1.5 * px, ACCENT);
+        push_rect(
+            &mut out.doc,
+            [b[0] + offset[0] - pad, b[1] + offset[1] - pad, b[2] + offset[0] + pad, b[3] + offset[1] + pad],
+            1.5 * px,
+            ed.theme.selection,
+        );
     }
 }
 
@@ -280,7 +283,10 @@ fn pull_overlay(ed: &Editor, out: &mut Overlays) {
     let steps = ((STEPS as f32 * progress).ceil() as usize).max(1);
     for i in 0..steps {
         let (a, b) = (start + sweep * i as f32 / steps as f32, start + sweep * (i + 1) as f32 / steps as f32);
-        out.screen.push(Capsule::new(point(a), point(b), 3.0 * dpr, [ACCENT[0], ACCENT[1], ACCENT[2], alpha]));
+        out.screen.push(Capsule::new(point(a), point(b), 3.0 * dpr, {
+            let a = ed.theme.selection;
+            [a[0], a[1], a[2], alpha]
+        }));
     }
     let arm = 9.0 * dpr;
     let ink = [64, 69, 82, alpha];

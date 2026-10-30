@@ -12,7 +12,7 @@ use crate::figure::shape_points;
 use crate::geometry::{SHAPES, Shape};
 use crate::ink::rect_contains;
 
-use super::theme::{ACCENT, ACCENT_WASH, INK, RIM, TRACK, Ui};
+use super::theme::Ui;
 use super::{Tool, Toolbar, position_in, width_in, width_range};
 
 /// What is open in the panel beyond its basics.
@@ -143,8 +143,8 @@ impl Toolbar {
 
 /// A white disc for a thumb, with a rim so it shows on the white panel.
 fn white_thumb(ui: &mut Ui, at: [f32; 2], diameter: f32) {
-    ui.disc(at, diameter, RIM);
-    ui.disc(at, diameter - 0.07 * diameter.max(8.0), [255, 255, 255, 255]);
+    ui.disc(at, diameter, ui.pal.rim);
+    ui.disc(at, diameter - 0.07 * diameter.max(8.0), ui.pal.white);
 }
 
 impl ToolPanel {
@@ -252,8 +252,8 @@ impl ToolPanel {
         let line = (0.04 * u).max(1.4 * self.px);
         // Thickness: a small dot to a big one.
         self.draw_track(self.width_y, position_in(width_range(self.tool), view.width), ui);
-        ui.disc([self.rect[0] + 0.7 * u, self.width_y], 0.14 * u, INK);
-        ui.disc([self.rect[2] - 0.7 * u, self.width_y], 0.5 * u, INK);
+        ui.disc([self.rect[0] + 0.7 * u, self.width_y], 0.14 * u, ui.pal.ink);
+        ui.disc([self.rect[2] - 0.7 * u, self.width_y], 0.5 * u, ui.pal.ink);
         if let Some(y) = self.smoothing_y {
             // Smoothing: a jagged line to a smooth one.
             self.draw_track(y, view.smoothing.clamp(0.0, 1.0), ui);
@@ -275,7 +275,7 @@ impl ToolPanel {
             };
             for (centre, smooth) in [(left, false), (right, true)] {
                 for w in wave(centre, smooth).windows(2) {
-                    ui.line(w[0], w[1], line, INK);
+                    ui.line(w[0], w[1], line, ui.pal.ink);
                 }
             }
         }
@@ -284,11 +284,11 @@ impl ToolPanel {
             for (&x, shape) in self.shape_x.iter().zip(SHAPES) {
                 let on = shape == view.shape;
                 if on {
-                    ui.panel([x - 0.62 * u, y - 0.58 * u, x + 0.62 * u, y + 0.58 * u], 0.3 * u, ACCENT_WASH);
+                    ui.panel([x - 0.62 * u, y - 0.58 * u, x + 0.62 * u, y + 0.58 * u], 0.3 * u, ui.pal.accent_wash);
                 }
                 let icon = shape_points(shape, [x - 0.36 * u, y + 0.3 * u], [x + 0.36 * u, y - 0.3 * u]);
                 for w in icon.windows(2) {
-                    ui.line(w[0], w[1], line * 1.15, if on { ACCENT } else { INK });
+                    ui.line(w[0], w[1], line * 1.15, if on { ui.pal.accent } else { ui.pal.ink });
                 }
             }
         }
@@ -297,11 +297,11 @@ impl ToolPanel {
             let at = [x, self.swatch_y];
             if i == view.colour {
                 // A ring: the accent, a white gap, then the colour.
-                ui.disc(at, 0.86 * u, ACCENT);
-                ui.disc(at, 0.76 * u, [255, 255, 255, 255]);
+                ui.disc(at, 0.86 * u, ui.pal.accent);
+                ui.disc(at, 0.76 * u, ui.pal.white);
                 ui.disc(at, 0.64 * u, colour);
             } else {
-                ui.disc(at, 0.66 * u, RIM);
+                ui.disc(at, 0.66 * u, ui.pal.rim);
                 ui.disc(at, 0.6 * u, colour);
             }
         }
@@ -315,8 +315,8 @@ impl ToolPanel {
         let u = self.unit;
         let [x0, x1] = self.track_x;
         let thumb = x0 + (x1 - x0) * t;
-        ui.line([x0, y], [x1, y], 0.12 * u, TRACK);
-        ui.line([x0, y], [thumb, y], 0.12 * u, ACCENT);
+        ui.line([x0, y], [x1, y], 0.12 * u, ui.pal.track);
+        ui.line([x0, y], [thumb, y], 0.12 * u, ui.pal.accent);
         white_thumb(ui, [thumb, y], 0.56 * u);
     }
 
@@ -324,7 +324,7 @@ impl ToolPanel {
     /// what fits): a curve for the pen, the chosen shape for the shape tool.
     fn draw_preview(&self, view: &PanelView, ui: &mut Ui) {
         let u = self.unit;
-        ui.panel(self.preview, 0.3 * u, [20, 24, 40, 10]);
+        ui.panel(self.preview, 0.3 * u, ui.pal.wash(10));
         let colour = view.palette[view.colour % view.palette.len()];
         let thickness = (view.width * view.zoom).clamp(1.0, 0.8 * u);
         let [x0, y0, x1, y1] = self.preview;
@@ -358,7 +358,7 @@ impl ToolPanel {
     /// the colour being made.
     fn draw_editor(&self, e: &EditorRows, hsv: Hsv, ui: &mut Ui) {
         let u = self.unit;
-        ui.line([self.rect[0] + 0.5 * u, e.divider], [self.rect[2] - 0.5 * u, e.divider], self.px.max(1.0), super::theme::SEPARATOR);
+        ui.line([self.rect[0] + 0.5 * u, e.divider], [self.rect[2] - 0.5 * u, e.divider], self.px.max(1.0), ui.pal.separator);
         let [x0, x1] = e.track_x;
         for (channel, y) in CHANNELS.into_iter().zip(e.rows) {
             // The track: flat pieces side by side (a hair of overlap hides the seams), then a round
@@ -378,7 +378,7 @@ impl ToolPanel {
             ui.disc([at(position), y], 0.34 * u, colour_along(channel, hsv, position));
         }
         let rgb = colour::hsv_to_rgb(hsv);
-        ui.disc(e.swatch, 1.06 * u, RIM);
+        ui.disc(e.swatch, 1.06 * u, ui.pal.rim);
         ui.disc(e.swatch, 1.0 * u, [rgb[0], rgb[1], rgb[2], 255]);
     }
 }
@@ -548,9 +548,9 @@ mod tests {
         let p = panel(true);
         let mut ui = Ui::default();
         p.draw(&PanelView { editing: Some(2), ..view() }, &mut ui);
-        let ring = ui.lines.iter().filter(|c| c.a == [p.swatch_x[2], p.swatch_y] && c.color == ACCENT).count();
+        let ring = ui.lines.iter().filter(|c| c.a == [p.swatch_x[2], p.swatch_y] && c.color == crate::palette::LIGHT.accent).count();
         assert_eq!(ring, 1, "the colour in use has an accent ring");
-        assert_eq!(ui.lines.iter().filter(|c| c.a == [p.swatch_x[1], p.swatch_y] && c.color == ACCENT).count(), 0);
+        assert_eq!(ui.lines.iter().filter(|c| c.a == [p.swatch_x[1], p.swatch_y] && c.color == crate::palette::LIGHT.accent).count(), 0);
         let e = p.editor.expect("editor");
         let row =
             |y: f32| -> Vec<&Panel> { ui.panels.iter().filter(|q| ((q.rect[1] + q.rect[3]) / 2.0 - y).abs() < 0.01 && q.radius == 0.0).collect() };

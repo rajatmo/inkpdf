@@ -15,7 +15,7 @@ use crate::text;
 use crate::workspace::Workspace;
 
 use super::gestures::{Mover, Pick};
-use super::paint::{ACCENT, Painter, polyline};
+use super::paint::{Painter, polyline};
 use super::shortcuts::selection_key;
 use super::{Dir, InputPolicy, Key, MouseUse, PageEvent, TAP_SELECT_PX, Tool};
 
@@ -498,6 +498,7 @@ impl Tool for TextTool {
     }
 
     fn paint(&self, ws: &Workspace, out: &mut dyn Painter) {
+        let accent = ws.theme.selection;
         if let Press::Pick(p) = &self.press {
             p.paint(ws, out);
         }
@@ -505,13 +506,13 @@ impl Tool for TextTool {
         let px = ws.dpr / ws.view.zoom;
         let [left, top_edge] = edit.top_left;
         // The box being typed into; what is selected in it, as a wash; and the caret.
-        polyline(out, &edit.outline(), 1.5 * px, ACCENT);
+        polyline(out, &edit.outline(), 1.5 * px, accent);
         if let Some((lo, hi)) = edit.selection() {
             for [x0, y0, x1, y1] in text::selection_rects(&edit.text, edit.size, lo, hi) {
                 // A pill as tall as the line, drawn as one thick line so that the wash does not show seams.
                 let height = (y1 - y0).max(px);
                 let (r, middle) = (height.min(x1 - x0).max(px) / 2.0, top_edge + (y0 + y1) / 2.0);
-                out.doc_line([left + x0 + r, middle], [(left + x1 - r).max(left + x0 + r), middle], 2.0 * r, [ACCENT[0], ACCENT[1], ACCENT[2], 70]);
+                out.doc_line([left + x0 + r, middle], [(left + x1 - r).max(left + x0 + r), middle], 2.0 * r, [accent[0], accent[1], accent[2], 70]);
             }
         }
         let caret = text::caret_at(&edit.text, edit.size, edit.caret);

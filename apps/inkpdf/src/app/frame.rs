@@ -9,7 +9,6 @@ use crate::tiles::{self, Key};
 use super::bench::FrameParts;
 use super::{State, ink_layer, paint};
 
-const BACKGROUND: [f64; 4] = [0.93, 0.936, 0.947, 1.0];
 /// Texture memory kept for page tiles and previews.
 const TEXTURE_BUDGET: usize = 768 << 20;
 /// How long uploading finished tiles may take out of one frame.
@@ -127,7 +126,13 @@ impl State {
             self.timing.latency_ms.push((crate::clock::now_ms() - t) as f32);
         }
         let t_ink = Instant::now();
-        let result = self.gpu.draw(frame, &scene.quads, &self.layers.overview.quads, &ink_scene, BACKGROUND);
+        let result = self.gpu.draw(
+            frame,
+            &scene.quads,
+            &self.layers.overview.quads,
+            &ink_scene,
+            [self.ed.theme.window[0], self.ed.theme.window[1], self.ed.theme.window[2], 1.0],
+        );
         let t_draw = Instant::now();
         // Keep the buffers (and their room) for the next frame.
         self.layers.overlay_buf = overlays;

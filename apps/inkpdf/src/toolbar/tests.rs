@@ -235,6 +235,6 @@ fn the_mode_button_shows_which_mode_it_is_by_its_icon_and_the_tablet_in_the_acce
     // Nothing else on the toolbars changed: only the one button's lines differ.
     let differing = desk.iter().zip(&slate).filter(|(a, b)| a != b).count();
     assert!(differing > 0 && differing <= desk.len().max(slate.len()) / 4, "only the mode button is redrawn: {differing} of {}", desk.len());
-    let accent = |lines: &[String]| lines.iter().filter(|l| l.contains(&format!("{:?}", super::ACCENT))).count();
+    let accent = |lines: &[String]| lines.iter().filter(|l| l.contains(&format!("{:?}", crate::palette::LIGHT.accent))).count();
     assert!(accent(&slate) > accent(&desk), "the tablet is drawn in the accent colour");
 }

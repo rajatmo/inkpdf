@@ -19,7 +19,7 @@ use crate::tool::{MAX_ACTIONS, ToolAction};
 use super::Tool;
 use super::Toolbar;
 use super::icons::icons;
-use super::theme::{ACCENT, ACCENT_WASH, INK, INK_DIM, RIM, SEPARATOR, Ui};
+use super::theme::Ui;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ContextItem {
@@ -219,13 +219,13 @@ impl ContextBar {
         match drawer_bottom {
             Some(end) => {
                 ui.floating(self.card(end), 0.45 * u, px);
-                ui.line([self.rect[0] + 0.5 * u, bottom], [self.rect[2] - 0.5 * u, bottom], px.max(1.0), SEPARATOR);
+                ui.line([self.rect[0] + 0.5 * u, bottom], [self.rect[2] - 0.5 * u, bottom], px.max(1.0), ui.pal.separator);
             }
             None => ui.floating(self.rect, 0.5 * (bottom - top), px),
         }
         let mid = (top + bottom) / 2.0;
         for &x in &self.gaps[..self.gap_count] {
-            ui.line([x, mid - 0.32 * u], [x, mid + 0.32 * u], px.max(1.0), SEPARATOR);
+            ui.line([x, mid - 0.32 * u], [x, mid + 0.32 * u], px.max(1.0), ui.pal.separator);
         }
         let all = icons();
         let line = (u * 0.04).max(1.4 * px);
@@ -238,15 +238,15 @@ impl ContextBar {
                 _ => false,
             };
             if on {
-                ui.panel([cx - 0.46 * u, cy - 0.46 * u, cx + 0.46 * u, cy + 0.46 * u], 0.3 * u, ACCENT_WASH);
+                ui.panel([cx - 0.46 * u, cy - 0.46 * u, cx + 0.46 * u, cy + 0.46 * u], 0.3 * u, ui.pal.accent_wash);
             }
             let enabled = Self::enabled(item, state);
             let colour = if on {
-                ACCENT
+                ui.pal.accent
             } else if enabled {
-                INK
+                ui.pal.ink
             } else {
-                INK_DIM
+                ui.pal.ink_dim
             };
             let icon = match item {
                 // Drawing is what the tool in use does, so its own icon stands for it.
@@ -268,19 +268,19 @@ impl ContextBar {
                     // A colour: the one in use is ringed, as in the panel.
                     let colour = state.palette[slot % state.palette.len()];
                     if slot == state.colour {
-                        ui.disc([cx, cy], 0.74 * u, ACCENT);
-                        ui.disc([cx, cy], 0.64 * u, [255, 255, 255, 255]);
+                        ui.disc([cx, cy], 0.74 * u, ui.pal.accent);
+                        ui.disc([cx, cy], 0.64 * u, ui.pal.white);
                         ui.disc([cx, cy], 0.54 * u, colour);
                     } else {
-                        ui.disc([cx, cy], 0.56 * u, RIM);
+                        ui.disc([cx, cy], 0.56 * u, ui.pal.rim);
                         ui.disc([cx, cy], 0.5 * u, colour);
                     }
                     continue;
                 }
                 ContextItem::Style if self.compact => {
                     // The colour in use, as a dot in a ring: the panel with the colours opens from it.
-                    ui.disc([cx, cy], 0.78 * u, if on { ACCENT } else { RIM });
-                    ui.disc([cx, cy], 0.66 * u, [255, 255, 255, 255]);
+                    ui.disc([cx, cy], 0.78 * u, if on { ui.pal.accent } else { ui.pal.rim });
+                    ui.disc([cx, cy], 0.66 * u, ui.pal.white);
                     ui.disc([cx, cy], 0.54 * u, state.palette[state.colour % state.palette.len()]);
                     continue;
                 }

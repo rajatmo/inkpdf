@@ -26,7 +26,7 @@ use crate::input::Sample;
 use crate::plane::clamp_into;
 use crate::workspace::Workspace;
 
-use super::super::paint::{ACCENT, Painter, dashed, fill_square, polyline};
+use super::super::paint::{Painter, dashed, fill_square, polyline};
 use super::{Gesture, SNAP_PX, ShapeTool};
 use crate::tools::{TAP_SELECT_PX, Tool};
 
@@ -254,12 +254,13 @@ impl ShapeTool {
     /// solid), the handles that exist as circles joined to their anchors, and a marker where a drag has
     /// snapped to another shape's anchor.
     pub(super) fn paint_anchors(&self, ws: &Workspace, out: &mut dyn Painter) {
+        let (accent, white) = (ws.theme.selection, ws.theme.white);
         let px = ws.dpr / ws.view.zoom;
         let offset = self.drag_offset();
         if let Some((_, figure)) = self.editing(ws) {
             let selected = self.selected_anchor(ws);
             let at = |p: P| [p[0] + offset[0], p[1] + offset[1]];
-            let guide = [ACCENT[0], ACCENT[1], ACCENT[2], 150];
+            let guide = [accent[0], accent[1], accent[2], 150];
             let controls = figure.controls();
             // The rectangle's diagonal, the ellipse's bounding box.
             for [a, b] in figure.guides() {
@@ -275,20 +276,20 @@ impl ShapeTool {
             for &(control, p) in &controls {
                 match control {
                     Control::Back(_) | Control::Fwd(_) => {
-                        out.doc_line(at(p), at(p), 11.0 * px, ACCENT);
-                        out.doc_line(at(p), at(p), 7.5 * px, [255, 255, 255, 255]);
+                        out.doc_line(at(p), at(p), 11.0 * px, accent);
+                        out.doc_line(at(p), at(p), 7.5 * px, white);
                     }
                     Control::Anchor(i) => {
                         let on = selected == Some(i);
-                        fill_square(out, at(p), 5.5 * px, px, ACCENT);
-                        fill_square(out, at(p), 3.6 * px, px, if on { ACCENT } else { [255, 255, 255, 255] });
+                        fill_square(out, at(p), 5.5 * px, px, accent);
+                        fill_square(out, at(p), 3.6 * px, px, if on { accent } else { white });
                     }
                 }
             }
         }
         if let Some(target) = self.snap {
             // A ring and a cross where the drag has landed on another shape's anchor.
-            let magenta = [226, 40, 150, 255];
+            let magenta = ws.theme.snap;
             let r = 10.0 * px;
             let ring: Vec<P> = (0..=24)
                 .map(|i| {

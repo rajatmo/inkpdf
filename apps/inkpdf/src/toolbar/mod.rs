@@ -34,7 +34,6 @@ pub use overview::{
 };
 pub use prompt::{PromptLayout, PromptView};
 pub use save_as::{ListingView, SaveAsHit, SaveAsLayout, SaveAsView};
-use theme::{ACCENT, ACCENT_WASH, HOVER_WASH, INK, INK_DIM, RIM, SEPARATOR};
 pub use theme::{Align, Image, Label, Ui};
 #[cfg(test)]
 pub use tool_panel::ToolPanel;
@@ -238,7 +237,7 @@ impl Toolbar {
         // The mark of the tool in use: one wash that slides from button to button.
         if let Some(rect) = self.mark_of_tool(look.tool) {
             let (cx, cy) = ((rect[0] + rect[2]) / 2.0, (rect[1] + rect[3]) / 2.0);
-            ui.panel([cx - 0.46 * u, cy - 0.46 * u, cx + 0.46 * u, cy + 0.46 * u], 0.3 * u, ACCENT_WASH);
+            ui.panel([cx - 0.46 * u, cy - 0.46 * u, cx + 0.46 * u, cy + 0.46 * u], 0.3 * u, ui.pal.accent_wash);
         }
         let mut last_end: Option<(usize, f32)> = None;
         for (slot, &(item, r)) in self.items.iter().enumerate() {
@@ -249,40 +248,44 @@ impl Toolbar {
                 && r[0] - end > 1.0
             {
                 let x = end + (r[0] - end) / 2.0;
-                ui.line([x, cy - 0.32 * u], [x, cy + 0.32 * u], px.max(1.0), SEPARATOR);
+                ui.line([x, cy - 0.32 * u], [x, cy + 0.32 * u], px.max(1.0), ui.pal.separator);
             }
             last_end = Some((pill, r[2]));
             // The grey wash of the pointer being over a button, as lit as the look says; a press spreading from its middle.
             let square = [cx - 0.46 * u, cy - 0.46 * u, cx + 0.46 * u, cy + 0.46 * u];
             if look.hover[slot] > 0.0 {
-                ui.panel(square, 0.3 * u, look::mix([HOVER_WASH[0], HOVER_WASH[1], HOVER_WASH[2], 0], HOVER_WASH, look.hover[slot]));
+                ui.panel(
+                    square,
+                    0.3 * u,
+                    look::mix([ui.pal.hover_wash[0], ui.pal.hover_wash[1], ui.pal.hover_wash[2], 0], ui.pal.hover_wash, look.hover[slot]),
+                );
             }
             let spread = look.ripple[slot];
             if spread > 0.0 && spread < 1.0 {
                 let reach = 0.46 * u * (1.0 - (1.0 - spread) * (1.0 - spread));
-                let colour = look::mix(ACCENT_WASH, [ACCENT[0], ACCENT[1], ACCENT[2], 0], spread);
+                let colour = look::mix(ui.pal.accent_wash, [ui.pal.accent[0], ui.pal.accent[1], ui.pal.accent[2], 0], spread);
                 ui.panel([cx - reach, cy - reach, cx + reach, cy + reach], (0.3 * u).min(reach), colour);
             }
             let half = 0.33 * u;
-            let ink = |amount: f32| look::mix(INK_DIM, INK, amount);
-            let tool_ink = |index: usize| look::mix(INK, ACCENT, look::nearness(look.tool, index));
+            let ink = |amount: f32| look::mix(ui.pal.ink_dim, ui.pal.ink, amount);
+            let tool_ink = |index: usize| look::mix(ui.pal.ink, ui.pal.accent, look::nearness(look.tool, index));
             match item {
                 Item::Undo => icons.undo.draw(&mut ui.lines, cx, cy, half, line, ink(look.enabled[slot])),
                 Item::Redo => icons.redo.draw(&mut ui.lines, cx, cy, half, line, ink(look.enabled[slot])),
-                Item::Save => icons.save.draw(&mut ui.lines, cx, cy, half, line, look::mix(INK, ACCENT, look.unsaved)),
-                Item::Close => icons.close.draw(&mut ui.lines, cx, cy, half, line, INK),
+                Item::Save => icons.save.draw(&mut ui.lines, cx, cy, half, line, look::mix(ui.pal.ink, ui.pal.accent, look.unsaved)),
+                Item::Close => icons.close.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink),
                 Item::DeletePage => icons.trash.draw(&mut ui.lines, cx, cy, half, line, ink(look.enabled[slot])),
-                Item::AddPage => icons.plus.draw(&mut ui.lines, cx, cy, half, line, INK),
-                Item::Pages => icons.pages.draw(&mut ui.lines, cx, cy, half, line, INK),
+                Item::AddPage => icons.plus.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink),
+                Item::Pages => icons.pages.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink),
                 // The mode in use, drawn as the machine it is for; the tablet in the accent colour, as the one you chose
                 // to leave the desk for.
                 Item::ModeSwitch => match state.mode {
-                    Mode::Desktop => icons.desktop.draw(&mut ui.lines, cx, cy, half, line, INK),
-                    Mode::Tablet => icons.tablet.draw(&mut ui.lines, cx, cy, half, line, ACCENT),
+                    Mode::Desktop => icons.desktop.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink),
+                    Mode::Tablet => icons.tablet.draw(&mut ui.lines, cx, cy, half, line, ui.pal.accent),
                 },
                 Item::Fullscreen => {
                     let icon = if state.fullscreen { &icons.exit_fullscreen } else { &icons.fullscreen };
-                    icon.draw(&mut ui.lines, cx, cy, half, line, INK);
+                    icon.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink);
                 }
                 Item::Tool(tool @ (Tool::Pen | Tool::Geometry | Tool::Text)) => {
                     let (icon, colour, index) = match tool {
@@ -293,8 +296,8 @@ impl Toolbar {
                     icon.draw(&mut ui.lines, cx, cy, half * 1.05, line, tool_ink(index));
                     // The colour the tool writes in, as a dot on its corner.
                     let dot = [r[2] - 0.2 * u, r[3] - 0.2 * u];
-                    ui.disc(dot, 0.3 * u, [255, 255, 255, 255]);
-                    ui.disc(dot, 0.24 * u, RIM);
+                    ui.disc(dot, 0.3 * u, ui.pal.white);
+                    ui.disc(dot, 0.24 * u, ui.pal.rim);
                     ui.disc(dot, 0.2 * u, colour);
                 }
                 Item::Tool(Tool::Laser) => icons.laser.draw(&mut ui.lines, cx, cy, half * 1.05, line, tool_ink(3)),

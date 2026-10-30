@@ -147,11 +147,12 @@ enum Layer {
 }
 
 /// Every top-level module of the program, and its layer. A new module is placed here or the test fails.
-const LAYERS: [(&str, Layer); 40] = [
+const LAYERS: [(&str, Layer); 41] = [
     ("plane", Layer::Base),
     ("motion", Layer::Base),
     ("scene", Layer::Base),
     ("clock", Layer::Base),
+    ("palette", Layer::Base),
     ("geometry", Layer::Base),
     ("colour", Layer::Base),
     ("coords", Layer::Base),
@@ -381,6 +382,42 @@ fn nothing_below_the_adapters_touches_the_disk_the_environment_or_an_operating_s
         })
         .collect();
     assert_free_of(&inner.iter().map(String::as_str).collect::<Vec<_>>(), &forbidden);
+}
+
+/// Whether a line has something that looks like a colour literal: `[r, g, b]` or `[r, g, b, a]` in whole numbers, one of them above 8
+/// (so an index list such as `[0, 1, 2, 3]` is not one).
+fn has_colour_literal(line: &str) -> bool {
+    let mut rest = line;
+    while let Some(open) = rest.find('[') {
+        rest = &rest[open + 1..];
+        let Some(close) = rest.find(']') else { break };
+        let parts: Vec<&str> = rest[..close].split(',').map(str::trim).collect();
+        if (parts.len() == 3 || parts.len() == 4)
+            && parts.iter().all(|p| p.parse::<u8>().is_ok())
+            && parts.iter().any(|p| p.parse::<u8>().is_ok_and(|n| n > 8))
+        {
+            return true;
+        }
+    }
+    false
+}
+
+#[test]
+fn the_interface_has_no_colour_of_its_own_every_colour_is_a_role_of_the_palette() {
+    // What the toolbars, the cards and the tools draw is coloured by `palette::Palette` (so the dark scheme can have its own values for
+    // the same roles); a literal colour in these places is a colour the dark scheme cannot change.
+    let mut bad = Vec::new();
+    for rel in ["toolbar", "tools"] {
+        for file in sources(&src().join(rel)) {
+            let text = std::fs::read_to_string(&file).unwrap_or_default();
+            for (i, line) in production_lines(&text) {
+                if !line.trim_start().starts_with("//") && has_colour_literal(line) {
+                    bad.push(format!("{}:{}: {}", file.strip_prefix(src()).unwrap_or(&file).display(), i + 1, line.trim()));
+                }
+            }
+        }
+    }
+    assert!(bad.is_empty(), "a colour that is not a role of the palette:\n{}", bad.join("\n"));
 }
 
 #[test]

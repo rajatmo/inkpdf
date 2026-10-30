@@ -29,6 +29,7 @@ mod outline;
 mod page_table;
 mod pages;
 mod pagetext;
+mod palette;
 mod path_store;
 mod pdf;
 mod pdf_read;

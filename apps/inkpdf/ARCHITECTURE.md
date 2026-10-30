@@ -59,7 +59,7 @@ ones below; no two modules may reach each other, directly or through others.
 | ui | `toolbar` |
 | domain | `tool`, `browse`, `input`, `requests`, `workspace`, `selection`, `settings`, `store` |
 | model | `figure`, `ink`, `laser`, `links`, `outline`, `pages`, `page_table`, `pagetext` |
-| base | `plane`, `motion`, `scene`, `clock`, `geometry`, `colour`, `coords`, `view`, `text`, `smooth`, `clipboard` |
+| base | `plane`, `motion`, `scene`, `clock`, `geometry`, `colour`, `coords`, `view`, `text`, `smooth`, `clipboard`, `palette` |
 
 * `plane` holds the point type `P` and the plane arithmetic (distances, polygon tests, simplify, thin, `clamp_into`)
   that `ink`, `figure`, `smooth`, `text` and `laser` all stand on; `ink` re-exports the common ones. `geometry` is only

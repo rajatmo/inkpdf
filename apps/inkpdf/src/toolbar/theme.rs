@@ -1,23 +1,8 @@
-//! The look of the interface: a light, floating style (white rounded panels with soft shadows,
-//! slate icons, one blue accent), and the small drawing helpers the toolbar and pop-ups share.
+//! The look of the interface: a floating style (rounded panels with soft shadows, line icons, one accent), in the colours of the
+//! [`Palette`] the [`Ui`] carries, and the small drawing helpers the toolbar and pop-ups share.
 
+use crate::palette::Palette;
 use crate::scene::{Capsule, Panel, Xform};
-
-/// Panels: plain white, so page text never ghosts through them.
-pub(super) const PANEL: [u8; 4] = [255, 255, 255, 255];
-pub(super) const PANEL_EDGE: [u8; 4] = [20, 24, 40, 26];
-/// Icons and text-weight lines.
-pub(super) const INK: [u8; 4] = [64, 69, 82, 255];
-pub(super) const INK_DIM: [u8; 4] = [176, 181, 192, 255];
-pub(super) const ACCENT: [u8; 4] = [47, 128, 237, 255];
-/// The wash behind an active button, and behind one the mouse is over.
-pub(super) const ACCENT_WASH: [u8; 4] = [47, 128, 237, 58];
-pub(super) const HOVER_WASH: [u8; 4] = [20, 24, 40, 16];
-pub(super) const SEPARATOR: [u8; 4] = [20, 24, 40, 24];
-/// The empty part of a slider.
-pub(super) const TRACK: [u8; 4] = [20, 24, 40, 34];
-/// The rim of a colour dot or a slider thumb, so a white one still shows on a white panel.
-pub(super) const RIM: [u8; 4] = [20, 24, 40, 56];
 
 /// Which side of its position a label sits on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -73,6 +58,8 @@ pub struct Mark {
 /// lines over those.
 #[derive(Clone, Default)]
 pub struct Ui {
+    /// The colours it is drawn in (the light scheme unless it was made with [`Ui::with_palette`]).
+    pub pal: Palette,
     pub panels: Vec<Panel>,
     pub lines: Vec<Capsule>,
     pub images: Vec<Image>,
@@ -80,6 +67,12 @@ pub struct Ui {
 }
 
 impl Ui {
+    #[allow(dead_code, reason = "the shell draws in the editor's palette (T4)")]
+    /// An empty drawing, to be made in these colours.
+    pub fn with_palette(pal: Palette) -> Self {
+        Self { pal, ..Self::default() }
+    }
+
     /// Where what is drawn so far ends: what is drawn after it can be given a change of place or opacity on its own
     /// (see [`Ui::apply`]).
     pub fn mark(&self) -> Mark {
@@ -128,13 +121,14 @@ impl Ui {
         self.panels.push(Panel::solid(rect, radius, color));
     }
 
-    /// A white panel that floats: a wide soft shadow, a tight one, a hairline edge, the fill.
+    /// A panel that floats: a wide soft shadow, a tight one, a hairline edge, the fill.
     /// `px` is one interface pixel at the current scale.
     pub fn floating(&mut self, rect: [f32; 4], radius: f32, px: f32) {
         let shifted = |dy: f32, grow: f32| [rect[0] - grow, rect[1] + dy - grow, rect[2] + grow, rect[3] + dy + grow];
-        self.panels.push(Panel::new(shifted(8.0 * px, 0.0), radius, 28.0 * px, [16, 20, 44, 46]));
-        self.panels.push(Panel::new(shifted(2.0 * px, 0.0), radius, 6.0 * px, [16, 20, 44, 40]));
-        self.panels.push(Panel::solid(shifted(0.0, 0.5 * px), radius + 0.5 * px, PANEL_EDGE));
-        self.panels.push(Panel::solid(rect, radius, PANEL));
+        let pal = self.pal;
+        self.panels.push(Panel::new(shifted(8.0 * px, 0.0), radius, 28.0 * px, pal.shadow(46)));
+        self.panels.push(Panel::new(shifted(2.0 * px, 0.0), radius, 6.0 * px, pal.shadow(40)));
+        self.panels.push(Panel::solid(shifted(0.0, 0.5 * px), radius + 0.5 * px, pal.panel_edge));
+        self.panels.push(Panel::solid(rect, radius, pal.panel));
     }
 }

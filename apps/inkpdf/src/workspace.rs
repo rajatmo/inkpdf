@@ -8,6 +8,7 @@ use crate::clipboard::{MemoryClipboard, TextClipboard};
 use crate::geometry::Shape;
 use crate::ink::{InkStore, P, Stroke};
 use crate::input::{Intent, PenButtons, Role, role_with};
+use crate::palette::Palette;
 use crate::tool::{PALETTE, Tool, ToolStyle};
 use crate::view::{Layout, View};
 
@@ -48,6 +49,8 @@ pub struct Workspace {
     pub shape: Shape,
     /// How much the pen is steadied while drawing, 0 to 1 (see [`crate::smooth`]).
     pub smoothing: f32,
+    /// The colours of the interface now (what the tools paint their handles and outlines in), as the editor resolved the scheme.
+    pub theme: Palette,
     /// What the shell is asked to do, and whether a frame is wanted.
     pub requests: Requests,
     pub redraw: bool,
@@ -76,6 +79,7 @@ impl Workspace {
             text_style: ToolStyle::TEXT,
             shape: Shape::default(),
             smoothing: crate::smooth::DEFAULT_AMOUNT,
+            theme: Palette::default(),
             requests: Requests::default(),
             redraw: false,
         }

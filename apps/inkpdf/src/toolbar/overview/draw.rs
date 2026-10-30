@@ -8,13 +8,11 @@ use crate::text;
 use crate::view::Layout;
 
 use super::super::icons::icons;
-use super::super::theme::{ACCENT, ACCENT_WASH, Align, HOVER_WASH, INK, INK_DIM, Image, Label, PANEL_EDGE, SEPARATOR, Ui};
+use super::super::theme::{Align, Image, Label, Ui};
 use super::layout::{Action, Control, MenuItem, OverviewLayout, TocHit, TocRow};
 
-const SCRIM: [u8; 4] = [16, 20, 44, 120];
-const PAPER: [u8; 4] = [255, 255, 255, 255];
-const PRESSED_WASH: [u8; 4] = [20, 24, 40, 30];
-const DANGER: [u8; 4] = [214, 52, 62, 255];
+/// How dark the scrim over the document is (0 to 255).
+const SCRIM_ALPHA: u8 = 120;
 
 /// What the pointer is over or pressing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -146,7 +144,7 @@ fn chevron(ui: &mut Ui, centre: [f32; 2], size: f32, open: bool, width: f32, col
 /// Draw the overview into `ui`.
 pub fn draw(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
     let (u, px) = (l.unit(), l.px());
-    ui.panels.push(crate::scene::Panel::solid([0.0, 0.0, l.viewport[0], l.viewport[1]], 0.0, SCRIM));
+    ui.panels.push(crate::scene::Panel::solid([0.0, 0.0, l.viewport[0], l.viewport[1]], 0.0, ui.pal.shadow(SCRIM_ALPHA)));
     ui.floating(l.card, 0.9 * u, px);
     header(view, l, ui);
     if l.toc.is_some() {
@@ -172,7 +170,7 @@ fn menu(view: &OverviewView<'_>, l: &OverviewLayout, page: usize, ui: &mut Ui) {
     for (k, (item, r)) in items.into_iter().enumerate() {
         let enabled = view.menu_enabled[k];
         if view.hover == Some(Hover::Menu(item)) && enabled {
-            ui.panels.push(crate::scene::Panel::solid(r, 0.3 * u, HOVER_WASH));
+            ui.panels.push(crate::scene::Panel::solid(r, 0.3 * u, ui.pal.hover_wash));
         }
         let text = match item {
             MenuItem::Before => "Add page before",
@@ -181,11 +179,11 @@ fn menu(view: &OverviewView<'_>, l: &OverviewLayout, page: usize, ui: &mut Ui) {
             MenuItem::Delete => "Delete",
         };
         let color = if !enabled {
-            INK_DIM
+            ui.pal.ink_dim
         } else if item == MenuItem::Delete {
-            DANGER
+            ui.pal.danger
         } else {
-            INK
+            ui.pal.ink
         };
         ui.labels.push(Label {
             text: text.to_string(),
@@ -201,7 +199,7 @@ fn menu(view: &OverviewView<'_>, l: &OverviewLayout, page: usize, ui: &mut Ui) {
 fn header(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
     let (u, px) = (l.unit(), l.px());
     let centre_y = (l.header[1] + l.header[3]) / 2.0;
-    icons().pages.draw(&mut ui.lines, l.card[0] + 1.0 * u, centre_y, 0.5 * u, 1.6 * px, INK);
+    icons().pages.draw(&mut ui.lines, l.card[0] + 1.0 * u, centre_y, 0.5 * u, 1.6 * px, ui.pal.ink);
     let count = view.layout.len();
     ui.labels.push(Label {
         text: if view.edit && !view.selected.is_empty() {
@@ -212,7 +210,7 @@ fn header(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
             format!("All pages ({count})")
         },
         size: 0.62 * u,
-        color: INK,
+        color: ui.pal.ink,
         at: [l.card[0] + 1.8 * u, centre_y],
         align: Align::Left,
         alpha: 1.0,
@@ -226,11 +224,11 @@ fn header(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
         };
         let on = control == Control::Edit && view.edit;
         let wash = if view.pressed == Some(Hover::Control(control)) && enabled {
-            Some(PRESSED_WASH)
+            Some(ui.pal.pressed_wash)
         } else if on {
-            Some(ACCENT_WASH)
+            Some(ui.pal.accent_wash)
         } else if view.hover == Some(Hover::Control(control)) && enabled {
-            Some(HOVER_WASH)
+            Some(ui.pal.hover_wash)
         } else {
             None
         };
@@ -238,11 +236,11 @@ fn header(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
             ui.panels.push(crate::scene::Panel::solid(r, (r[2] - r[0]) / 2.0, color));
         }
         let color = if !enabled {
-            INK_DIM
+            ui.pal.ink_dim
         } else if on {
-            ACCENT
+            ui.pal.accent
         } else {
-            INK
+            ui.pal.ink
         };
         let half = 0.45 * u;
         let icon = match control {
@@ -254,17 +252,17 @@ fn header(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
         };
         icon.draw(&mut ui.lines, centre[0], centre[1], half, 1.7 * px, color);
     }
-    ui.line([l.header[0], l.header[3]], [l.header[2], l.header[3]], px, SEPARATOR);
+    ui.line([l.header[0], l.header[3]], [l.header[2], l.header[3]], px, ui.pal.separator);
 }
 
 fn contents(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
     let (u, px) = (l.unit(), l.px());
     let Some(toc) = l.toc else { return };
-    ui.line([toc[2], toc[1]], [toc[2], toc[3] - 0.9 * u], px, SEPARATOR);
+    ui.line([toc[2], toc[1]], [toc[2], toc[3] - 0.9 * u], px, ui.pal.separator);
     ui.labels.push(Label {
         text: "Contents".to_string(),
         size: 0.46 * u,
-        color: INK_DIM,
+        color: ui.pal.ink_dim,
         at: [toc[0] + 0.9 * u, toc[1] + 0.6 * u],
         align: Align::Left,
         alpha: 1.0,
@@ -280,22 +278,22 @@ fn contents(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
         let section = view.section == Some(row.item);
         let hovered = matches!(view.hover, Some(Hover::Toc(TocHit::Title(i) | TocHit::Arrow(i))) if i == k);
         if section {
-            ui.panels.push(crate::scene::Panel::solid(r, 0.3 * u, ACCENT_WASH));
+            ui.panels.push(crate::scene::Panel::solid(r, 0.3 * u, ui.pal.accent_wash));
         } else if hovered {
-            ui.panels.push(crate::scene::Panel::solid(r, 0.3 * u, HOVER_WASH));
+            ui.panels.push(crate::scene::Panel::solid(r, 0.3 * u, ui.pal.hover_wash));
         }
         let centre_y = (r[1] + r[3]) / 2.0;
         if row.foldable {
             let arrow = l.toc_arrow(row, k, view.toc_scroll);
-            chevron(ui, [(arrow[0] + arrow[2]) / 2.0, centre_y], 0.14 * u, !(view.folded)(row.item), 1.5 * px, INK_DIM);
+            chevron(ui, [(arrow[0] + arrow[2]) / 2.0, centre_y], 0.14 * u, !(view.folded)(row.item), 1.5 * px, ui.pal.ink_dim);
         }
         let x = l.toc_title_x(row, k, view.toc_scroll);
         let color = if section {
-            ACCENT
+            ui.pal.accent
         } else if item.page.is_some() {
-            INK
+            ui.pal.ink
         } else {
-            INK_DIM
+            ui.pal.ink_dim
         };
         let title = fit(&item.title, size, r[2] - x - 0.2 * u);
         if !title.is_empty() {
@@ -322,46 +320,36 @@ fn pages(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
                 [thumb[0] - px, thumb[1] - px + 2.0 * px, thumb[2] + px, thumb[3] + px + 2.0 * px],
                 2.0 * px,
                 6.0 * px,
-                [16, 20, 44, 36],
+                ui.pal.shadow(36),
             ));
         }
-        ui.panels.push(crate::scene::Panel::solid([shown[0] - px, shown[1] - px, shown[2] + px, shown[3] + px], 2.0 * px, PANEL_EDGE));
-        ui.panels.push(crate::scene::Panel::solid(shown, 1.5 * px, PAPER));
+        ui.panels.push(crate::scene::Panel::solid([shown[0] - px, shown[1] - px, shown[2] + px, shown[3] + px], 2.0 * px, ui.pal.panel_edge));
+        ui.panels.push(crate::scene::Panel::solid(shown, 1.5 * px, ui.pal.paper));
         // A page being dragged is left faded where it was.
         let faded = view.drag.is_some_and(|d| d.pages.contains(&i));
         ui.images.push(Image { page: i as u32, full: thumb, shown, alpha: if faded { 0.3 } else { 1.0 } });
         if hovered && !current {
-            ui.panels.push(crate::scene::Panel::solid(shown, 1.5 * px, HOVER_WASH));
+            ui.panels.push(crate::scene::Panel::solid(shown, 1.5 * px, ui.pal.hover_wash));
         }
         if whole {
             if selected(i) {
-                outline_rect(ui, [thumb[0] - 3.0 * px, thumb[1] - 3.0 * px, thumb[2] + 3.0 * px, thumb[3] + 3.0 * px], 3.0 * px, ACCENT);
+                outline_rect(ui, [thumb[0] - 3.0 * px, thumb[1] - 3.0 * px, thumb[2] + 3.0 * px, thumb[3] + 3.0 * px], 3.0 * px, ui.pal.accent);
             } else if current {
-                outline_rect(ui, [thumb[0] - 3.0 * px, thumb[1] - 3.0 * px, thumb[2] + 3.0 * px, thumb[3] + 3.0 * px], 2.5 * px, ACCENT);
+                outline_rect(ui, [thumb[0] - 3.0 * px, thumb[1] - 3.0 * px, thumb[2] + 3.0 * px, thumb[3] + 3.0 * px], 2.5 * px, ui.pal.accent);
             }
             if view.edit {
                 // A circle to tick in the top right corner (where a page has the least on it): filled once the page is chosen.
                 let centre = [thumb[2] - 0.55 * u, thumb[1] + 0.55 * u];
                 let tick = ui.mark();
                 if selected(i) {
-                    ui.disc(centre, 0.8 * u, ACCENT);
-                    ui.line(
-                        [centre[0] - 0.2 * u, centre[1] + 0.02 * u],
-                        [centre[0] - 0.05 * u, centre[1] + 0.18 * u],
-                        2.0 * px,
-                        [255, 255, 255, 255],
-                    );
-                    ui.line(
-                        [centre[0] - 0.05 * u, centre[1] + 0.18 * u],
-                        [centre[0] + 0.24 * u, centre[1] - 0.16 * u],
-                        2.0 * px,
-                        [255, 255, 255, 255],
-                    );
+                    ui.disc(centre, 0.8 * u, ui.pal.accent);
+                    ui.line([centre[0] - 0.2 * u, centre[1] + 0.02 * u], [centre[0] - 0.05 * u, centre[1] + 0.18 * u], 2.0 * px, ui.pal.white);
+                    ui.line([centre[0] - 0.05 * u, centre[1] + 0.18 * u], [centre[0] + 0.24 * u, centre[1] - 0.16 * u], 2.0 * px, ui.pal.white);
                 } else {
                     // An open ring (the page shows through it) that shows on white paper, with a pale one round it
                     // so that it shows on dark pages too.
-                    ring(ui, centre, 0.7 * u, 3.6 * px, [255, 255, 255, 200]);
-                    ring(ui, centre, 0.7 * u, 1.8 * px, INK_DIM);
+                    ring(ui, centre, 0.7 * u, 3.6 * px, ui.pal.white_a(200));
+                    ring(ui, centre, 0.7 * u, 1.8 * px, ui.pal.ink_dim);
                 }
                 // A tick just made pops in: it grows from half its size as it clears.
                 ui.apply(tick, Xform::grow(centre, 1.0 - 0.5 * motion.tick, 1.0 - motion.tick));
@@ -370,20 +358,20 @@ fn pages(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
         // The number, under the picture.
         let row = l.number_row(i, view.scroll);
         if within(l.grid, row) {
-            let color = if current || selected(i) { ACCENT } else { INK };
+            let color = if current || selected(i) { ui.pal.accent } else { ui.pal.ink };
             let (centre_x, centre_y) = ((row[0] + row[2]) / 2.0, (row[1] + row[3]) / 2.0 + 0.1 * u);
             if view.hover == Some(Hover::Number(i)) || view.menu == Some(i) {
                 let half = (0.9 * u).min((row[2] - row[0]) / 2.0);
                 ui.panels.push(crate::scene::Panel::solid(
                     [centre_x - half - 0.5 * u, row[1] + 0.15 * u, centre_x + half + 0.5 * u, row[3] - 0.05 * u],
                     0.4 * u,
-                    HOVER_WASH,
+                    ui.pal.hover_wash,
                 ));
             }
             let text = (i + 1).to_string();
             ui.labels.push(Label { text: text.clone(), size: 0.5 * u, color, at: [centre_x - 0.2 * u, centre_y], align: Align::Centre, alpha: 1.0 });
             let after = centre_x - 0.2 * u + text::measure(&text, 0.5 * u)[0] / 2.0 + 0.35 * u;
-            chevron(ui, [after, centre_y], 0.12 * u, view.menu == Some(i), 1.4 * px, INK_DIM);
+            chevron(ui, [after, centre_y], 0.12 * u, view.menu == Some(i), 1.4 * px, ui.pal.ink_dim);
         }
         // The page as a whole: sliding from where it was, or growing in as a new one.
         let middle = [(thumb[0] + thumb[2]) / 2.0, (thumb[1] + thumb[3]) / 2.0];
@@ -397,7 +385,7 @@ fn pages(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
         let content = track + max;
         let (len, at) = ((track * track / content).max(1.2 * u), top + (track - (track * track / content).max(1.2 * u)) * (view.scroll / max));
         let x = l.grid[2] - 0.35 * u;
-        ui.line([x, at], [x, at + len], 0.22 * u, [20, 24, 40, 70]);
+        ui.line([x, at], [x, at + len], 0.22 * u, ui.pal.wash(70));
     }
 }
 
@@ -405,28 +393,28 @@ fn pages(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
 fn bar(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
     let (u, px) = (l.unit(), l.px());
     let Some(bar) = l.bar else { return };
-    ui.line([bar[0], bar[1]], [bar[2], bar[1]], px, SEPARATOR);
+    ui.line([bar[0], bar[1]], [bar[2], bar[1]], px, ui.pal.separator);
     for (i, action) in Action::ALL.into_iter().enumerate() {
         let r = l.action(action);
         let enabled = view.enabled[i];
         let hovered = view.hover == Some(Hover::Action(action));
         let wash = if view.pressed == Some(Hover::Action(action)) && enabled {
-            Some(PRESSED_WASH)
+            Some(ui.pal.pressed_wash)
         } else if hovered && enabled {
-            Some(HOVER_WASH)
+            Some(ui.pal.hover_wash)
         } else {
             None
         };
         let radius = (r[3] - r[1]) / 2.0;
         // The pill that chooses everything has a hairline round it, the round buttons only a wash.
         if action == Action::SelectAll {
-            ui.panels.push(crate::scene::Panel::solid(r, radius, SEPARATOR));
-            ui.panels.push(crate::scene::Panel::solid([r[0] + px, r[1] + px, r[2] - px, r[3] - px], radius, [255, 255, 255, 255]));
+            ui.panels.push(crate::scene::Panel::solid(r, radius, ui.pal.separator));
+            ui.panels.push(crate::scene::Panel::solid([r[0] + px, r[1] + px, r[2] - px, r[3] - px], radius, ui.pal.panel));
         }
         if let Some(color) = wash {
             ui.panels.push(crate::scene::Panel::solid(r, radius, color));
         }
-        let color = if enabled || action == Action::SelectAll { INK } else { INK_DIM };
+        let color = if enabled || action == Action::SelectAll { ui.pal.ink } else { ui.pal.ink_dim };
         let centre = [(r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0];
         let icon = match action {
             Action::SelectAll => {
@@ -440,7 +428,7 @@ fn bar(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
             Action::Later => &icons().later,
             Action::Delete => &icons().trash,
         };
-        let tint = if action == Action::Delete && enabled { DANGER } else { color };
+        let tint = if action == Action::Delete && enabled { ui.pal.danger } else { color };
         icon.draw(&mut ui.lines, centre[0], centre[1], 0.42 * u, 1.7 * px, tint);
     }
 }
@@ -450,24 +438,24 @@ fn dragging(view: &OverviewView<'_>, l: &OverviewLayout, drag: &DragView<'_>, ui
     let (u, px) = (l.unit(), l.px());
     let marker = l.slot_marker(drag.slot, view.layout.len(), view.scroll);
     if let Some(shown) = clip(marker, l.grid) {
-        ui.line([(shown[0] + shown[2]) / 2.0, shown[1]], [(shown[0] + shown[2]) / 2.0, shown[3]], shown[2] - shown[0], ACCENT);
+        ui.line([(shown[0] + shown[2]) / 2.0, shown[1]], [(shown[0] + shown[2]) / 2.0, shown[3]], shown[2] - shown[0], ui.pal.accent);
     }
     let Some(&first) = drag.pages.first() else { return };
     let Some(page) = view.layout.page(first) else { return };
     let cell = l.thumb(first, 0.0, [page.w, page.h]);
     let (w, h) = (cell[2] - cell[0], cell[3] - cell[1]);
     let rect = [drag.pos[0] - w / 2.0, drag.pos[1] - h / 2.0, drag.pos[0] + w / 2.0, drag.pos[1] + h / 2.0];
-    ui.panels.push(crate::scene::Panel::new([rect[0], rect[1] + 3.0 * px, rect[2], rect[3] + 3.0 * px], 2.0 * px, 10.0 * px, [16, 20, 44, 70]));
-    ui.panels.push(crate::scene::Panel::solid(rect, 1.5 * px, PAPER));
+    ui.panels.push(crate::scene::Panel::new([rect[0], rect[1] + 3.0 * px, rect[2], rect[3] + 3.0 * px], 2.0 * px, 10.0 * px, ui.pal.shadow(70)));
+    ui.panels.push(crate::scene::Panel::solid(rect, 1.5 * px, ui.pal.paper));
     ui.images.push(Image { page: first as u32, full: rect, shown: rect, alpha: 0.85 });
-    outline_rect(ui, rect, 2.0 * px, ACCENT);
+    outline_rect(ui, rect, 2.0 * px, ui.pal.accent);
     if drag.pages.len() > 1 {
         let badge = [rect[2], rect[1]];
-        ui.disc(badge, 0.9 * u, ACCENT);
+        ui.disc(badge, 0.9 * u, ui.pal.accent);
         ui.labels.push(Label {
             text: drag.pages.len().to_string(),
             size: 0.46 * u,
-            color: [255, 255, 255, 255],
+            color: ui.pal.white,
             at: badge,
             align: Align::Centre,
             alpha: 1.0,
@@ -573,7 +561,11 @@ mod tests {
         let editing = drawn(&v, [1280.0, 720.0], 1.0).0;
         assert!(editing.lines.len() > ringed.lines.len(), "a circle on every page, ticked on the chosen ones");
         let accent = |ui: &Ui| {
-            ui.labels.iter().filter(|l| l.color == ACCENT && l.text.chars().all(|c| c.is_ascii_digit())).map(|l| l.text.clone()).collect::<Vec<_>>()
+            ui.labels
+                .iter()
+                .filter(|l| l.color == crate::palette::LIGHT.accent && l.text.chars().all(|c| c.is_ascii_digit()))
+                .map(|l| l.text.clone())
+                .collect::<Vec<_>>()
         };
         assert_eq!(accent(&editing), ["2", "3", "5"], "the numbers of the current and the chosen pages are in the accent colour");
     }
@@ -600,9 +592,9 @@ mod tests {
             assert!(label.at[0] >= toc[0] && label.at[0] < toc[2], "{label:?} is in the column");
         }
         let section = ui.labels.iter().find(|x| x.text == "1.1 Basics").expect("label");
-        assert_eq!(section.color, ACCENT, "the section being read stands out");
+        assert_eq!(section.color, crate::palette::LIGHT.accent, "the section being read stands out");
         let dim = ui.labels.iter().find(|x| x.text == "Appendix").expect("label");
-        assert_eq!(dim.color, INK_DIM, "an entry that goes nowhere is dim");
+        assert_eq!(dim.color, crate::palette::LIGHT.ink_dim, "an entry that goes nowhere is dim");
         let with = ui.lines.len();
         let folded = OverviewView { folded: &|i| i == 0, ..view(&pages, &outline, &rows, &[]) };
         let (closed, _) = drawn(&folded, [1280.0, 720.0], 1.0);

@@ -8,17 +8,10 @@ use crate::browse::{self, Entry, Place};
 use crate::scene::Capsule;
 use crate::text;
 
-use super::theme::{ACCENT, ACCENT_WASH, Align, HOVER_WASH, INK, INK_DIM, Label, RIM, SEPARATOR, TRACK, Ui};
+use super::theme::{Align, Label, Ui};
 
-const DANGER: [u8; 4] = [214, 52, 62, 255];
-const SCRIM: [u8; 4] = [16, 20, 44, 104];
-const FOLDER: [u8; 4] = [240, 178, 52, 255];
-const FOLDER_TAB: [u8; 4] = [226, 160, 36, 255];
-const PAGE: [u8; 4] = [222, 226, 235, 255];
-const PAGE_RIM: [u8; 4] = [170, 176, 192, 255];
-/// The names of the PDFs: quieter than the folders, but plainly readable.
-const FILE_INK: [u8; 4] = [112, 118, 134, 255];
-const WHITE: [u8; 4] = [255, 255, 255, 255];
+/// How dark the scrim over the document is (0 to 255).
+const SCRIM_ALPHA: u8 = 104;
 
 /// The card's width and the heights of what is in it, in units (one unit is a comfortable button, 44 pixels at 100%).
 const CARD_W: f32 = 16.0;
@@ -255,29 +248,29 @@ fn draw(l: &SaveAsLayout, v: &SaveAsView<'_>, ui: &mut Ui) {
     let line = (0.05 * u).max(1.5 * l.px);
     let washed = |ui: &mut Ui, r: [f32; 4], radius: f32, which: SaveAsHit| {
         if v.pressed == Some(which) {
-            ui.panel(r, radius, [0, 0, 0, 44]);
+            ui.panel(r, radius, ui.pal.press(44));
         } else if v.hover == Some(which) {
-            ui.panel(r, radius, HOVER_WASH);
+            ui.panel(r, radius, ui.pal.hover_wash);
         }
     };
-    ui.panel([0.0, 0.0, l.viewport[0], l.viewport[1]], 0.0, SCRIM);
+    ui.panel([0.0, 0.0, l.viewport[0], l.viewport[1]], 0.0, ui.pal.shadow(SCRIM_ALPHA));
     ui.floating(l.card, 0.5 * u, l.px);
-    label(ui, "Save as", 0.62 * u, INK, l.title, Align::Left, 1.0);
+    label(ui, "Save as", 0.62 * u, ui.pal.ink, l.title, Align::Left, 1.0);
 
     // The places.
     for &(i, r) in &l.chips {
         let Some(place) = v.places.get(i) else { continue };
         let active = v.place == Some(i);
-        ui.panel(r, 0.3 * u, if active { ACCENT_WASH } else { SEPARATOR });
+        ui.panel(r, 0.3 * u, if active { ui.pal.accent_wash } else { ui.pal.separator });
         washed(ui, r, 0.3 * u, SaveAsHit::Place(i));
         // (The width of the text is what is left after the chip's own margins: a long name is shortened, not spilled.)
         let text = browse::elide_left(&place.label, |s| text::measure(s, 0.42 * u)[0] <= r[2] - r[0] - 0.3 * u);
-        label(ui, &text, 0.42 * u, if active { ACCENT } else { INK }, middle(r), Align::Centre, 1.0);
+        label(ui, &text, 0.42 * u, if active { ui.pal.accent } else { ui.pal.ink }, middle(r), Align::Centre, 1.0);
     }
 
     // Up, and where you are.
-    let up_ink = if v.has_parent { INK } else { INK_DIM };
-    ui.panel(l.up, 0.3 * u, SEPARATOR);
+    let up_ink = if v.has_parent { ui.pal.ink } else { ui.pal.ink_dim };
+    ui.panel(l.up, 0.3 * u, ui.pal.separator);
     if v.has_parent {
         washed(ui, l.up, 0.3 * u, SaveAsHit::Up);
     }
@@ -286,10 +279,10 @@ fn draw(l: &SaveAsLayout, v: &SaveAsView<'_>, ui: &mut Ui) {
     ui.line([c[0], c[1] - 0.12 * u], [c[0] + 0.22 * u, c[1] + 0.1 * u], line, up_ink);
     let room = l.path[2] - l.path[0] - 0.4 * u;
     let shown = browse::elide_left(v.dir, |s| text::measure(s, 0.46 * u)[0] <= room);
-    label(ui, &shown, 0.46 * u, INK, [l.path[0] + 0.2 * u, middle(l.path)[1]], Align::Left, 1.0);
+    label(ui, &shown, 0.46 * u, ui.pal.ink, [l.path[0] + 0.2 * u, middle(l.path)[1]], Align::Left, 1.0);
 
     // The list.
-    ui.panel(l.list, 0.3 * u, [20, 24, 40, 10]);
+    ui.panel(l.list, 0.3 * u, ui.pal.wash(10));
     let row_h = l.row_height();
     for i in l.visible_rows(v.scroll, v.entries.len()) {
         let full = l.row_rect(i, v.scroll);
@@ -298,71 +291,71 @@ fn draw(l: &SaveAsLayout, v: &SaveAsView<'_>, ui: &mut Ui) {
         let seen = (shown[3] - shown[1]) / row_h;
         let alpha = ((seen - 0.5) * 2.0).clamp(0.0, 1.0);
         if v.pressed == Some(SaveAsHit::Row(i)) {
-            ui.panel(shown, 0.25 * u, with_alpha([0, 0, 0, 44], alpha));
+            ui.panel(shown, 0.25 * u, with_alpha(ui.pal.press(44), alpha));
         } else if v.hover == Some(SaveAsHit::Row(i)) {
-            ui.panel(shown, 0.25 * u, with_alpha(HOVER_WASH, alpha));
+            ui.panel(shown, 0.25 * u, with_alpha(ui.pal.hover_wash, alpha));
         }
         let entry = &v.entries[i];
         let mid = [full[0] + 0.7 * u, middle(full)[1]];
         if entry.folder {
-            ui.panel([mid[0] - 0.3 * u, mid[1] - 0.26 * u, mid[0] - 0.02 * u, mid[1] - 0.1 * u], 0.06 * u, with_alpha(FOLDER_TAB, alpha));
-            ui.panel([mid[0] - 0.3 * u, mid[1] - 0.16 * u, mid[0] + 0.3 * u, mid[1] + 0.24 * u], 0.08 * u, with_alpha(FOLDER, alpha));
+            ui.panel([mid[0] - 0.3 * u, mid[1] - 0.26 * u, mid[0] - 0.02 * u, mid[1] - 0.1 * u], 0.06 * u, with_alpha(ui.pal.folder_tab, alpha));
+            ui.panel([mid[0] - 0.3 * u, mid[1] - 0.16 * u, mid[0] + 0.3 * u, mid[1] + 0.24 * u], 0.08 * u, with_alpha(ui.pal.folder, alpha));
         } else {
-            ui.panel([mid[0] - 0.25 * u, mid[1] - 0.32 * u, mid[0] + 0.25 * u, mid[1] + 0.32 * u], 0.07 * u, with_alpha(PAGE_RIM, alpha));
-            ui.panel([mid[0] - 0.23 * u, mid[1] - 0.3 * u, mid[0] + 0.23 * u, mid[1] + 0.3 * u], 0.06 * u, with_alpha(PAGE, alpha));
-            ui.panel([mid[0] - 0.23 * u, mid[1] + 0.06 * u, mid[0] + 0.23 * u, mid[1] + 0.2 * u], 0.03 * u, with_alpha(DANGER, alpha * 0.8));
+            ui.panel([mid[0] - 0.25 * u, mid[1] - 0.32 * u, mid[0] + 0.25 * u, mid[1] + 0.32 * u], 0.07 * u, with_alpha(ui.pal.page_rim, alpha));
+            ui.panel([mid[0] - 0.23 * u, mid[1] - 0.3 * u, mid[0] + 0.23 * u, mid[1] + 0.3 * u], 0.06 * u, with_alpha(ui.pal.page, alpha));
+            ui.panel([mid[0] - 0.23 * u, mid[1] + 0.06 * u, mid[0] + 0.23 * u, mid[1] + 0.2 * u], 0.03 * u, with_alpha(ui.pal.danger, alpha * 0.8));
         }
         let room = full[2] - full[0] - 1.6 * u;
         let name = browse::elide_left(&entry.name, |s| text::measure(s, 0.5 * u)[0] <= room);
-        label(ui, &name, 0.5 * u, if entry.folder { INK } else { FILE_INK }, [full[0] + 1.35 * u, middle(full)[1]], Align::Left, alpha);
+        label(ui, &name, 0.5 * u, if entry.folder { ui.pal.ink } else { ui.pal.file_ink }, [full[0] + 1.35 * u, middle(full)[1]], Align::Left, alpha);
     }
     let centre = middle(l.list);
     match v.listing {
-        ListingView::Loading if v.entries.is_empty() => label(ui, "Loading…", 0.5 * u, INK_DIM, centre, Align::Centre, 1.0),
+        ListingView::Loading if v.entries.is_empty() => label(ui, "Loading…", 0.5 * u, ui.pal.ink_dim, centre, Align::Centre, 1.0),
         ListingView::Failed(why) => {
             let room = l.list[2] - l.list[0] - u;
             let why = browse::elide_left(why, |s| text::measure(s, 0.46 * u)[0] <= room);
-            label(ui, &why, 0.46 * u, DANGER, centre, Align::Centre, 1.0)
+            label(ui, &why, 0.46 * u, ui.pal.danger, centre, Align::Centre, 1.0)
         }
-        ListingView::Ready if v.entries.is_empty() => label(ui, "No folders or PDFs here", 0.5 * u, INK_DIM, centre, Align::Centre, 1.0),
+        ListingView::Ready if v.entries.is_empty() => label(ui, "No folders or PDFs here", 0.5 * u, ui.pal.ink_dim, centre, Align::Centre, 1.0),
         _ => {}
     }
     // A thin bar at the right edge says how much more there is.
     let (list_h, content) = (l.list[3] - l.list[1], v.entries.len() as f32 * row_h);
     if content > list_h {
         let track = [l.list[2] - 0.32 * u, l.list[1] + 0.2 * u, l.list[2] - 0.12 * u, l.list[3] - 0.2 * u];
-        ui.panel(track, 0.1 * u, TRACK);
+        ui.panel(track, 0.1 * u, ui.pal.track);
         let (th, range) = (track[3] - track[1], l.max_scroll(v.entries.len()).max(1.0));
         let len = (th * list_h / content).max(0.8 * u).min(th);
         let top = track[1] + (th - len) * (v.scroll / range).clamp(0.0, 1.0);
-        ui.panel([track[0], top, track[2], top + len], 0.1 * u, RIM);
+        ui.panel([track[0], top, track[2], top + len], 0.1 * u, ui.pal.rim);
     }
 
     // What is wrong, if anything.
     if let Some(message) = v.message {
         let room = l.status[2] - l.status[0];
         let message = browse::elide_left(message, |s| text::measure(s, 0.44 * u)[0] <= room);
-        label(ui, &message, 0.44 * u, DANGER, [l.status[0] + 0.1 * u, middle(l.status)[1]], Align::Left, 1.0);
+        label(ui, &message, 0.44 * u, ui.pal.danger, [l.status[0] + 0.1 * u, middle(l.status)[1]], Align::Left, 1.0);
     }
 
     // The name.
-    ui.panel(l.name, 0.3 * u, ACCENT);
-    ui.panel([l.name[0] + 0.05 * u, l.name[1] + 0.05 * u, l.name[2] - 0.05 * u, l.name[3] - 0.05 * u], 0.27 * u, WHITE);
+    ui.panel(l.name, 0.3 * u, ui.pal.accent);
+    ui.panel([l.name[0] + 0.05 * u, l.name[1] + 0.05 * u, l.name[2] - 0.05 * u, l.name[3] - 0.05 * u], 0.27 * u, ui.pal.white);
     let field = l.name[2] - l.name[0] - 0.8 * u;
     let size = 0.55 * u;
     let range = visible_name(v.name, v.caret, |s| text::measure(s, size)[0] <= field);
     let (x0, mid_y) = (l.name[0] + 0.4 * u, middle(l.name)[1]);
     if let Some(stem) = v.stem_selected.filter(|s| *s > 0 && range.start == 0) {
         let width = text::measure(&v.name[..stem.min(range.end)], size)[0];
-        ui.panel([x0 - 0.05 * u, mid_y - 0.42 * u, x0 + width + 0.05 * u, mid_y + 0.42 * u], 0.12 * u, ACCENT_WASH);
+        ui.panel([x0 - 0.05 * u, mid_y - 0.42 * u, x0 + width + 0.05 * u, mid_y + 0.42 * u], 0.12 * u, ui.pal.accent_wash);
     }
-    label(ui, &v.name[range.clone()], size, INK, [x0, mid_y], Align::Left, 1.0);
+    label(ui, &v.name[range.clone()], size, ui.pal.ink, [x0, mid_y], Align::Left, 1.0);
     let caret_x = x0 + text::measure(&v.name[range.start..v.caret.clamp(range.start, range.end)], size)[0];
-    ui.lines.push(Capsule::new([caret_x, mid_y - 0.4 * u], [caret_x, mid_y + 0.4 * u], 0.07 * u, ACCENT));
+    ui.lines.push(Capsule::new([caret_x, mid_y - 0.4 * u], [caret_x, mid_y + 0.4 * u], 0.07 * u, ui.pal.accent));
 
     // Cancel and Save.
     for (r, which, text, ink, fill) in [
-        (l.cancel, SaveAsHit::Cancel, "Cancel", INK, SEPARATOR),
+        (l.cancel, SaveAsHit::Cancel, "Cancel", ui.pal.ink, ui.pal.separator),
         (
             l.save,
             SaveAsHit::Save,
@@ -373,13 +366,13 @@ fn draw(l: &SaveAsLayout, v: &SaveAsView<'_>, ui: &mut Ui) {
             } else {
                 "Save"
             },
-            WHITE,
+            ui.pal.white,
             if v.busy {
-                INK_DIM
+                ui.pal.ink_dim
             } else if v.replace {
-                DANGER
+                ui.pal.danger
             } else {
-                ACCENT
+                ui.pal.accent
             },
         ),
     ] {

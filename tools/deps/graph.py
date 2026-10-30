@@ -140,7 +140,7 @@ for f in files:
              'crate':sorted({m for m in re.findall(r'crate::([a-z_]+)',body) if m in mods and m!='platform'})}
 nid=lambda f: 'p_'+f.replace('/','_').replace('.rs','')
 cfg={'windows/mod.rs':'cfg(windows)','linux.rs':'cfg(unix, not android)','android/mod.rs':'cfg(target_os = android)','stubs.rs':'cfg(not(windows))','unix_dirs.rs':'cfg(not(windows))'}
-colr={'windows':'#2e86c1','linux':'#27ae60','android':'#8e44ad','stubs':'#7f8c8d','unix_dirs':'#7f8c8d','motion_event':'#d68910','saf':'#16a085'}
+colr={'windows':'#2e86c1','linux':'#27ae60','android':'#8e44ad','stubs':'#7f8c8d','unix_dirs':'#7f8c8d','motion_event':'#d68910','saf':'#16a085','dialog':'#2e86c1'}
 def grp(f): return f.split('/')[0].replace('.rs','')
 D=['digraph P {','rankdir=LR; newrank=true; splines=true; nodesep=0.3; ranksep=1.1; pad=0.4;',
    'label=<<b>Platform routing (compile-time): who is built where, and what each side talks to</b>>; labelloc=t; fontsize=22; fontname="Helvetica";',

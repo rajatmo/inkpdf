@@ -14,6 +14,7 @@ subgraph cluster_plat { label="platform/  (adapter layer, picks one backend at c
   "p_android_host" [label="platform/android/host.rs", color="#8e44ad", penwidth=2];
   "p_android_mod" [label="platform/android/mod.rs", color="#8e44ad", penwidth=2];
   "p_android_reader" [label="platform/android/reader.rs", color="#8e44ad", penwidth=2];
+  "p_dialog" [label="platform/dialog.rs", color="#2e86c1", penwidth=2];
   "p_linux" [label="platform/linux.rs", color="#27ae60", penwidth=2];
   "p_motion_event" [label="platform/motion_event.rs", color="#d68910", penwidth=2];
   "p_saf" [label="platform/saf.rs", color="#16a085", penwidth=2];

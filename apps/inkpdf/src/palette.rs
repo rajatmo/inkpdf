@@ -96,7 +96,7 @@ impl Palette {
     pub fn of(scheme: Scheme) -> Palette {
         match scheme {
             Scheme::Light => LIGHT,
-            Scheme::Dark => LIGHT,
+            Scheme::Dark => DARK,
         }
     }
 
@@ -105,7 +105,7 @@ impl Palette {
         let t = t.clamp(0.0, 1.0);
         let c = |x: Rgba, y: Rgba| -> Rgba { [0, 1, 2, 3].map(|i| (f32::from(x[i]) + (f32::from(y[i]) - f32::from(x[i])) * t).round() as u8) };
         let r = |x: [u8; 3], y: [u8; 3]| -> [u8; 3] { [0, 1, 2].map(|i| (f32::from(x[i]) + (f32::from(y[i]) - f32::from(x[i])) * t).round() as u8) };
-        let w = |x: f64, y: f64| x + (y - x) * f64::from(t);
+        let w = |x: f64, y: f64| x * f64::from(1.0 - t) + y * f64::from(t);
         Palette {
             panel: c(a.panel, b.panel),
             panel_edge: c(a.panel_edge, b.panel_edge),
@@ -179,6 +179,40 @@ pub const LIGHT: Palette = Palette {
     press_rgb: [0, 0, 0],
 };
 
+/// The dark scheme: the same roles on a dark slate, the ink light, the accent and the danger lifted so they keep their contrast, the
+/// washes made of light instead of dark. (The pages are not part of it: they stay as the document has them unless dark pages is on.)
+pub const DARK: Palette = Palette {
+    panel: [30, 33, 40, 255],
+    panel_edge: [235, 238, 245, 30],
+    ink: [221, 225, 235, 255],
+    ink_dim: [96, 102, 116, 255],
+    accent: [70, 140, 245, 255],
+    accent_wash: [70, 140, 245, 70],
+    hover_wash: [235, 238, 245, 22],
+    pressed_wash: [235, 238, 245, 40],
+    neutral_wash: [235, 238, 245, 24],
+    separator: [235, 238, 245, 30],
+    track: [235, 238, 245, 44],
+    rim: [235, 238, 245, 80],
+    danger: [240, 90, 100, 255],
+    danger_wash: [240, 90, 100, 52],
+    white: [255, 255, 255, 255],
+    paper: [255, 255, 255, 255],
+    selection: [64, 132, 255, 255],
+    snap: [226, 40, 150, 255],
+    laser: [236, 36, 48, 255],
+    guide: [90, 90, 96, 230],
+    folder: [240, 178, 52, 255],
+    folder_tab: [226, 160, 36, 255],
+    page: [70, 76, 90, 255],
+    page_rim: [122, 128, 144, 255],
+    file_ink: [160, 166, 182, 255],
+    window: [0.085, 0.09, 0.105],
+    shadow_rgb: [0, 0, 0],
+    wash_rgb: [235, 238, 245],
+    press_rgb: [255, 255, 255],
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -199,6 +233,123 @@ mod tests {
         assert_eq!(Palette::mix(&a, &b, 9.0), b, "beyond its end is its end");
         let (x, y) = (Palette { ink: [0, 100, 200, 255], ..a }, Palette { ink: [100, 200, 0, 255], ..a });
         assert_eq!(Palette::mix(&x, &y, 0.5).ink, [50, 150, 100, 255]);
+    }
+
+    /// WCAG relative luminance of an opaque colour.
+    fn luminance(c: Rgba) -> f64 {
+        let channel = |v: u8| {
+            let v = f64::from(v) / 255.0;
+            if v <= 0.03928 { v / 12.92 } else { ((v + 0.055) / 1.055).powf(2.4) }
+        };
+        0.2126 * channel(c[0]) + 0.7152 * channel(c[1]) + 0.0722 * channel(c[2])
+    }
+
+    /// The contrast ratio of two colours (1 to 21), the lighter over the darker.
+    fn contrast(a: Rgba, b: Rgba) -> f64 {
+        let (x, y) = (luminance(a), luminance(b));
+        (x.max(y) + 0.05) / (x.min(y) + 0.05)
+    }
+
+    /// What lies under a translucent colour, flattened onto the panel.
+    fn over(top: Rgba, under: Rgba) -> Rgba {
+        let a = f32::from(top[3]) / 255.0;
+        [0, 1, 2]
+            .map(|i| (f32::from(top[i]) * a + f32::from(under[i]) * (1.0 - a)).round() as u8)
+            .iter()
+            .copied()
+            .chain([255])
+            .collect::<Vec<_>>()
+            .try_into()
+            .expect("four")
+    }
+
+    #[test]
+    fn what_is_read_and_what_is_pressed_keeps_its_contrast_in_both_schemes() {
+        for (name, p) in [("light", LIGHT), ("dark", DARK)] {
+            assert_eq!(p.panel[3], 255, "{name}: a panel is opaque, so page text never ghosts through it");
+            assert!(contrast(p.ink, p.panel) >= 7.0, "{name}: ink on a panel is {:.1}", contrast(p.ink, p.panel));
+            assert!(contrast(p.ink_dim, p.panel) >= 1.8, "{name}: a dim icon is still seen ({:.1})", contrast(p.ink_dim, p.panel));
+            assert!(contrast(p.ink_dim, p.panel) < contrast(p.ink, p.panel) / 2.0, "{name}: and dim");
+            assert!(contrast(p.accent, p.panel) >= 3.0, "{name}: the accent on a panel is {:.1}", contrast(p.accent, p.panel));
+            assert!(contrast(p.white, p.accent) >= 3.0, "{name}: white on the accent (the Save button) is {:.1}", contrast(p.white, p.accent));
+            assert!(contrast(p.danger, p.panel) >= 3.0, "{name}: danger on a panel is {:.1}", contrast(p.danger, p.panel));
+            assert!(
+                contrast(over(p.danger_wash, p.panel), p.panel) < 1.5 && contrast(p.danger, over(p.danger_wash, p.panel)) >= 3.0,
+                "{name}: danger on its wash"
+            );
+            assert!(contrast(p.ink, over(p.accent_wash, p.panel)) >= 4.5, "{name}: ink on the accent wash of an active button");
+            assert!(contrast(p.ink, over(p.hover_wash, p.panel)) >= 6.0, "{name}: ink on the wash of a button the pointer is over");
+            assert!(contrast(p.ink, over(p.pressed_wash, p.panel)) >= 5.0, "{name}: ink on a pressed button");
+            assert!(contrast(p.file_ink, p.panel) >= 3.0, "{name}: the name of a file on the card ({:.1})", contrast(p.file_ink, p.panel));
+            assert!(contrast(p.rim, p.panel) >= 1.0 && over(p.rim, p.panel) != p.panel, "{name}: a rim shows on a panel");
+        }
+        assert!(luminance(DARK.panel) < 0.05 && luminance(LIGHT.panel) > 0.9, "the dark scheme is dark and the light one is light");
+        assert!(luminance(DARK.ink) > luminance(DARK.panel) && luminance(LIGHT.ink) < luminance(LIGHT.panel), "ink is the other way from its panel");
+    }
+
+    /// Every role of a palette, to treat them alike.
+    fn roles(p: &Palette) -> Vec<Rgba> {
+        vec![
+            p.panel,
+            p.panel_edge,
+            p.ink,
+            p.ink_dim,
+            p.accent,
+            p.accent_wash,
+            p.hover_wash,
+            p.pressed_wash,
+            p.neutral_wash,
+            p.separator,
+            p.track,
+            p.rim,
+            p.danger,
+            p.danger_wash,
+            p.white,
+            p.paper,
+            p.selection,
+            p.snap,
+            p.laser,
+            p.guide,
+            p.folder,
+            p.folder_tab,
+            p.page,
+            p.page_rim,
+            p.file_ink,
+            p.shadow(255),
+            p.wash(255),
+            p.press(255),
+        ]
+    }
+
+    #[test]
+    fn a_mix_of_the_schemes_goes_from_one_to_the_other_without_overshooting_in_any_role() {
+        let (a, b) = (LIGHT, DARK);
+        let (ra, rb) = (roles(&a), roles(&b));
+        let mut last = roles(&Palette::mix(&a, &b, 0.0));
+        assert_eq!(last, ra);
+        for step in 1..=20 {
+            let now = roles(&Palette::mix(&a, &b, step as f32 / 20.0));
+            for (role, (before, after)) in last.iter().zip(&now).enumerate() {
+                for ch in 0..4 {
+                    let (from, to) = (ra[role][ch], rb[role][ch]);
+                    let moving_up = to >= from;
+                    assert!((after[ch] >= before[ch]) == moving_up || after[ch] == before[ch], "role {role} channel {ch} turned back at step {step}");
+                    assert!(after[ch] >= from.min(to) && after[ch] <= from.max(to), "role {role} channel {ch} overshoots at step {step}");
+                }
+            }
+            last = now;
+        }
+        assert_eq!(last, rb);
+        assert_eq!(Palette::mix(&a, &b, 1.0).window, b.window);
+    }
+
+    #[test]
+    fn the_schemes_differ_where_they_should_and_agree_where_a_mark_is_the_same_in_both() {
+        assert_ne!(LIGHT.panel, DARK.panel);
+        assert_ne!(LIGHT.ink, DARK.ink);
+        assert_ne!(LIGHT.window, DARK.window);
+        assert_eq!((LIGHT.white, DARK.white), ([255; 4], [255; 4]), "a mark on a coloured dot is white in both");
+        assert_eq!((LIGHT.laser, LIGHT.snap), (DARK.laser, DARK.snap), "a pointer's red does not change with the look of the bars");
     }
 
     #[test]

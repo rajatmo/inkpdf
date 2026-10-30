@@ -340,7 +340,7 @@ fn draw(l: &SaveAsLayout, v: &SaveAsView<'_>, ui: &mut Ui) {
 
     // The name.
     ui.panel(l.name, 0.3 * u, ui.pal.accent);
-    ui.panel([l.name[0] + 0.05 * u, l.name[1] + 0.05 * u, l.name[2] - 0.05 * u, l.name[3] - 0.05 * u], 0.27 * u, ui.pal.white);
+    ui.panel([l.name[0] + 0.05 * u, l.name[1] + 0.05 * u, l.name[2] - 0.05 * u, l.name[3] - 0.05 * u], 0.27 * u, ui.pal.panel);
     let field = l.name[2] - l.name[0] - 0.8 * u;
     let size = 0.55 * u;
     let range = visible_name(v.name, v.caret, |s| text::measure(s, size)[0] <= field);

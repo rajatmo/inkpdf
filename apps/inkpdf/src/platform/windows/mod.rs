@@ -13,7 +13,7 @@ use super::{PointerSource, Waker};
 use crate::input::{Mode, PointerEvent};
 
 pub use folders::{documents_dir, places};
-pub use native::{SystemClipboard, attach_parent_console, config_dir, error_box, motion_prefs, open_url, report_fatal, system_font};
+pub use native::{SystemClipboard, attach_parent_console, color_scheme, config_dir, error_box, motion_prefs, open_url, report_fatal, system_font};
 
 /// An on-screen keyboard is the system's to show on Windows (a touch keyboard comes up by itself): nothing to do.
 pub fn set_text_input(_active: bool) {}

@@ -6,6 +6,7 @@ use std::ops::Range;
 
 use crate::editor::Editor;
 use crate::ink::{InkStore, P, Stroke};
+use crate::palette::Palette;
 use crate::scene::Capsule;
 use crate::smooth::curve_through;
 use crate::toolbar::{self, ContextState, Look, PanelView, PromptView, Ui};
@@ -93,6 +94,8 @@ pub(super) struct UiStamp {
     look: Look,
     /// How far the bar under the tools has come in.
     bar_in: u32,
+    /// The colours it was drawn in (they move while the scheme fades).
+    pal: Palette,
 }
 
 /// Line work drawn over the committed ink.
@@ -200,11 +203,12 @@ impl UiLayers {
             context: ed.context_view(),
             look: ed.toolbar_look(),
             bar_in: ed.motions.bar_amount().to_bits(),
+            pal: ed.palette(),
         };
         if self.ui_built.as_ref() == Some(&stamp) {
             return;
         }
-        let mut ui = Ui::default();
+        let mut ui = Ui::with_palette(ed.palette());
         ed.draw_interface(&mut ui);
         cx.gpu.set_ui(&ui.panels, &ui.lines);
         self.ui_built = Some(stamp);

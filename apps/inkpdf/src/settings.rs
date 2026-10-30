@@ -22,11 +22,57 @@
 //! slots, `width 1 2.5`; those lines are ignored.)
 
 use crate::geometry::Shape;
+use crate::palette::Scheme;
 use crate::smooth::DEFAULT_AMOUNT;
 use crate::tool::{MAX_WIDTH, MIN_WIDTH, PALETTE, TEXT_SIZES, Tool, ToolStyle};
 
+/// Which look the interface has: the system's (light or dark as the desktop says), or one of them always.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Appearance {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+impl Appearance {
+    /// The look it comes to, given what the system says.
+    pub fn resolve(self, system: Scheme) -> Scheme {
+        match self {
+            Appearance::System => system,
+            Appearance::Light => Scheme::Light,
+            Appearance::Dark => Scheme::Dark,
+        }
+    }
+
+    #[allow(dead_code, reason = "the theme button goes through them (T5)")]
+    /// The next one, in the order the theme button goes through them.
+    pub fn next(self) -> Appearance {
+        match self {
+            Appearance::System => Appearance::Light,
+            Appearance::Light => Appearance::Dark,
+            Appearance::Dark => Appearance::System,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Appearance::System => "system",
+            Appearance::Light => "light",
+            Appearance::Dark => "dark",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Appearance> {
+        [Appearance::System, Appearance::Light, Appearance::Dark].into_iter().find(|a| a.name() == name)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Settings {
+    /// The look of the interface, and whether the pages are drawn dark too (only in effect when the look is dark).
+    pub appearance: Appearance,
+    pub dark_pages: bool,
     pub palette: [[u8; 4]; 5],
     pub tool: Tool,
     pub pen: ToolStyle,
@@ -39,6 +85,8 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            appearance: Appearance::System,
+            dark_pages: false,
             palette: PALETTE,
             tool: Tool::Pen,
             pen: ToolStyle::PEN,
@@ -64,6 +112,8 @@ impl Settings {
                         *cell = [rgb[0], rgb[1], rgb[2], 255];
                     }
                 }
+                ["appearance", name] => out.appearance = Appearance::from_name(name).unwrap_or(out.appearance),
+                ["dark-pages", value] => out.dark_pages = value == "on",
                 ["tool", name] => out.tool = Tool::from_name(name).unwrap_or(out.tool),
                 ["shape", name] => out.shape = Shape::from_name(name).unwrap_or(out.shape),
                 ["slot", slot] => {
@@ -121,6 +171,7 @@ impl Settings {
         ));
         text.push_str(&format!("shape {}\nshape-slot {}\nshape-width {:.2}\n", self.shape.name(), self.shape_style.colour, self.shape_style.width));
         text.push_str(&format!("text-slot {}\ntext-size {:.2}\n", self.text_style.colour, self.text_style.width));
+        text.push_str(&format!("appearance {}\ndark-pages {}\n", self.appearance.name(), if self.dark_pages { "on" } else { "off" }));
         text
     }
 }
@@ -149,7 +200,7 @@ mod tests {
     use crate::tool::DEFAULT_WIDTH;
 
     fn everything_changed() -> Settings {
-        let mut s = Settings::default();
+        let mut s = Settings { appearance: Appearance::Dark, dark_pages: true, ..Settings::default() };
         s.palette[2] = [12, 34, 255, 255];
         s.palette[4] = [0, 0, 0, 255];
         s.tool = Tool::Geometry;
@@ -204,6 +255,39 @@ mod tests {
         let s = Settings::parse(old);
         assert_eq!((s.pen.width, s.smoothing, s.tool), (4.0, 0.3, Tool::Pen));
         assert_eq!((s.shape, s.shape_style), (Shape::Line, ToolStyle::SHAPES), "the new settings are the defaults");
+    }
+
+    #[test]
+    fn the_look_is_kept_and_a_file_from_before_it_still_reads_as_the_systems_with_light_pages() {
+        let s = Settings::parse("appearance dark\ndark-pages on\n");
+        assert_eq!((s.appearance, s.dark_pages), (Appearance::Dark, true));
+        let old = Settings::parse("color 0 1c1e24\nwidth 4.00\nsmoothing 0.30\ntext-slot 1\ntext-size 20.00\n");
+        assert_eq!((old.appearance, old.dark_pages), (Appearance::System, false), "what the previous version wrote");
+        let bad = Settings::parse("appearance purple\ndark-pages maybe\n");
+        assert_eq!((bad.appearance, bad.dark_pages), (Appearance::System, false), "what is not a look is not one");
+        for a in [Appearance::System, Appearance::Light, Appearance::Dark] {
+            assert_eq!(Appearance::from_name(a.name()), Some(a));
+            assert_eq!(Settings::parse(&Settings { appearance: a, ..Settings::default() }.to_text()).appearance, a);
+        }
+    }
+
+    #[test]
+    fn an_appearance_and_what_the_system_says_make_a_look_in_every_case() {
+        use Appearance as A;
+        use Scheme as S;
+        let table = [
+            (A::System, S::Light, S::Light),
+            (A::System, S::Dark, S::Dark),
+            (A::Light, S::Light, S::Light),
+            (A::Light, S::Dark, S::Light),
+            (A::Dark, S::Light, S::Dark),
+            (A::Dark, S::Dark, S::Dark),
+        ];
+        for (appearance, system, want) in table {
+            assert_eq!(appearance.resolve(system), want, "{appearance:?} on a {system:?} system");
+        }
+        assert_eq!(A::System.next().next().next(), A::System, "the button goes round: system, light, dark");
+        assert_eq!((A::System.next(), A::Light.next(), A::Dark.next()), (A::Light, A::Dark, A::System));
     }
 
     #[test]

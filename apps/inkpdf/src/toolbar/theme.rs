@@ -67,7 +67,6 @@ pub struct Ui {
 }
 
 impl Ui {
-    #[allow(dead_code, reason = "the shell draws in the editor's palette (T4)")]
     /// An empty drawing, to be made in these colours.
     pub fn with_palette(pal: Palette) -> Self {
         Self { pal, ..Self::default() }

@@ -23,6 +23,7 @@
 //! redo).
 
 mod act;
+mod appearance;
 mod chrome;
 mod commands;
 mod context;
@@ -218,6 +219,9 @@ impl Editor {
 
     /// Take the saved settings: the tool, and each tool's colours, thickness and options.
     pub fn apply_settings(&mut self, settings: &crate::settings::Settings) {
+        self.ws.appearance = settings.appearance;
+        self.ws.dark_pages = settings.dark_pages;
+        self.sync_theme();
         self.ws.palette = settings.palette;
         self.ws.tool = settings.tool;
         self.ws.pen = settings.pen;
@@ -233,6 +237,8 @@ impl Editor {
     /// What is worth remembering for the next session.
     pub fn settings(&self) -> crate::settings::Settings {
         crate::settings::Settings {
+            appearance: self.ws.appearance,
+            dark_pages: self.ws.dark_pages,
             palette: self.ws.palette,
             tool: self.ws.tool,
             pen: self.ws.pen,
@@ -262,6 +268,7 @@ impl Editor {
     pub fn step_view(&mut self, dt: f32) -> bool {
         let overview = self.step_overview(dt);
         let interface = self.step_motions(dt);
+        self.ws.theme = self.palette();
         self.ws.step_view(dt) || overview || interface
     }
 
@@ -271,6 +278,7 @@ impl Editor {
         let rest = toolbar::Look::resting(&state, &bar);
         self.motions.retarget_toolbar(&rest, state.pressed.and_then(|item| bar.slot(item)));
         self.motions.retarget_drawers(self.chrome.prompt, self.panel_view(), self.context_bar().is_some());
+        self.motions.retarget_theme(self.scheme() == crate::palette::Scheme::Dark);
         self.motions.step(dt)
     }
 

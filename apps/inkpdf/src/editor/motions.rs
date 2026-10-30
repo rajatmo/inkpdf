@@ -24,6 +24,9 @@ pub struct Motions {
     panel: Presence<PanelView>,
     /// How far the bar under the tools has come in.
     bar_in: Tween,
+    /// How dark the interface is, 0 (the light scheme) to 1 (the dark one): a change of look is a fade between them.
+    theme: Tween,
+    theme_primed: bool,
 }
 
 impl Default for Motions {
@@ -47,6 +50,8 @@ impl Motions {
             prompt: Presence::default(),
             panel: Presence::default(),
             bar_in: Tween::at(1.0),
+            theme: Tween::at(0.0),
+            theme_primed: false,
         }
     }
 
@@ -84,6 +89,22 @@ impl Motions {
             }
             self.pressed = pressed;
         }
+    }
+
+    /// The interface is heading for the dark scheme (or the light one): it fades there (at once the first time, and with reduced motion).
+    pub fn retarget_theme(&mut self, dark: bool) {
+        let target = f32::from(dark);
+        if !self.theme_primed || self.prefs.reduced {
+            self.theme_primed = true;
+            self.theme.jump(target);
+        } else {
+            self.theme.go(target, self.prefs.time(seconds::MEDIUM), Curve::Standard);
+        }
+    }
+
+    /// How far from the light scheme to the dark one the interface is now, 0 to 1.
+    pub fn theme_amount(&self) -> f32 {
+        self.theme.value()
     }
 
     /// Where the prompt, the tool's panel and the bar under the tools are heading: `now` is each as it is wanted now.
@@ -170,6 +191,7 @@ impl Motions {
         moving |= self.prompt.step(dt);
         moving |= self.panel.step(dt);
         moving |= self.bar_in.step(dt);
+        moving |= self.theme.step(dt);
         moving
     }
 }

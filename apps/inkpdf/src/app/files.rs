@@ -248,7 +248,10 @@ impl State {
         while let Some(request) = self.ed.requests().pop() {
             match request {
                 Request::Answer(choice) => self.answered(choice),
-                Request::SettingsChanged => self.save_settings(),
+                Request::SettingsChanged => {
+                    self.save_settings();
+                    self.sync_window_theme();
+                }
                 Request::Save => {
                     self.save_now();
                 }

@@ -120,6 +120,10 @@ impl super::Platform for FakePlatform {
         std::sync::Arc::new(crate::path_store::PathStore)
     }
 
+    fn color_scheme(&self) -> Option<crate::palette::Scheme> {
+        None
+    }
+
     fn system_font(&self) -> Option<Vec<u8>> {
         None
     }

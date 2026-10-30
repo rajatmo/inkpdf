@@ -173,6 +173,8 @@ pub struct State {
     mode_forced: bool,
     /// Which of Ctrl, Shift, … are held (for the desktop mode's shortcuts).
     modifiers: ModifiersState,
+    /// The look the window's title bar was last told to have.
+    last_appearance: crate::settings::Appearance,
     /// The input given to the editor, being copied to a file (`--record`).
     recorder: Option<replay::Recorder>,
     /// A recording being played (`--replay`).
@@ -257,6 +259,7 @@ impl State {
             keyboard_shown: false,
             mode_forced: opts.mode.is_some(),
             modifiers: ModifiersState::empty(),
+            last_appearance: crate::settings::Appearance::default(),
             recorder: opts.record.map(replay::Recorder::new),
             player: opts.replay.as_deref().map(replay::Player::load).transpose()?,
         };
@@ -265,6 +268,8 @@ impl State {
         state.feed(InputEvent::Resized(size));
         state.feed(InputEvent::ScaleChanged(dpr));
         state.ed.apply_settings(&config::load(state.platform.config_dir()));
+        state.refresh_system_scheme();
+        state.sync_window_theme();
         // Text copied from a box can be pasted anywhere, and text copied anywhere into a box.
         if let Some(clipboard) = state.platform.clipboard(&*state.window) {
             state.ed.set_text_clipboard(clipboard);
@@ -333,7 +338,11 @@ impl State {
             WindowEvent::CursorLeft { .. } => self.feed(InputEvent::MouseLeft),
             WindowEvent::Focused(false) => self.feed(InputEvent::FocusLost),
             // (What was asked of motion in Windows' settings is read again when the window is come back to.)
-            WindowEvent::Focused(true) => self.ed.motions.set_prefs(self.platform.motion_prefs()),
+            WindowEvent::Focused(true) => {
+                self.ed.motions.set_prefs(self.platform.motion_prefs());
+                self.refresh_system_scheme();
+            }
+            WindowEvent::ThemeChanged(_) => self.refresh_system_scheme(),
             WindowEvent::ModifiersChanged(m) => self.modifiers = m.state(),
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => self.feed(InputEvent::ScaleChanged(scale_factor as f32)),
             WindowEvent::RedrawRequested => self.redraw(),
@@ -366,6 +375,30 @@ impl State {
             recorder.push(&event);
         }
         self.ed.handle(event);
+    }
+
+    /// Ask what the system's look is: the platform first (it knows `INKPDF_THEME`, and the desktop's settings where the toolkit cannot), then the
+    /// window (Windows says it). Light when nobody knows.
+    fn refresh_system_scheme(&mut self) {
+        use crate::palette::Scheme;
+        let scheme = self
+            .platform
+            .color_scheme()
+            .or_else(|| self.window.theme().map(|t| if t == winit::window::Theme::Dark { Scheme::Dark } else { Scheme::Light }))
+            .unwrap_or(Scheme::Light);
+        self.ed.set_system_scheme(scheme);
+    }
+
+    /// The title bar follows the look the user chose (and the system's when they left it to the system), where the toolkit can do it.
+    fn sync_window_theme(&mut self) {
+        use crate::settings::Appearance;
+        let appearance = self.ed.appearance();
+        self.window.set_theme(match appearance {
+            Appearance::System => None,
+            Appearance::Light => Some(winit::window::Theme::Light),
+            Appearance::Dark => Some(winit::window::Theme::Dark),
+        });
+        self.last_appearance = appearance;
     }
 
     /// Change how the devices are used (the posture changed, or it was asked for on the command line).

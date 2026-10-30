@@ -5,7 +5,6 @@
 //! The page itself (the paper, the ink the user chose) is not part of the interface's scheme: it stays as the document has it, unless the
 //! user turns on dark pages, which is its own setting (see `Workspace::display_colour`).
 
-#[allow(dead_code, reason = "chosen by the appearance setting (T4)")]
 /// Which look.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 pub enum Scheme {
@@ -70,7 +69,6 @@ fn with_alpha(rgb: [u8; 3], alpha: u8) -> Rgba {
     [rgb[0], rgb[1], rgb[2], alpha]
 }
 
-#[allow(dead_code, reason = "the scheme is resolved by the editor (T4)")]
 impl Palette {
     /// A shadow, or a scrim over the document, of this opacity (0 to 255).
     pub fn shadow(&self, alpha: u8) -> Rgba {
@@ -92,6 +90,7 @@ impl Palette {
         with_alpha([self.white[0], self.white[1], self.white[2]], alpha)
     }
 
+    #[cfg(test)]
     /// The palette of a scheme.
     pub fn of(scheme: Scheme) -> Palette {
         match scheme {

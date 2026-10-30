@@ -61,7 +61,7 @@ impl UiLayers {
             }
             return false;
         }
-        let mut ui = Ui::default();
+        let mut ui = Ui::with_palette(cx.ed.palette());
         cx.ed.draw_overview(&mut ui);
         cx.gpu.set_ui(&ui.panels, &ui.lines);
         self.overview.ghost = Some(ui.clone());
@@ -78,7 +78,7 @@ impl UiLayers {
         if !cx.ed.save_as_open() {
             return false;
         }
-        let mut ui = Ui::default();
+        let mut ui = Ui::with_palette(cx.ed.palette());
         cx.ed.draw_save_as(&mut ui);
         cx.gpu.set_ui(&ui.panels, &ui.lines);
         self.overview.images.clear();

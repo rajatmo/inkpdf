@@ -12,6 +12,21 @@ pub fn set_text_input(_active: bool) {}
 /// There is no terminal to join: a program started from one already has it.
 pub fn attach_parent_console() {}
 
+/// What `INKPDF_THEME` (`light` or `dark`) says: the look for a run, whatever the system says.
+pub fn env_scheme() -> Option<crate::palette::Scheme> {
+    match std::env::var("INKPDF_THEME").ok().as_deref() {
+        Some("dark") => Some(crate::palette::Scheme::Dark),
+        Some("light") => Some(crate::palette::Scheme::Light),
+        _ => None,
+    }
+}
+
+/// Where the toolkit does not say what the system's look is and nothing else does yet: not known.
+#[cfg(target_os = "android")]
+pub fn color_scheme() -> Option<crate::palette::Scheme> {
+    env_scheme()
+}
+
 /// Report a problem before there is a window: on the terminal.
 pub fn report_fatal(text: &str) {
     eprintln!("{text}");

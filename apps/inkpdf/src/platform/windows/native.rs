@@ -141,6 +141,15 @@ impl TextClipboard for SystemClipboard {
     }
 }
 
+/// What `INKPDF_THEME` says (`light` or `dark`); otherwise nothing: the shell asks the window, which knows Windows' setting.
+pub fn color_scheme() -> Option<crate::palette::Scheme> {
+    match std::env::var("INKPDF_THEME").ok().as_deref() {
+        Some("dark") => Some(crate::palette::Scheme::Dark),
+        Some("light") => Some(crate::palette::Scheme::Light),
+        _ => None,
+    }
+}
+
 /// The folder a user's application data goes in: `%APPDATA%`.
 pub fn config_dir() -> Option<std::path::PathBuf> {
     std::env::var_os("APPDATA").map(std::path::PathBuf::from)

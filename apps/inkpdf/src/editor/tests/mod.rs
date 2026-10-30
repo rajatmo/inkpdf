@@ -2,6 +2,7 @@
 //! and see what each one is allowed to do.
 
 mod anchors;
+mod appearance;
 mod capability;
 mod contract;
 mod delete_page;

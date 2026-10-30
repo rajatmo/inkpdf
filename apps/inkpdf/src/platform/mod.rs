@@ -50,6 +50,9 @@ pub trait Platform {
     fn detect_mode(&self) -> Mode;
     /// What the user has asked of motion.
     fn motion_prefs(&self) -> Prefs;
+    /// What the system says its look is (light or dark), for where the windowing toolkit cannot say: it can on Windows (the shell asks
+    /// the window), not on X11, nor Android. `INKPDF_THEME=light|dark` says it for a run. `None` when it is not known (taken as light).
+    fn color_scheme(&self) -> Option<crate::palette::Scheme>;
     /// Where this platform keeps files: by path on the file system, or in whatever its own picker hands out.
     fn file_store(&self) -> Arc<dyn FileStore>;
     /// The bytes of the font the system draws text in, if its widths are the ones PDF readers use (Arial). Without one the program's
@@ -125,6 +128,10 @@ impl Platform for Native {
 
     fn file_store(&self) -> Arc<dyn FileStore> {
         Arc::new(PathStore)
+    }
+
+    fn color_scheme(&self) -> Option<crate::palette::Scheme> {
+        os::color_scheme()
     }
 
     fn system_font(&self) -> Option<Vec<u8>> {

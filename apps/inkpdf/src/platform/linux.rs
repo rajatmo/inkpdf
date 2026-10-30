@@ -47,6 +47,32 @@ pub fn places() -> Vec<Place> {
     existing_places(all, |p| p.is_dir())
 }
 
+/// The look the desktop has: `INKPDF_THEME` if set, else what GNOME's settings say (`color-scheme`, or a theme named `-dark`), which most
+/// desktops keep in step; `None` where that cannot be read (taken as light). X11 does not tell a window, so it is asked of the settings.
+pub fn color_scheme() -> Option<crate::palette::Scheme> {
+    use crate::palette::Scheme;
+    if let Some(scheme) = super::stubs::env_scheme() {
+        return Some(scheme);
+    }
+    let ask = |key: &str| -> Option<String> {
+        let out = std::process::Command::new("gsettings")
+            .args(["get", "org.gnome.desktop.interface", key])
+            .stdin(std::process::Stdio::null())
+            .output()
+            .ok()?;
+        out.status.success().then(|| String::from_utf8_lossy(&out.stdout).to_lowercase())
+    };
+    if let Some(value) = ask("color-scheme") {
+        if value.contains("prefer-dark") {
+            return Some(Scheme::Dark);
+        }
+        if value.contains("prefer-light") {
+            return Some(Scheme::Light);
+        }
+    }
+    ask("gtk-theme").map(|theme| if theme.contains("dark") { Scheme::Dark } else { Scheme::Light })
+}
+
 /// A desktop is a desktop: no Linux desktop reports a slate posture in a way that can be told from a keyboard being
 /// folded away, and the toolbar's mode button (or `--mode tablet`) flips it by hand.
 pub fn detect_mode() -> Mode {

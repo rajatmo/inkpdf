@@ -102,7 +102,7 @@ fn tapping_the_colour_in_use_opens_the_colour_editor_and_its_sliders_change_it()
     assert_eq!(ed.chrome.panel, Some(PanelState { editing: Some(2) }), "the second tap on the colour in use opens the editor");
     // The editor starts from the slot's colour.
     let [hue, _, _] = ed.chrome.colour_hsv;
-    assert!(hue < 5.0 || hue > 355.0, "it is a red: {hue}");
+    assert!(!(5.0..=355.0).contains(&hue), "it is a red: {hue}");
 
     // Drag the hue slider a third of the way along: a green.
     drag_slider(&mut ed, Slider::Channel(Channel::Hue), 0.0, 1.0 / 3.0);

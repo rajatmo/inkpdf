@@ -100,7 +100,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "editor" -> "figure" [color="#6a5acd99", penwidth=1.30, tooltip="1 uses"];
 "editor" -> "geometry" [color="#6a5acd99", penwidth=1.30, tooltip="1 uses"];
 "editor" -> "ink" [color="#6a5acd99", penwidth=2.38, tooltip="8 uses"];
-"editor" -> "input" [color="#6a5acd99", penwidth=2.92, tooltip="18 uses"];
+"editor" -> "input" [color="#6a5acd99", penwidth=2.96, tooltip="19 uses"];
 "editor" -> "links" [color="#6a5acd99", penwidth=1.80, tooltip="3 uses"];
 "editor" -> "motion" [color="#6a5acd99", penwidth=1.96, tooltip="4 uses"];
 "editor" -> "outline" [color="#6a5acd99", penwidth=1.80, tooltip="3 uses"];
@@ -111,7 +111,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "editor" -> "scene" [color="#6a5acd99", penwidth=1.30, tooltip="1 uses"];
 "editor" -> "settings" [color="#6a5acd99", penwidth=1.96, tooltip="4 uses"];
 "editor" -> "store" [color="#6a5acd99", penwidth=1.30, tooltip="1 uses"];
-"editor" -> "tool" [color="#6a5acd99", penwidth=2.30, tooltip="7 uses"];
+"editor" -> "tool" [color="#6a5acd99", penwidth=2.38, tooltip="8 uses"];
 "editor" -> "toolbar" [color="#6a5acd99", penwidth=2.70, tooltip="13 uses"];
 "editor" -> "tools" [color="#6a5acd99", penwidth=2.46, tooltip="9 uses"];
 "editor" -> "view" [color="#6a5acd99", penwidth=1.59, tooltip="2 uses"];

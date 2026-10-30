@@ -36,6 +36,7 @@ impl Editor {
                 if self.fingers.fingers() == 0 {
                     self.end_pull();
                 }
+                self.fingers.set_scale(self.ws.dpr);
                 self.fingers.down(ev.id, first.pos, first.t_ms);
             }
             Phase::Move => {
@@ -50,6 +51,7 @@ impl Editor {
                     return;
                 }
                 for s in &ev.samples {
+                    self.fingers.set_scale(self.ws.dpr);
                     if let Some(d) = self.fingers.moved(ev.id, s.pos, s.t_ms) {
                         self.apply_touch(d);
                     }
@@ -74,6 +76,7 @@ impl Editor {
                     self.end_act();
                     return;
                 }
+                self.fingers.set_scale(self.ws.dpr);
                 let released = self.fingers.up(ev.id, last.pos, last.t_ms);
                 if let Some(v) = released.fling.filter(|_| lifted) {
                     self.ws.scroll_by_px(v[0] * FLING_SECONDS, v[1] * FLING_SECONDS);

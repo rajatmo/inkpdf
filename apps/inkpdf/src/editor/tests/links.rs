@@ -105,3 +105,87 @@ fn links_are_forgotten_when_another_document_loads() {
     ed.load(Layout::new(&[[612.0, 792.0]]), vec![]);
     assert!(ed.links.is_empty());
 }
+
+fn selecting(ed: &mut Editor) {
+    ed.ws.tool = Tool::Select;
+}
+
+fn mouse_press_release(ed: &mut Editor, down: [f32; 2], up: [f32; 2]) {
+    ed.mouse_moved(down);
+    ed.mouse_button(ButtonState::Pressed, MouseButton::Left);
+    ed.mouse_moved(up);
+    ed.mouse_button(ButtonState::Released, MouseButton::Left);
+}
+
+#[test]
+fn with_the_select_tool_a_mouse_click_follows_a_web_link() {
+    let mut ed = editor();
+    selecting(&mut ed);
+    with_links(&mut ed, Target::Url("https://example.com/".into()));
+    let on = on_page(&ed, 150.0, 200.0);
+    mouse_click_at(&mut ed, on);
+    assert_eq!(ed.requests.url(), Some("https://example.com/"));
+}
+
+#[test]
+fn with_the_select_tool_a_mouse_click_follows_a_page_link() {
+    let mut ed = editor();
+    selecting(&mut ed);
+    with_links(&mut ed, Target::Page(1));
+    let on = on_page(&ed, 150.0, 200.0);
+    mouse_click_at(&mut ed, on);
+    settle(&mut ed);
+    assert!(ed.view.scroll[1] > 500.0, "scroll {}", ed.view.scroll[1]);
+}
+
+#[test]
+fn with_the_select_tool_a_drag_from_a_link_is_not_a_click() {
+    let mut ed = editor();
+    selecting(&mut ed);
+    with_links(&mut ed, Target::Url("https://example.com/".into()));
+    let on = on_page(&ed, 150.0, 200.0);
+    mouse_press_release(&mut ed, on, [on[0] + 60.0, on[1]]);
+    assert!(ed.requests.url().is_none());
+}
+
+#[test]
+fn with_the_select_tool_a_click_off_the_link_does_nothing() {
+    let mut ed = editor();
+    selecting(&mut ed);
+    with_links(&mut ed, Target::Url("https://example.com/".into()));
+    let off = on_page(&ed, 150.0, 300.0);
+    mouse_click_at(&mut ed, off);
+    assert!(ed.requests.url().is_none());
+}
+
+#[test]
+fn with_the_select_tool_a_stylus_tap_follows_a_link() {
+    let mut ed = editor();
+    selecting(&mut ed);
+    with_links(&mut ed, Target::Url("https://example.com/".into()));
+    let on = on_page(&ed, 150.0, 200.0);
+    pen_stroke(&mut ed, TIP, &[on, on]);
+    assert_eq!(ed.requests.url(), Some("https://example.com/"));
+    // A stroke across the link is a selection, not a click.
+    let mut ed = editor();
+    selecting(&mut ed);
+    with_links(&mut ed, Target::Url("https://example.com/".into()));
+    pen_stroke(&mut ed, TIP, &[on, [on[0] + 40.0, on[1] + 5.0], [on[0] + 80.0, on[1] + 5.0]]);
+    assert!(ed.requests.url().is_none());
+}
+
+#[test]
+fn a_finger_tap_that_wobbles_follows_a_link_on_a_dense_screen_only() {
+    // 15 screen pixels is a hair's breadth at 2.6 times the scale, a swipe at 1.
+    for (dpr, follows) in [(2.6, true), (1.0, false)] {
+        let mut ed = editor();
+        ed.set_dpr(dpr);
+        // (Lower down the page than the other tests, out of the way of the bars, which grow with the scale.)
+        ed.links = vec![Link { rect: [112.0, 502.0, 312.0, 522.0], target: Target::Url("https://example.com/".into()) }];
+        let on = on_page(&ed, 150.0, 500.0);
+        ed.pointer_event(touch(1, Phase::Down, on, 30.0));
+        ed.pointer_event(touch(1, Phase::Move, [on[0] + 15.0, on[1]], 30.0));
+        ed.pointer_event(touch(1, Phase::Up, [on[0] + 15.0, on[1]], 30.0));
+        assert_eq!(ed.requests.url().is_some(), follows, "dpr {dpr}");
+    }
+}

@@ -255,6 +255,7 @@ impl Editor {
         };
         if listens || tool.owns(dev, id) {
             tool.pointer(&mut self.ws, &PageEvent { dev, id, phase, samples, pen });
+            self.watch_link_click(dev, id, phase, samples);
         }
     }
 

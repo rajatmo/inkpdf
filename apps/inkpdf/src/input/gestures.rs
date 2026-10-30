@@ -34,14 +34,26 @@ pub struct TouchGestures {
     trail: Vec<(f64, [f32; 2])>,
     moved_far: bool,
     peak_fingers: usize,
+    /// Screen pixels per logical pixel (what the distances below are in), 0 until told: taken as 1. A finger's jitter is millimetres, not pixels.
+    scale: f32,
 }
 
-const TAP_SLOP_PX: f32 = 10.0;
-const TAP_MAX_MS: f64 = 300.0;
+/// How far a finger may wander and still be tapping, in logical pixels (Android's own touch slop is 8, and a finger on a tablet wanders more).
+const TAP_SLOP_PX: f32 = 12.0;
+const TAP_MAX_MS: f64 = 350.0;
 const FLING_WINDOW_MS: f64 = 90.0;
 const FLING_MIN_SPEED: f32 = 250.0;
 
 impl TouchGestures {
+    /// Tell it how many screen pixels a logical pixel is, so that a tap or a fling is judged by what the hand did, not by how dense the screen is.
+    pub fn set_scale(&mut self, scale: f32) {
+        self.scale = if scale.is_finite() && scale > 0.0 { scale } else { 1.0 };
+    }
+
+    fn scale(&self) -> f32 {
+        if self.scale > 0.0 { self.scale } else { 1.0 }
+    }
+
     pub fn fingers(&self) -> usize {
         self.touches.len()
     }
@@ -83,7 +95,7 @@ impl TouchGestures {
         let (before_centre, before_spread) = (self.centre()?, self.spread());
         let track = self.touches.get_mut(&id)?;
         track.pos = pos;
-        if ((pos[0] - track.start[0]).powi(2) + (pos[1] - track.start[1]).powi(2)).sqrt() > TAP_SLOP_PX {
+        if ((pos[0] - track.start[0]).powi(2) + (pos[1] - track.start[1]).powi(2)).sqrt() > TAP_SLOP_PX * self.scale() {
             self.moved_far = true;
         }
         let (centre, spread) = (self.centre()?, self.spread());
@@ -115,7 +127,7 @@ impl TouchGestures {
             return None;
         }
         let v = [(last.1[0] - first.1[0]) / dt, (last.1[1] - first.1[1]) / dt];
-        ((v[0] * v[0] + v[1] * v[1]).sqrt() >= FLING_MIN_SPEED).then_some(v)
+        ((v[0] * v[0] + v[1] * v[1]).sqrt() >= FLING_MIN_SPEED * self.scale()).then_some(v)
     }
 }
 
@@ -147,6 +159,18 @@ mod tests {
         let d2 = g.moved(2, [260.0, 110.0], 33.0).expect("delta");
         assert!(d.zoom < 1.0 && d2.zoom > 1.0);
         assert!((d.zoom * d2.zoom - 1.0).abs() < 1e-3, "net zoom for a pure pan is 1");
+    }
+
+    #[test]
+    fn a_tap_is_judged_in_logical_pixels_not_screen_pixels() {
+        // A finger wobbles 20 screen pixels: a swipe on a plain screen, a hair's breadth on one at 3 times the scale.
+        for (scale, tap) in [(1.0, false), (3.0, true)] {
+            let mut g = TouchGestures::default();
+            g.set_scale(scale);
+            g.down(1, [50.0, 60.0], 0.0);
+            g.moved(1, [70.0, 60.0], 30.0);
+            assert_eq!(g.up(1, [70.0, 60.0], 120.0).tap.is_some(), tap, "scale {scale}");
+        }
     }
 
     #[test]

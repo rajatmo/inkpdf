@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.3
+
+- **Links work with every pointer.** A finger's tap was judged in screen pixels (10 px, 300 ms), so on a dense tablet screen the natural wobble of a
+  fingertip made most taps "a swipe" and the link was never followed. The slop is now 12 logical pixels (scaled by the screen's scale), the
+  time 350 ms, and a fling needs a speed in logical pixels too.
+- With the **Select tool** (the one the program starts on, the one to read with) a click of the left mouse button or a tap of the stylus's tip on a
+  link follows it, a drag from a link is a selection as before. The tools that draw still draw (only a finger's tap follows a link there).
+
 ## 1.3.2
 
 - **Android follows the system's light and dark look** (set "system" with the theme button): the program reads the activity's night mode, and

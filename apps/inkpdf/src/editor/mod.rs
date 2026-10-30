@@ -95,6 +95,8 @@ pub struct Editor {
     graves: HashMap<u64, pages::Grave>,
     /// The bar under the tools as it last was, kept while it goes out (see [`Editor::step_motions`]).
     held_bar: Option<(toolbar::ContextBar, toolbar::ContextState)>,
+    /// A press of the stylus or mouse on a link that may still be a click (see [`navigation`]).
+    link_tap: Option<navigation::LinkTap>,
     /// The search card: what was typed, what it found (see [`search`]).
     pub search: search::Search,
     /// The tools there are, as the toolbar lists them (the program's own and the extensions').
@@ -149,6 +151,7 @@ impl Editor {
             grave: 0,
             graves: HashMap::new(),
             held_bar: None,
+            link_tap: None,
             search: search::Search::default(),
             tools: ToolSet::with_extensions(extensions),
             chrome: Chrome::default(),

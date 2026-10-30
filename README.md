@@ -62,7 +62,7 @@ InkPDF picks a **mode** from how the machine is used: **desktop** (keyboard and 
 
 | | Stylus | Finger | Mouse (desktop mode) |
 |---|---|---|---|
-| **Draws, selects, erases** | tip draws; eraser end erases; side button makes a lasso (on Android, an S Pen's one button erases) | pans and zooms; a tap follows a link; pulling past the last page adds a page | left draws, right erases, middle lassos; the wheel scrolls |
+| **Draws, selects, erases** | tip draws; eraser end erases; side button makes a lasso (on Android, an S Pen's one button erases) | pans and zooms; a tap follows a link (with the Select tool a stylus tap or a mouse click does too); pulling past the last page adds a page | left draws, right erases, middle lassos; the wheel scrolls |
 
 - **Palm rejection is simple:** touch is off while the pen is near the screen (hovering or touching) and comes back the
   moment it leaves.

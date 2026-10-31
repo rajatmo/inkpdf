@@ -204,7 +204,7 @@ impl State {
             let (gpu, failed) = (&self.gpu, &self.session.failed);
             let have = |k: Key| !doc.renders(k) || gpu.has(k) || failed.contains(&k);
             let queue = match &overview {
-                Some(pages) => pages.clone().filter_map(|p| to_file(p as u32)).map(|p| Key::Thumb { page: p }).filter(|&k| !have(k)).collect(),
+                Some(pages) => pages.iter().filter_map(|&p| to_file(p as u32)).map(|p| Key::Thumb { page: p }).filter(|&k| !have(k)).collect(),
                 None => plan.queue(have),
             };
             pending = queue.len();

@@ -67,9 +67,10 @@ impl Registry {
         }
     }
 
-    /// Add a tool of an extension, drawn on its button from the SVG `icon` (a name already there, or more tools than fit, is refused).
+    /// Add a tool of an extension, drawn on its button from the SVG `icon` (a name already there, more tools than fit, or no icon is refused: an
+    /// extension with no icon is not a tool to choose, and its button would be an empty space in the pill).
     pub fn with(mut self, tool: Tool, icon: &'static str) -> Registry {
-        if self.tools.len() < MAX_TOOLS && self.tools.iter().all(|(t, _)| *t != tool) {
+        if !icon.is_empty() && self.tools.len() < MAX_TOOLS && self.tools.iter().all(|(t, _)| *t != tool) {
             self.tools.push((tool, Some(icon)));
         }
         self
@@ -130,7 +131,11 @@ pub fn registry() -> &'static Registry {
     static REGISTRY: std::sync::OnceLock<Registry> = std::sync::OnceLock::new();
     // (The extensions the program can serve: see `tools::extensions`, which says why one is left out.)
     REGISTRY.get_or_init(|| {
-        inkpdf_ext::all().iter().filter(|e| e.problem().is_none()).fold(Registry::builtin(), |r, e| r.with(Tool::named(e.id), e.icon_svg))
+        // (An extension with no icon has no button: it is not a tool to choose.)
+        inkpdf_ext::all()
+            .iter()
+            .filter(|e| e.problem().is_none() && !e.icon_svg.is_empty())
+            .fold(Registry::builtin(), |r, e| r.with(Tool::named(e.id), e.icon_svg))
     })
 }
 
@@ -291,6 +296,7 @@ mod tests {
         assert_eq!(r.icon(Tool::Pen), None, "the toolbar draws the program's own");
         let full = (0..50).fold(Registry::builtin(), |r, i| r.with(Tool::named(Box::leak(format!("t{i}").into_boxed_str())), "<path/>"));
         assert_eq!(full.len(), MAX_TOOLS);
+        assert_eq!(Registry::builtin().with(Tool::named("quiet"), "").len(), 6, "an extension with no icon has no button");
     }
 
     #[test]

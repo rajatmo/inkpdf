@@ -92,6 +92,17 @@ impl SearchLayout {
     /// The card in a window of `viewport` pixels, at the right, with its top `top` pixels down (just under the bars), with room for `rows`
     /// rows of results.
     pub fn new(toolbar: &Toolbar, viewport: [f32; 2], top: f32, rows: usize) -> SearchLayout {
+        // (In a window too short to hold it at `top` it goes as far up as it must to be whole.)
+        let limit = viewport[1] - 12.0 * toolbar.dpr;
+        let at_top = Self::build(toolbar, viewport, top, rows);
+        if at_top.card[3] <= limit {
+            return at_top;
+        }
+        let height = at_top.card[3] - at_top.card[1];
+        Self::build(toolbar, viewport, (limit - height).max(0.0), rows)
+    }
+
+    fn build(toolbar: &Toolbar, viewport: [f32; 2], top: f32, rows: usize) -> SearchLayout {
         let px = toolbar.dpr;
         let u = toolbar.unit.clamp(20.0 * px, 34.0 * px);
         let margin = 12.0 * px;
@@ -109,10 +120,12 @@ impl SearchLayout {
         let next = [x1 - pad - h, row_b, x1 - pad, row_b + h];
         let previous = [next[0] - gap - h, row_b, next[0] - gap, row_b + h];
         let status = [words[2] + gap, row_b, previous[0] - gap, row_b + h];
-        let row_count = rows.min(ROWS);
-        let mut list = [[0.0; 4]; ROWS];
         let first = row_b + h + pad;
         let row_h = 0.95 * u;
+        // (As many rows as fit under the card's top in this window, so that the card is never longer than the window.)
+        let fits = ((viewport[1] - margin - pad - first) / row_h).floor().max(0.0) as usize;
+        let row_count = rows.min(ROWS).min(fits);
+        let mut list = [[0.0; 4]; ROWS];
         for (i, r) in list.iter_mut().enumerate().take(row_count) {
             *r = [x0 + pad, first + i as f32 * row_h, x1 - pad, first + (i + 1) as f32 * row_h];
         }

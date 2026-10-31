@@ -13,7 +13,10 @@ impl Editor {
 
     /// The button, where it is, if it is shown (not while a prompt has the window).
     pub fn theme_layout(&self) -> Option<ThemeLayout> {
-        (self.chrome.theme_menu && self.chrome.prompt.is_none()).then(|| ThemeLayout::new(&self.toolbar(), self.ws.view.viewport))
+        // (It hangs from the theme button: with the look's pill folded there is no button to hang from, and nothing is shown.)
+        let bar = self.toolbar();
+        let hangs = bar.items().iter().any(|(item, _)| *item == Item::Theme);
+        (self.chrome.theme_menu && self.chrome.prompt.is_none() && hangs).then(|| ThemeLayout::new(&bar, self.ws.view.viewport))
     }
 
     /// What the button is drawn from.

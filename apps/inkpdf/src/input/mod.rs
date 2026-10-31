@@ -35,6 +35,8 @@ pub use rules::{Action, CursorKind, Target, decide};
 
 /// The pointer id a mouse has when it stands in for a stylus (real pointer ids are small): a tool that is handed it knows the press is the mouse's.
 pub const MOUSE_STYLUS_ID: u32 = u32::MAX;
+/// The id a finger that stands in for the stylus is handed to a tool with.
+pub const FINGER_STYLUS_ID: u32 = u32::MAX - 1;
 
 /// How the machine is being held, which decides what the devices do: with a keyboard and mouse in front of
 /// you (desktop), or as a slate you touch and write on (tablet). It follows the machine's posture (see

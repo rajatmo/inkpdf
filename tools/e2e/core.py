@@ -243,6 +243,20 @@ class Session:
                 return found
         raise KeyError(f"the app's layout has no '{name}' in {group}")
 
+    def link(self, kind):
+        """The place of a link of this kind (`page3`, `url`) that is in the middle of the window. A window shows as much of a page as its shape
+        allows, so the test document has links all down its first page, and the one that is clear of the toolbars and of the keyboard is taken."""
+        w, h = self.d.size
+        spots = {}
+        end = time.time() + 2.0
+        while time.time() < end:
+            spots = (self.d.layout() or {}).get("links", {})
+            ok = [p for n, p in spots.items() if (n == kind or n.startswith(kind + "#")) and 0.25 * h <= p[1] <= 0.7 * h]
+            if ok:
+                return ok[0]
+            time.sleep(0.1)
+        raise KeyError(f"no link to {kind} in the middle of the window: {spots}")
+
     def has(self, group, name):
         """Whether the app says there is such a control now."""
         return self._look_up(group, name) is not None
@@ -318,6 +332,9 @@ class Session:
 
     def pen_bar(self, name):
         self.tap_spot(self.spot("bar", name))
+
+    def finger_bar(self, name):
+        self.finger_tap(self.spot("bar", name))
 
     def tell_setting(self, name):
         """The system telling the app a setting changed (a posture); False where the platform has no such thing."""

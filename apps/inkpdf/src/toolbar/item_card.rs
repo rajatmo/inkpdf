@@ -69,12 +69,36 @@ pub struct ItemCardLayout {
     px: f32,
     title: [f32; 4],
     name_label: [f32; 4],
+    /// A card with no name to write on what is sent and no button to delete what it is about (a link's).
+    plain: bool,
 }
 
 impl ItemCardLayout {
     /// The card in a window of `viewport` pixels, at the right, with its top `top` pixels down, for `rows` rows of text, `actions` buttons of the
     /// kind's and a field (or not).
     pub fn new(toolbar: &Toolbar, viewport: [f32; 2], top: f32, rows: usize, actions: usize, has_field: bool) -> ItemCardLayout {
+        Self::placed(toolbar, viewport, top, rows, actions, has_field, false)
+    }
+
+    /// The same for a card that is about something that is not an item (an address a link goes to): no name and no delete button.
+    pub fn plain(toolbar: &Toolbar, viewport: [f32; 2], top: f32, rows: usize, actions: usize) -> ItemCardLayout {
+        Self::placed(toolbar, viewport, top, rows, actions, false, true)
+    }
+
+    /// The card at `top`, or, in a window too short to hold it there, as far up as it must go to be whole (over the bars: a card cut off at the bottom of
+    /// the window loses the buttons that are on it).
+    fn placed(toolbar: &Toolbar, viewport: [f32; 2], top: f32, rows: usize, actions: usize, has_field: bool, plain: bool) -> ItemCardLayout {
+        let limit = viewport[1] - 12.0 * toolbar.dpr;
+        let at_top = Self::build(toolbar, viewport, top, rows, actions, has_field, plain);
+        if at_top.card[3] <= limit {
+            return at_top;
+        }
+        // (The rows are as many as fit under `top`; what is left is the card without rows, which has to go up.)
+        let height = at_top.card[3] - at_top.card[1];
+        Self::build(toolbar, viewport, (limit - height).max(0.0), rows, actions, has_field, plain)
+    }
+
+    fn build(toolbar: &Toolbar, viewport: [f32; 2], top: f32, rows: usize, actions: usize, has_field: bool, plain: bool) -> ItemCardLayout {
         let px = toolbar.dpr;
         let u = toolbar.unit.clamp(20.0 * px, 34.0 * px);
         let margin = 12.0 * px;
@@ -86,17 +110,21 @@ impl ItemCardLayout {
         let row_a = y0 + pad;
         let close = [x1 - pad - h, row_a, x1 - pad, row_a + h];
         let title = [x0 + pad, row_a, close[0] - gap, row_a + h];
-        let row_count = rows.min(ROWS);
-        let mut list = [[0.0; 4]; ROWS];
         let row_h = 1.45 * u;
         let first = row_a + h + gap;
+        // (As many rows as fit in this window under the card's top, with the name, the field and the buttons below them: never longer than the window.)
+        let below = (if plain { 0.0 } else { 0.9 * u + gap }) + (if has_field { h + gap } else { 0.0 }) + h + pad;
+        let fits = ((viewport[1] - margin - first - below) / row_h).floor().max(0.0) as usize;
+        let row_count = rows.min(ROWS).min(fits);
+        let mut list = [[0.0; 4]; ROWS];
         for (i, r) in list.iter_mut().enumerate().take(row_count) {
             *r = [x0 + pad, first + i as f32 * row_h, x1 - pad, first + (i + 1) as f32 * row_h];
         }
         let after_rows = if row_count > 0 { list[row_count - 1][3] + gap } else { first };
         let name_label = [x0 + pad, after_rows, x0 + pad + 2.4 * u, after_rows + 0.9 * u];
         let name = [name_label[2], after_rows, x1 - pad, after_rows + 0.9 * u];
-        let mut y = name[3] + gap;
+        // (A plain card has no row for the name: what follows the rows is its buttons.)
+        let mut y = if plain { after_rows } else { name[3] + gap };
         let send = [x1 - pad - h, y, x1 - pad, y + h];
         let field = has_field.then(|| {
             let r = [x0 + pad, y, send[0] - gap, y + h];
@@ -106,8 +134,8 @@ impl ItemCardLayout {
         let action_count = actions.min(ACTIONS);
         let mut buttons = [[0.0; 4]; ACTIONS];
         let delete = [x1 - pad - h, y, x1 - pad, y + h];
-        // (The buttons share the room before the delete button, as wide as 4.6 units each if there is room for that.)
-        let room = delete[0] - gap - (x0 + pad);
+        // (The buttons share the room before the delete button (all the width, in a plain card), as wide as 4.6 units each if there is room for that.)
+        let room = if plain { x1 - pad - (x0 + pad) } else { delete[0] - gap - (x0 + pad) };
         let button_w = (4.6 * u).min((room - action_count.saturating_sub(1) as f32 * gap) / action_count.max(1) as f32);
         for (i, b) in buttons.iter_mut().enumerate().take(action_count) {
             let left = x0 + pad + i as f32 * (button_w + gap);
@@ -128,6 +156,7 @@ impl ItemCardLayout {
             px,
             title,
             name_label,
+            plain,
         }
     }
 
@@ -137,7 +166,10 @@ impl ItemCardLayout {
 
     /// Every part there is and where it is.
     fn parts(&self) -> Vec<([f32; 4], CardItem)> {
-        let mut parts = vec![(self.close, CardItem::Close), (self.delete, CardItem::Delete), (self.name, CardItem::Name)];
+        let mut parts = vec![(self.close, CardItem::Close)];
+        if !self.plain {
+            parts.extend([(self.delete, CardItem::Delete), (self.name, CardItem::Name)]);
+        }
         parts.extend(self.field.map(|f| (f, CardItem::Field)));
         if self.field.is_some() {
             parts.push((self.send, CardItem::Send));
@@ -196,7 +228,7 @@ impl ItemCardLayout {
         for (rect, (head, body)) in self.rows[..self.row_count].iter().zip(&view.rows) {
             let room = (rect[2] - rect[0] - 0.4 * u).max(u);
             let x = rect[0] + 0.2 * u;
-            say(ui, &elide(head, 0.36 * u, room), 0.36 * u, ui.pal.ink_dim, [x, rect[1] + 0.32 * u], Align::Left);
+            say(ui, &elide(head, 0.4 * u, room), 0.4 * u, ui.pal.ink_dim, [x, rect[1] + 0.32 * u], Align::Left);
             say(ui, &elide(&first_line(body), 0.46 * u, room), 0.46 * u, ui.pal.ink, [x, rect[1] + 0.95 * u], Align::Left);
         }
         if view.older > 0 && self.row_count > 0 {
@@ -223,8 +255,10 @@ impl ItemCardLayout {
                 }
             }
         };
-        say(ui, "Name", 0.4 * u, ui.pal.ink_dim, [self.name_label[0] + 0.1 * u, mid(self.name_label)[1]], Align::Left);
-        field_of(ui, self.name, &view.name, view.name_caret, "Your name", view.typing_name);
+        if !self.plain {
+            say(ui, "Name", 0.4 * u, ui.pal.ink_dim, [self.name_label[0] + 0.1 * u, mid(self.name_label)[1]], Align::Left);
+            field_of(ui, self.name, &view.name, view.name_caret, "Your name", view.typing_name);
+        }
         if let (Some(rect), Some(hint)) = (self.field, &view.hint) {
             field_of(ui, rect, &view.text, view.caret, hint, !view.typing_name);
             let can = !view.text.trim().is_empty();
@@ -237,8 +271,10 @@ impl ItemCardLayout {
             let room = rect[2] - rect[0] - 0.4 * u;
             say(ui, &elide(words, 0.44 * u, room), 0.44 * u, ui.pal.accent, mid(*rect), Align::Centre);
         }
-        let [cx, cy] = mid(self.delete);
-        all.trash.draw(&mut ui.lines, cx, cy, 0.34 * u, line, ui.pal.danger);
+        if !self.plain {
+            let [cx, cy] = mid(self.delete);
+            all.trash.draw(&mut ui.lines, cx, cy, 0.34 * u, line, ui.pal.danger);
+        }
     }
 }
 
@@ -309,6 +345,40 @@ mod tests {
         let bare = layout([1100.0, 900.0], 1.0, 0, 0, false);
         assert!(bare.field.is_none() && bare.card[3] < l.card[3], "no rows, no field and no buttons make a shorter card");
         assert_eq!(layout([1100.0, 900.0], 1.0, 99, 99, true).row_count, ROWS, "no more rows than there is room for");
+    }
+
+    #[test]
+    fn a_plain_card_has_no_name_and_no_delete_button_and_its_buttons_have_all_the_width() {
+        for (viewport, dpr) in WINDOWS {
+            let l = ItemCardLayout::plain(&Toolbar::layout(viewport, dpr), viewport, 90.0 * dpr, 3, 2);
+            assert!(l.card[0] >= 0.0 && l.card[2] <= viewport[0] + 0.5 && l.card[3] <= viewport[1] + 600.0, "{:?}", l.card);
+            let names: Vec<String> = l.named_parts().into_iter().map(|(n, _)| n).collect();
+            assert_eq!(names, ["close", "action0", "action1"], "{names:?} at {viewport:?}");
+            for (_, r) in l.named_parts() {
+                assert!(r[0] >= l.card[0] && r[2] <= l.card[2] && r[1] >= l.card[1] && r[3] <= l.card[3], "{r:?} in {:?}", l.card);
+                assert!(r[3] - r[1] >= 18.0 * dpr, "{r:?} is small at {viewport:?}");
+            }
+            let full = ItemCardLayout::new(&Toolbar::layout(viewport, dpr), viewport, 90.0 * dpr, 3, 2, false);
+            assert!(l.card[3] < full.card[3], "no row for the name makes it shorter");
+            let mut ui = Ui::default();
+            l.draw(
+                &ItemCardView {
+                    title: "Web link".into(),
+                    rows: vec![("a".into(), "b".into())],
+                    older: 0,
+                    name: String::new(),
+                    name_caret: 0,
+                    hint: None,
+                    text: String::new(),
+                    caret: 0,
+                    actions: vec!["Open".into(), "Copy".into()],
+                    typing_name: false,
+                },
+                &mut ui,
+            );
+            let words: Vec<&str> = ui.labels.iter().map(|t| t.text.as_str()).collect();
+            assert!(!words.contains(&"Name") && words.contains(&"Open") && words.contains(&"Copy"), "{words:?}");
+        }
     }
 
     #[test]

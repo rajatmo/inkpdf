@@ -131,7 +131,7 @@ impl AndroidPointer {
         } else {
             None
         };
-        let raw = RawKey { code, down: matches!(k.action(), KeyAction::Down), ctrl, shift: meta.shift_on(), unicode };
+        let raw = RawKey { code, down: matches!(k.action(), KeyAction::Down), ctrl, shift: meta.shift_on(), alt: meta.alt_on(), unicode };
         if crate::platform::motion_event::key(&raw, out) { InputStatus::Handled } else { InputStatus::Unhandled }
     }
 

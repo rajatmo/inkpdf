@@ -276,3 +276,15 @@ fn hovering_makes_the_next_segment_follow_the_pen() {
     ed.pointer_event(PointerEvent { device: Device::Pen, id: 1, phase: Phase::Leave, samples: vec![], pen: HOVER, contact_px: 0.0 });
     assert_eq!(ed.draft_preview().map(|p| p.0.len()), Some(1));
 }
+
+#[test]
+fn a_tap_the_window_reports_at_no_place_adds_no_node() {
+    let mut ed = drawing(Shape::Line);
+    tap(&mut ed, 100.0, 100.0, 1000.0);
+    assert_eq!(nodes(&ed).len(), 1);
+    for bad in [[f32::NAN, 300.0], [300.0, f32::NAN], [f32::NAN, f32::NAN]] {
+        pen_at(&mut ed, Phase::Down, bad, 2000.0);
+        pen_at(&mut ed, Phase::Up, bad, 2020.0);
+    }
+    assert!(nodes(&ed).iter().all(|n| n[0].is_finite() && n[1].is_finite()), "no node is a NaN: {:?}", nodes(&ed));
+}

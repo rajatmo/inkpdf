@@ -372,7 +372,7 @@ impl Tool for TextTool {
         match key {
             Key::Escape => self.finish_text(ws),
             // (A box being typed into has no use for the page keys; the document scrolls.)
-            Key::Page(_) => return false,
+            Key::Page(_) | Key::Trail(_) => return false,
             _ => return self.edit_key(ws, key),
         }
         true

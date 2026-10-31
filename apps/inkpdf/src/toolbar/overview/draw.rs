@@ -79,6 +79,10 @@ pub struct OverviewView<'a> {
     pub menu_enabled: [bool; 5],
     /// The pages that carry a flag, in order.
     pub flagged: &'a [usize],
+    /// With only the flagged pages shown: the pages that are, in the order of their places in the grid (else the places are the pages).
+    pub only: Option<&'a [usize]>,
+    /// Whether the flag button of the header can be pressed (there are flags to show, or the flagged are shown and it puts all back).
+    pub can_filter: bool,
     /// How each page's picture is moving.
     pub motion: &'a dyn Fn(usize) -> PageMotion,
 }
@@ -145,7 +149,8 @@ pub fn draw(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
 /// The menu of one page, floating over the pages.
 fn menu(view: &OverviewView<'_>, l: &OverviewLayout, page: usize, ui: &mut Ui) {
     let (u, px) = (l.unit(), l.px());
-    let (rect, items) = l.menu(page, view.scroll);
+    let place = view.only.map_or(page, |only| only.binary_search(&page).unwrap_or(0));
+    let (rect, items) = l.menu(place, view.scroll);
     ui.floating(rect, 0.5 * u, px);
     for (k, (item, r)) in items.into_iter().enumerate() {
         let look = ButtonLook {
@@ -178,6 +183,8 @@ fn header(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
     let chosen = view.selected.len();
     let titles = if view.edit && chosen > 0 {
         [format!("{chosen} selected"), chosen.to_string()]
+    } else if let Some(only) = view.only {
+        [format!("Flagged pages ({})", only.len()), only.len().to_string()]
     } else {
         [format!("All pages ({count})"), count.to_string()]
     };
@@ -189,14 +196,16 @@ fn header(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
             enabled: match control {
                 Control::Undo => view.can_undo,
                 Control::Redo => view.can_redo,
+                Control::Flagged => view.can_filter,
                 _ => true,
             },
             hovered: view.hover == Some(Hover::Control(control)),
             pressed: view.pressed == Some(Hover::Control(control)),
-            on: control == Control::Edit && view.edit,
+            on: (control == Control::Edit && view.edit) || (control == Control::Flagged && view.only.is_some()),
             danger: false,
         };
         let icon = match control {
+            Control::Flagged => &icons().flag,
             Control::Close => &icons().close,
             Control::Redo => &icons().redo,
             Control::Undo => &icons().undo,
@@ -251,11 +260,13 @@ fn contents(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
 
 fn pages(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
     let (u, px) = (l.unit(), l.px());
-    let count = view.layout.len();
+    // (A place in the grid, `k`, is a page `i`: the same, unless only some pages are shown.)
+    let count = view.only.map_or(view.layout.len(), <[usize]>::len);
     let selected = |i: usize| view.selected.binary_search(&i).is_ok();
-    for i in l.visible_pages(count, view.scroll) {
+    for k in l.visible_pages(count, view.scroll) {
+        let i = view.only.map_or(k, |only| only[k]);
         let Some(page) = view.layout.page(i) else { continue };
-        let thumb = l.thumb(i, view.scroll, [page.w, page.h]);
+        let thumb = l.thumb(k, view.scroll, [page.w, page.h]);
         let Some(shown) = clip(thumb, l.grid) else { continue };
         let whole = within(l.grid, thumb);
         let hovered = view.hover == Some(Hover::Page(i));
@@ -309,7 +320,7 @@ fn pages(view: &OverviewView<'_>, l: &OverviewLayout, ui: &mut Ui) {
             }
         }
         // The number, under the picture.
-        let row = l.number_row(i, view.scroll);
+        let row = l.number_row(k, view.scroll);
         if within(l.grid, row) {
             let color = if current || selected(i) { ui.pal.accent } else { ui.pal.ink };
             let (centre_x, centre_y) = ((row[0] + row[2]) / 2.0, (row[1] + row[3]) / 2.0 + 0.1 * u);
@@ -423,6 +434,8 @@ mod tests {
             menu: None,
             menu_enabled: [true; 5],
             flagged: &[],
+            only: None,
+            can_filter: true,
             motion: &|_| PageMotion::default(),
         }
     }

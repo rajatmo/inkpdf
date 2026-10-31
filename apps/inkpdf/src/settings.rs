@@ -72,6 +72,8 @@ pub struct Settings {
     /// The look of the interface, and whether the pages are drawn dark too (only in effect when the look is dark).
     pub appearance: Appearance,
     pub dark_pages: bool,
+    /// A finger draws like the stylus, so that every tool works with no stylus (the button of the right pill).
+    pub finger_draws: bool,
     /// How the search card matches: with the case, and as whole words.
     pub search_case: bool,
     pub search_words: bool,
@@ -91,6 +93,7 @@ impl Default for Settings {
         Self {
             appearance: Appearance::System,
             dark_pages: false,
+            finger_draws: false,
             search_case: false,
             search_words: false,
             author: String::new(),
@@ -126,6 +129,7 @@ impl Settings {
                 }
                 ["appearance", name] => out.appearance = Appearance::from_name(name).unwrap_or(out.appearance),
                 ["dark-pages", value] => out.dark_pages = value == "on",
+                ["finger-draws", value] => out.finger_draws = value == "on",
                 ["search-case", value] => out.search_case = value == "on",
                 ["search-words", value] => out.search_words = value == "on",
                 ["tool", name] => out.tool = Tool::from_name(name).unwrap_or(out.tool),
@@ -160,6 +164,7 @@ impl Settings {
         let on = |b: bool| if b { "on" } else { "off" };
         text.push_str(&format!("appearance {}\ndark-pages {}\n", self.appearance.name(), on(self.dark_pages)));
         text.push_str(&format!("search-case {}\nsearch-words {}\n", on(self.search_case), on(self.search_words)));
+        text.push_str(&format!("finger-draws {}\n", on(self.finger_draws)));
         let author = clean_name(&self.author);
         if !author.is_empty() {
             text.push_str(&format!("author {author}\n"));
@@ -214,6 +219,7 @@ mod tests {
         let mut s = Settings {
             appearance: Appearance::Dark,
             dark_pages: true,
+            finger_draws: true,
             search_case: true,
             search_words: true,
             author: "Ada Lovelace".into(),

@@ -591,7 +591,7 @@
 <!-- editor&#45;&gt;toolbar -->
 <g id="edge15" class="edge">
 <title>editor&#45;&gt;toolbar</title>
-<g id="a_edge15"><a xlink:title="15 uses">
+<g id="a_edge15"><a xlink:title="17 uses">
 <path fill="none" stroke="#6a5acd" stroke-width="1.6" stroke-opacity="0.600000" d="M1026.32,-263.12C1078.04,-268.26 1187.53,-282.34 1210.17,-311 1263.63,-378.68 1209.55,-488.73 1180.73,-537.34"/>
 <polygon fill="#6a5acd" fill-opacity="0.600000" stroke="#6a5acd" stroke-width="1.6" stroke-opacity="0.600000" points="1179.07,-536.04 1177.76,-542.26 1182.66,-538.21 1179.07,-536.04"/>
 </a>
@@ -600,7 +600,7 @@
 <!-- editor&#45;&gt;tools -->
 <g id="edge16" class="edge">
 <title>editor&#45;&gt;tools</title>
-<g id="a_edge16"><a xlink:title="12 uses">
+<g id="a_edge16"><a xlink:title="13 uses">
 <path fill="none" stroke="#6a5acd" stroke-width="1.6" stroke-opacity="0.600000" d="M999.17,-277.99C999.17,-293.51 999.17,-316.53 999.17,-334.19"/>
 <polygon fill="#6a5acd" fill-opacity="0.600000" stroke="#6a5acd" stroke-width="1.6" stroke-opacity="0.600000" points="997.07,-333.95 999.17,-339.95 1001.27,-333.95 997.07,-333.95"/>
 </a>

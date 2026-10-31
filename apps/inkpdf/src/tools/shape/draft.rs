@@ -82,6 +82,10 @@ impl ShapeTool {
         };
         let tap = dist2(down, last).sqrt() * ws.view.zoom < TAP_PX * ws.dpr;
         let raw = clamp_into(rect, if tap { down } else { last });
+        // (A press the window reported at no place, a NaN, is no node: a clamp lets it through.)
+        if !(raw[0].is_finite() && raw[1].is_finite()) {
+            return;
+        }
         let reach = REACH_PX * ws.dpr / ws.view.zoom;
         let double = tap
             && self

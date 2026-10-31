@@ -297,6 +297,34 @@ pub trait ItemKind: Send + Sync {
     }
 }
 
+/// What a [`LinkHandler`] asks the program to do when a button of its card is pressed (an extension touches neither the system nor the network: the
+/// program does what is asked).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LinkAct {
+    /// Nothing.
+    Nothing,
+    /// Put the card away.
+    Close,
+    /// Hand the address to the system, to open in its own browser, and put the card away.
+    Open,
+    /// Put the address on the clipboard.
+    Copy,
+}
+
+/// What an extension does with a link that leaves the document (an address on the web): it may show a card for it, instead of the address going
+/// straight to the system's browser. It is asked for every such link, in the order the extensions are listed; the first that has a card takes the link.
+pub trait LinkHandler: Send + Sync {
+    /// Its name (lower case letters, digits and `-`).
+    fn id(&self) -> &'static str;
+
+    /// The card for the address `url` (the program has checked that it is a web address it may open), or `None` if this handler does not take it.
+    /// A card with no field: its buttons are what a person presses, and Enter is the first of them.
+    fn card(&self, url: &str) -> Option<Card>;
+
+    /// A button of the card pressed (its [`CardAction::id`]).
+    fn act(&self, url: &str, action: &str) -> LinkAct;
+}
+
 /// What a tool may ask of the document and the window, on every call it is made.
 pub trait Context {
     /// Add an item of the kind named `kind` (one of this extension's: see [`Tool::item_kinds`]) holding `data`, in the box `bounds` (document
@@ -380,6 +408,11 @@ pub trait Tool {
     /// What the tool shows over the page: its drafts, trails, handles.
     fn paint(&self, _cx: &dyn Context, _out: &mut dyn Painter) {}
 
+    /// What the extension does with links that leave the document, if it does anything (asked once, when the editor is made).
+    fn link_handlers(&self) -> Vec<Box<dyn LinkHandler>> {
+        Vec::new()
+    }
+
     /// The kinds of item the extension makes, if it makes any (asked once, when the program starts: the program keeps them, and a file that holds
     /// one is read through it, whichever tool is in use).
     fn item_kinds(&self) -> Vec<Box<dyn ItemKind>> {
@@ -418,8 +451,9 @@ impl Extension {
         if self.label.trim().is_empty() {
             return Some(format!("{} has no label", self.id));
         }
-        if !self.icon_svg.contains("<path") {
-            return Some(format!("{} has no icon (an SVG of paths)", self.id));
+        // (An extension with no icon has no button on the toolbar: it is not a tool to choose, only what its item kinds and link handlers give.)
+        if !self.icon_svg.is_empty() && !self.icon_svg.contains("<path") {
+            return Some(format!("{} has an icon that is not an SVG of paths", self.id));
         }
         None
     }

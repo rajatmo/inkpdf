@@ -106,6 +106,10 @@ pub(super) struct UiStamp {
     item_card: Option<crate::toolbar::ItemCardView>,
     /// The card that says something went wrong, if it is up.
     error: Option<crate::toolbar::ErrorView>,
+    /// The pill that goes back and forward through the places the reader has been, if it is up.
+    trail: Option<crate::toolbar::TrailView>,
+    /// The card for a link that goes out to the web, if it is up.
+    link: Option<crate::toolbar::ItemCardView>,
     theme_menu: Option<crate::toolbar::ThemeView>,
 }
 
@@ -215,6 +219,8 @@ impl UiLayers {
             search: ed.search_view(),
             item_card: ed.item_card_view(),
             error: ed.error_view(),
+            trail: ed.trail_view(),
+            link: ed.link_view(),
             theme_menu: ed.theme_view(),
         };
         if self.ui_built.as_ref() == Some(&stamp) {

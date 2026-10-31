@@ -24,9 +24,16 @@ fn a_finger_tap_on_a_page_link_glides_to_that_page() {
     finger_tap(&mut ed, on);
     settle(&mut ed);
     let page = ed.layout.page(1).expect("page 1");
-    // As near the top of the window as the end of the document allows.
-    let wanted = (page.y - crate::view::DOC_MARGIN).min(ed.layout.height() - ed.view.viewport[1] / ed.view.zoom);
+    // As near the top of the window as the end of the document allows, with the page's first line below the bars (they float over the page).
+    let bars = ed.context_bar().map_or(ed.toolbar().bottom(), |c| c.rect[3]) + 8.0 * ed.dpr;
+    let wanted = (page.y - bars / ed.view.zoom).min(ed.layout.height() - ed.view.viewport[1] / ed.view.zoom);
     assert!(ed.view.scroll[1] > 500.0 && (ed.view.scroll[1] - wanted).abs() < 1.0, "scroll {} wanted {wanted}", ed.view.scroll[1]);
+    let top_of_page = ed.view.doc_to_screen([page.x, page.y])[1];
+    assert!(
+        top_of_page >= ed.toolbar().bottom() || wanted != page.y - bars / ed.view.zoom,
+        "the page begins at {top_of_page}, under the bars that end at {}",
+        ed.toolbar().bottom()
+    );
     assert!(ed.requests.url().is_none());
 }
 

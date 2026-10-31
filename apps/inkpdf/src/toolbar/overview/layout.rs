@@ -17,11 +17,13 @@ pub enum Control {
     Edit,
     /// A blank page after the one being looked at.
     Add,
+    /// The flag: show only the pages that carry one, and all of them again.
+    Flagged,
 }
 
 impl Control {
     /// From the right of the header to the left.
-    pub const ALL: [Control; 5] = [Control::Close, Control::Redo, Control::Undo, Control::Edit, Control::Add];
+    pub const ALL: [Control; 6] = [Control::Close, Control::Redo, Control::Undo, Control::Edit, Control::Add, Control::Flagged];
 }
 
 /// What can be done to the pages that are chosen in edit mode: the buttons of the bar under the pages.
@@ -83,7 +85,7 @@ pub struct OverviewLayout {
     pub card: [f32; 4],
     pub header: [f32; 4],
     /// Each header button, with where it is.
-    pub controls: [(Control, [f32; 4]); 5],
+    pub controls: [(Control, [f32; 4]); 6],
     /// The table of contents' column, if there is one.
     pub toc: Option<[f32; 4]>,
     /// The part of the card the pages are in.
@@ -118,8 +120,8 @@ impl OverviewLayout {
         let px = dpr.max(0.25);
         // A comfortable size, shrunk to fit a narrow window.
         let nominal = 40.0 * px;
-        // (The header's five buttons and the card's margin need about ten and a half units across.)
-        let fit = ((viewport[0] / nominal - 1.0) / 10.5).clamp(0.2, 1.0);
+        // (The header's six buttons and the card's margin need about twelve units across.)
+        let fit = ((viewport[0] / nominal - 1.0) / 12.0).clamp(0.2, 1.0);
         let u = nominal * fit;
         let width = (viewport[0] - 1.0 * u).clamp(1.0, 30.0 * u);
         let height = (viewport[1] - 2.0 * u).max(1.0);
@@ -128,14 +130,14 @@ impl OverviewLayout {
         let card = [x0, y0, x0 + width, y0 + height];
         let header = [card[0], card[1], card[2], card[1] + 2.2 * u];
         let button = 1.5 * u;
-        let mut controls = [(Control::Close, [0.0; 4]); 5];
+        let mut controls = [(Control::Close, [0.0; 4]); 6];
         let mut right = header[2] - 0.5 * u;
         for (i, control) in Control::ALL.into_iter().enumerate() {
             let top = header[1] + (header[3] - header[1] - button) / 2.0;
             controls[i] = (control, [right - button, top, right, top + button]);
             right -= button + 0.2 * u;
         }
-        let toc_width = if has_toc && width >= 12.0 * u { (width * 0.28).clamp(4.5 * u, 8.0 * u) } else { 0.0 };
+        let toc_width = if has_toc && width >= 13.0 * u { (width * 0.28).clamp(4.5 * u, 8.0 * u) } else { 0.0 };
         let toc = (toc_width > 0.0).then_some([card[0], header[3], card[0] + toc_width, card[3]]);
         let mut grid = [card[0] + toc_width, header[3], card[2], card[3]];
         // In edit mode a bar of what can be done to the chosen pages takes the bottom of the card.

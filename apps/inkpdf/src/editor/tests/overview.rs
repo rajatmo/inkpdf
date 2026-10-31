@@ -1136,3 +1136,157 @@ fn a_page_chosen_has_its_tick_pop_in_and_with_motion_reduced_nothing_moves() {
     assert!(still.edit_pages(PageEdit::Move { pages: vec![0], to: 5 }));
     assert!((0..6).all(|p| page_motion(&still, p) == crate::toolbar::PageMotion::default()));
 }
+
+// ---- only the flagged pages
+
+/// Where the number of the page that is shown at the place of `page` is (the grid has the flagged pages only).
+fn shown_number_centre(ed: &Editor, page: usize) -> [f32; 2] {
+    number_centre(ed, ed.overview_place(page))
+}
+
+fn shown_menu_item_centre(ed: &Editor, page: usize, item: crate::toolbar::OverviewMenuItem) -> [f32; 2] {
+    menu_item_centre(ed, ed.overview_place(page), item)
+}
+
+fn shown_pages(ed: &Editor) -> Vec<u32> {
+    let mut ui = crate::toolbar::Ui::default();
+    ed.draw_overview(&mut ui);
+    ui.images.iter().map(|i| i.page).collect()
+}
+
+fn titles(ed: &Editor) -> Vec<String> {
+    let mut ui = crate::toolbar::Ui::default();
+    ed.draw_overview(&mut ui);
+    ui.labels.iter().map(|l| l.text.clone()).collect()
+}
+
+#[test]
+fn the_flag_button_shows_only_the_flagged_pages_and_pressed_again_all_of_them_with_every_device() {
+    for how in ALL {
+        let (mut ed, _) = with_ink(9);
+        open(&mut ed, how);
+        let button = button_centre(&ed, OverviewControl::Flagged);
+        tap(&mut ed, how, button);
+        assert!(ed.only_flagged().is_none(), "{how:?}: with no flag there is nothing to show, and the button does nothing");
+        assert_eq!(shown_pages(&ed).len(), 9, "{how:?}: every page is still shown");
+        for page in [2, 5, 7] {
+            ed.toggle_flag(page);
+        }
+        tap(&mut ed, how, button);
+        assert_eq!(ed.only_flagged(), Some(vec![2, 5, 7]), "{how:?}: the flagged pages");
+        assert_eq!(shown_pages(&ed), [2, 5, 7], "{how:?}: and only they are drawn");
+        assert_eq!(ed.overview_pages(), Some(vec![2, 5, 7]), "{how:?}: and only their pictures are asked for");
+        assert!(titles(&ed).contains(&"Flagged pages (3)".to_string()), "{how:?}: the title says what is shown");
+        // The places are filled in turn, and a press on one is on its page.
+        for (place, page) in [2, 5, 7].into_iter().enumerate() {
+            let at = cell_centre(&ed, place);
+            assert_eq!(ed.overview_hit(at), Some(OverviewHover::Page(page)), "{how:?}: place {place} is page {}", page + 1);
+        }
+        assert_eq!(ed.overview_hit(cell_centre(&ed, 3)), None, "{how:?}: there is no fourth place");
+        tap(&mut ed, how, button);
+        assert!(ed.only_flagged().is_none(), "{how:?}: pressed again, all the pages");
+        assert_eq!(shown_pages(&ed).len(), 9);
+        // A page of the flagged ones, pressed, is gone to.
+        tap(&mut ed, how, button);
+        let at = cell_centre(&ed, 1);
+        tap(&mut ed, how, at);
+        assert!(!ed.overview_open(), "{how:?}: the overview is put away");
+        settle(&mut ed);
+        assert_eq!(ed.view.current_page(&ed.layout), 5, "{how:?}: the second flagged page is the one looked at");
+    }
+}
+
+#[test]
+fn the_filter_gives_way_to_edit_mode_and_to_the_last_flag_taken_away_and_its_pages_cannot_be_carried_about() {
+    use crate::toolbar::OverviewMenuItem as M;
+    for how in ALL {
+        let (mut ed, ids) = with_ink(9);
+        for page in [2, 5, 7] {
+            ed.toggle_flag(page);
+        }
+        open(&mut ed, how);
+        let button = button_centre(&ed, OverviewControl::Flagged);
+        tap(&mut ed, how, button);
+        assert_eq!(ed.only_flagged().map(|o| o.len()), Some(3));
+        // A page cannot be carried to another place: the places are not the pages' places.
+        if !matches!(how, Press::Finger) {
+            let (from, to) = (cell_centre(&ed, 0), cell_centre(&ed, 2));
+            let mid = [(from[0] + to[0]) / 2.0, (from[1] + to[1]) / 2.0];
+            pen_stroke(&mut ed, TIP, &[from, mid, to]);
+        }
+        assert_eq!(pages_of(&ed, &ids), (0..9).map(Some).collect::<Vec<_>>(), "{how:?}: no page was moved");
+        assert!(ed.chrome.overview.as_ref().is_some_and(|o| !o.dragging_for_tests()), "{how:?}: nothing is being carried");
+        // A menu of a shown page does what it says: a copy after it takes the flags after it on, the flag item takes its flag away.
+        let at = shown_number_centre(&ed, 5);
+        tap(&mut ed, how, at);
+        assert_eq!(menu_open_for(&ed), Some(5), "{how:?}: the menu of page 6");
+        let at = shown_menu_item_centre(&ed, 5, M::Duplicate);
+        tap(&mut ed, how, at);
+        assert_eq!(
+            ed.flags.iter().copied().collect::<Vec<_>>(),
+            [2, 5, 8],
+            "{how:?}: the copy comes after page 6, and the flag of page 8 is now on page 9"
+        );
+        assert_eq!(ed.only_flagged(), Some(vec![2, 5, 8]), "{how:?}: still only the flagged pages");
+        for page in [2, 5, 8] {
+            let at = shown_number_centre(&ed, page);
+            tap(&mut ed, how, at);
+            let at = shown_menu_item_centre(&ed, page, M::Flag);
+            tap(&mut ed, how, at);
+        }
+        assert!(ed.flags.is_empty(), "{how:?}: every flag taken away");
+        assert!(ed.only_flagged().is_none() && shown_pages(&ed).len() == 10, "{how:?}: with none left all the pages are shown again");
+        // Edit mode shows every page to choose among, and the flag button then does nothing.
+        ed.toggle_flag(1);
+        assert!(ed.overview_open() && !ed.flags.is_empty(), "{how:?}: open with a flag {:?}", ed.flags);
+        assert_eq!(ed.overview_hit(button), Some(OverviewHover::Control(OverviewControl::Flagged)), "{how:?}: the button is there");
+        tap(&mut ed, how, button);
+        assert!(ed.only_flagged().is_some(), "{how:?}: filtered again");
+        edit_mode(&mut ed, how);
+        assert!(ed.only_flagged().is_none() && shown_pages(&ed).len() == 10, "{how:?}: edit mode shows every page");
+        tap(&mut ed, how, button);
+        assert!(ed.only_flagged().is_none(), "{how:?}: and the flag button does nothing in it");
+    }
+}
+
+/// Not a check: what one frame of the overview costs while the wheel scrolls it (the step of its glide, and building what is drawn), on a document of a thousand
+/// pages in a 4K window. `cargo test --release -p inkpdf --lib measure_the_overview -- --ignored --nocapture`.
+#[test]
+#[ignore = "a measurement, not a check"]
+fn measure_the_overview_frame_while_the_wheel_scrolls() {
+    let mut ed = Editor::reference([3840.0, 2054.0], 1.5, crate::motion::Prefs::FULL);
+    ed.load(Layout::new(&vec![[612.0, 792.0]; 1000]), vec![]);
+    for page in (0..1000).step_by(7) {
+        ed.toggle_flag(page);
+    }
+    ed.open_overview();
+    glide_done(&mut ed);
+    let frames = 2000;
+    let (mut step, mut build, mut copy, mut shown) = (std::time::Duration::ZERO, std::time::Duration::ZERO, std::time::Duration::ZERO, 0usize);
+    for n in 0..frames {
+        if n % 20 == 0 {
+            ed.overview_wheel(crate::input::Wheel::Lines(0.0, if (n / 400) % 2 == 0 { -1.0 } else { 1.0 }));
+        }
+        let t = std::time::Instant::now();
+        ed.step_view(1.0 / 60.0);
+        step += t.elapsed();
+        let t = std::time::Instant::now();
+        let mut ui = crate::toolbar::Ui::with_palette(ed.palette());
+        ed.draw_overview(&mut ui);
+        build += t.elapsed();
+        let t = std::time::Instant::now();
+        let ghost = ui.clone();
+        copy += t.elapsed();
+        shown += ghost.images.len();
+        std::hint::black_box(&ghost);
+    }
+    let per = |d: std::time::Duration| d.as_secs_f64() * 1000.0 / f64::from(frames);
+    println!(
+        "overview frame: step {:.4} ms, build {:.4} ms ({} pictures a frame), copy of what is built {:.4} ms; at 60 frames a second the build is {:.2}% of a core",
+        per(step),
+        per(build),
+        shown / frames as usize,
+        per(copy),
+        per(build) * 6.0
+    );
+}

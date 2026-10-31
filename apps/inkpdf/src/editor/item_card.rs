@@ -33,6 +33,16 @@ impl Editor {
         Some(Open { id, kind, card, data: item.data.clone() })
     }
 
+    /// There is one card at a time at the right: one that has just been opened by a tool (a press on a note) puts away the search card and the card of a link.
+    pub(super) fn one_card_at_the_right(&mut self) {
+        let now = self.ws.card.open;
+        if now.is_some() && now != self.seen_card {
+            self.close_search();
+            self.close_link_card();
+        }
+        self.seen_card = now;
+    }
+
     /// Whether the card of an item is open.
     pub fn item_card_open(&self) -> bool {
         self.open_card().is_some()
@@ -47,21 +57,38 @@ impl Editor {
         }
     }
 
+    /// Where the cards at the right begin: under the bars, and under the round button that hangs from the theme button.
+    pub(super) fn card_top(&self) -> f32 {
+        let bar = self.toolbar();
+        let mut top = self.context_bar().map_or(bar.bottom(), |c| c.rect[3]) + 8.0 * self.ws.dpr;
+        if let Some(button) = self.theme_layout() {
+            top = top.max(button.rect[3] + 8.0 * self.ws.dpr);
+        }
+        // (The cards are as wide as `ItemCardLayout` makes them: where that reaches over the pill that goes back and forward, they begin under it.)
+        if let Some(pill) = self.trail_layout() {
+            let left = ItemCardLayout::plain(&bar, self.ws.view.viewport, 0.0, 0, 0).card[0];
+            if pill.card[2] + 8.0 * self.ws.dpr > left {
+                top = top.max(pill.card[3] + 8.0 * self.ws.dpr);
+            }
+        }
+        top
+    }
+
     /// The card, where it is (at the right, under the bars and under the search card if that is open), if it is open.
     pub fn item_card_layout(&self) -> Option<ItemCardLayout> {
         let open = self.open_card()?;
         if self.chrome.prompt.is_some() {
             return None;
         }
-        let bar = self.toolbar();
-        let mut top = self.context_bar().map_or(bar.bottom(), |c| c.rect[3]) + 8.0 * self.ws.dpr;
-        if let Some(button) = self.theme_layout() {
-            top = top.max(button.rect[3] + 8.0 * self.ws.dpr);
-        }
-        if let Some(search) = self.search_layout() {
-            top = top.max(search.card[3] + 8.0 * self.ws.dpr);
-        }
-        Some(ItemCardLayout::new(&bar, self.ws.view.viewport, top, open.card.rows.len(), open.card.actions.len(), open.card.field.is_some()))
+        let top = self.card_top().max(self.search_layout().map_or(0.0, |s| s.card[3] + 8.0 * self.ws.dpr));
+        Some(ItemCardLayout::new(
+            &self.toolbar(),
+            self.ws.view.viewport,
+            top,
+            open.card.rows.len(),
+            open.card.actions.len(),
+            open.card.field.is_some(),
+        ))
     }
 
     /// What the card is drawn from.
@@ -162,7 +189,7 @@ impl Editor {
                 true
             }
             // (A page key goes on to scroll the document, as the card has no use for it.)
-            Key::Page(_) => false,
+            Key::Page(_) | Key::Trail(_) => false,
             _ => {
                 let card = &mut self.ws.card;
                 let (field, rules) = if name { (&mut card.name, NAME) } else { (&mut card.field, REPLY) };

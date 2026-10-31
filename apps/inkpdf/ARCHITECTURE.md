@@ -413,6 +413,9 @@ ends whatever was under way first); the shell sets it from `posture::detect()` a
 Windows sends `WM_SETTINGCHANGE` "ConvertibleSlateMode", unless `--mode desktop|tablet` forced it. The toolbar's
 `Item::ModeSwitch` (right pill, left of full screen) both shows the mode (`State.mode`: a monitor, or a tablet in
 the accent colour) and flips it through the same `set_mode`; it is not saved, and a posture change decides again.
+`Item::Finger` (right pill, between the mode button and full screen) turns `Editor::finger_draws` on and off (saved as `finger-draws`): `editor/touch.rs`
+then hands the first finger on the page to the tool as a stylus with the id `FINGER_STYLUS_ID`, under the tablet mode's policy (`finger_route_samples` in
+`routing.rs`), beginning the stroke only after 8 logical px of movement; a second finger ends it and the two pinch.
 
 `SM_CONVERTIBLESLATEMODE` alone cannot be trusted: an ordinary desktop PC reports 0 ("slate"). So `posture::decide`
 also needs a touch or pen digitizer and a platform role of mobile or slate (`PowerDeterminePlatformRole`). The

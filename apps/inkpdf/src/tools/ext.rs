@@ -157,7 +157,7 @@ fn key_in(k: Key<'_>) -> Option<api::Key<'_>> {
         Key::Home(shift) => api::Key::Home(shift),
         Key::End(shift) => api::Key::End(shift),
         Key::Chord(c) => api::Key::Chord(c),
-        Key::Page(_) => return None,
+        Key::Page(_) | Key::Trail(_) => return None,
     })
 }
 

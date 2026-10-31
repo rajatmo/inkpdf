@@ -33,6 +33,7 @@ mod error_card;
 mod forms;
 mod item_card;
 mod keyboard;
+mod link_card;
 mod modal;
 mod motions;
 mod mouse;
@@ -50,6 +51,7 @@ mod text_pages;
 mod theme_menu;
 mod toolbar_ui;
 mod touch;
+mod trail;
 
 #[cfg(test)]
 mod tests;
@@ -95,6 +97,13 @@ pub struct Editor {
     keyboard: keyboard::Keyboard,
     /// What the card that says something went wrong says now: its heading and the reason.
     error: Option<(String, String)>,
+    /// The places a link, a contents entry or a search result has taken the reader from.
+    trail: trail::Trail,
+    /// What the extensions do with links that go out to the web, and the card for one that is up.
+    link_handlers: Vec<Box<dyn inkpdf_api::LinkHandler>>,
+    link: Option<link_card::LinkOpen>,
+    /// The item whose card was open when last looked at (a card opened by a tool is told by its changing).
+    seen_card: Option<u64>,
     /// The document's table of contents (see [`crate::outline`]); empty if it has none.
     pub outline: Vec<crate::outline::OutlineItem>,
     /// The pages the person flagged (the program's own outline entries: see [`crate::outline::FLAG`]), which follow the pages as they are edited.
@@ -130,6 +139,9 @@ pub struct Editor {
     pub motions: motions::Motions,
     /// How the machine is being used: what the mouse and keyboard do depends on it.
     mode: Mode,
+    /// A finger draws like the stylus (see [`routing`]), and the finger that is drawing now (see [`touch`]).
+    finger_draws: bool,
+    finger: Option<touch::FingerPen>,
     /// Milliseconds now, on the clock the pointer messages are stamped with (see [`crate::clock`]); a field so that tests can give another.
     clock: fn() -> f64,
     /// The mouse button held on the page, if any.
@@ -168,6 +180,10 @@ impl Editor {
             form_typing: None,
             keyboard: keyboard::Keyboard::default(),
             error: None,
+            trail: trail::Trail::default(),
+            link_handlers: extensions.iter().flat_map(|e| (e.create)().link_handlers()).collect(),
+            link: None,
+            seen_card: None,
             outline: Vec::new(),
             flags: std::collections::BTreeSet::new(),
             pull: 0.0,
@@ -183,6 +199,8 @@ impl Editor {
             chrome: Chrome::default(),
             motions: motions::Motions::new(prefs),
             mode: Mode::default(),
+            finger_draws: false,
+            finger: None,
             clock: crate::clock::now_ms,
             mouse_press: None,
             palm: PalmGuard::default(),
@@ -202,6 +220,8 @@ impl Editor {
         self.ws.erasing.clear();
         self.search.close();
         self.close_item_card();
+        self.close_link_card();
+        self.forget_trail();
         self.chrome.clear_press_and_prompt();
         self.mouse_press = None;
         self.ws.requests.clear_answer();
@@ -240,6 +260,7 @@ impl Editor {
             unsaved: self.ws.ink.is_dirty(),
             fullscreen: self.chrome.fullscreen,
             mode: self.mode,
+            finger: self.finger_draws,
             appearance: self.ws.look.appearance,
             dark_pages: self.ws.look.dark_pages,
             theme_menu: self.chrome.theme_menu,
@@ -292,6 +313,7 @@ impl Editor {
     pub fn apply_settings(&mut self, settings: &crate::settings::Settings) {
         self.ws.look.appearance = settings.appearance;
         self.ws.look.dark_pages = settings.dark_pages;
+        self.finger_draws = settings.finger_draws;
         self.search.case = settings.search_case;
         self.search.words = settings.search_words;
         self.ws.card.name = crate::field::Field::new(settings.author.clone());
@@ -313,6 +335,7 @@ impl Editor {
         crate::settings::Settings {
             appearance: self.ws.look.appearance,
             dark_pages: self.ws.look.dark_pages,
+            finger_draws: self.finger_draws,
             search_case: self.search.case,
             search_words: self.search.words,
             author: crate::settings::clean_name(&self.ws.card.name.text),
@@ -357,6 +380,7 @@ impl Editor {
         let overview = self.step_overview(dt);
         let interface = self.step_motions(dt);
         self.refresh_search();
+        self.one_card_at_the_right();
         self.keep_typing_clear();
         self.ws.look.theme = self.palette();
         self.ws.step_view(dt) || overview || interface
@@ -426,6 +450,8 @@ impl Editor {
 
     /// Whether a frame is wanted, and no longer.
     pub fn take_redraw(&mut self) -> bool {
+        // (Asked after every event: a card opened by a tool is settled with the others at once, not at the next frame.)
+        self.one_card_at_the_right();
         std::mem::take(&mut self.ws.redraw)
     }
 

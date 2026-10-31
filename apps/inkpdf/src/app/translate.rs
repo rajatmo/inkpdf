@@ -116,8 +116,11 @@ pub(super) fn touch(touch: &winit::event::Touch, now_ms: f64) -> PointerEvent {
 /// The key that was pressed, if the program hears it. Which of them it hears depends on what is being typed into (the tool in use
 /// says, see `InputPolicy`): a text box or the Save As card takes them all (`typing`); otherwise only the keys that work on a
 /// selection (Delete, Escape, the arrows) are of use, and the editor leaves the rest to the tool.
-pub(super) fn key(logical: &Typed, text: Option<&str>, shift: bool, typing: bool) -> Option<KeyInput> {
+pub(super) fn key(logical: &Typed, text: Option<&str>, shift: bool, alt: bool, typing: bool) -> Option<KeyInput> {
     Some(match logical {
+        // (Alt and an arrow go back and forward through the places a link took the reader from, as in a browser.)
+        Typed::Named(NamedKey::ArrowLeft) if alt => KeyInput::Trail(false),
+        Typed::Named(NamedKey::ArrowRight) if alt => KeyInput::Trail(true),
         Typed::Named(NamedKey::Backspace) => KeyInput::Backspace,
         Typed::Named(NamedKey::Delete) => KeyInput::Delete,
         Typed::Named(NamedKey::Escape) => KeyInput::Escape,
@@ -159,6 +162,15 @@ mod tests {
     }
 
     #[test]
+    fn alt_and_an_arrow_go_back_and_forward_and_an_arrow_alone_does_not() {
+        let arrow = |k: NamedKey, alt: bool| key(&Typed::Named(k), None, false, alt, false);
+        assert_eq!(arrow(NamedKey::ArrowLeft, true), Some(KeyInput::Trail(false)));
+        assert_eq!(arrow(NamedKey::ArrowRight, true), Some(KeyInput::Trail(true)));
+        assert_eq!(arrow(NamedKey::ArrowLeft, false), Some(KeyInput::Arrow(Dir::Left, false)));
+        assert_eq!(arrow(NamedKey::ArrowUp, true), Some(KeyInput::Arrow(Dir::Up, false)), "only the sideways arrows");
+    }
+
+    #[test]
     fn the_three_buttons_the_program_uses_are_translated_and_the_others_are_other() {
         assert_eq!(button(Button::Left), MouseButton::Left);
         assert_eq!(button(Button::Right), MouseButton::Right);
@@ -186,15 +198,15 @@ mod tests {
 
     #[test]
     fn named_keys_are_heard_always_and_typed_text_only_while_something_takes_it() {
-        let named = |k: NamedKey, shift: bool, typing: bool| key(&Typed::Named(k), None, shift, typing);
+        let named = |k: NamedKey, shift: bool, typing: bool| key(&Typed::Named(k), None, shift, false, typing);
         assert_eq!(named(NamedKey::Backspace, false, false), Some(KeyInput::Backspace));
         assert_eq!(named(NamedKey::ArrowLeft, true, false), Some(KeyInput::Arrow(Dir::Left, true)));
         assert_eq!(named(NamedKey::Home, false, true), Some(KeyInput::Home(false)));
         assert_eq!(named(NamedKey::Enter, false, true), Some(KeyInput::Text("\n".to_string())), "a new line, when typing");
         assert_eq!(named(NamedKey::Enter, false, false), None, "and nothing otherwise");
         let letter = Typed::Character("a".into());
-        assert_eq!(key(&letter, Some("a"), false, true), Some(KeyInput::Text("a".to_string())));
-        assert_eq!(key(&letter, Some("a"), false, false), None, "a letter is for nothing when nothing is typed into");
-        assert_eq!(key(&letter, None, false, true), None, "a key with no text types nothing");
+        assert_eq!(key(&letter, Some("a"), false, false, true), Some(KeyInput::Text("a".to_string())));
+        assert_eq!(key(&letter, Some("a"), false, false, false), None, "a letter is for nothing when nothing is typed into");
+        assert_eq!(key(&letter, None, false, false, true), None, "a key with no text types nothing");
     }
 }

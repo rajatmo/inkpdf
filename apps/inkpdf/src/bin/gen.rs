@@ -1,7 +1,7 @@
 //! Writes a many-page test PDF with dense text and vector drawing, for scrolling and zoom
-//! benchmarks: `inkpdf-gen out.pdf [pages] [--outline] [--form]`. With `--outline` it also has a table of contents: a chapter every three
+//! benchmarks: `inkpdf-gen out.pdf [pages] [--outline] [--form] [--links]`. With `--outline` it also has a table of contents: a chapter every three
 //! pages, and a section under the first. With `--form` page 1 is a form to fill in (a text field, a check box, radio buttons, a combo box and
-//! a field of several lines).
+//! a field of several lines). With `--links` page 1 has two links: one to the third page (or the last, if there are fewer) and one to a web address.
 
 use std::fmt::Write as _;
 use std::fs;
@@ -154,14 +154,34 @@ fn add_form(objs: &mut Vec<String>) {
     objs[0] = objs[0].replace(" >>", &format!(" /AcroForm {} 0 R >>", at + 8));
 }
 
+/// The links of `--links` on page 1: bands down the page, in turn one that goes to the third page (the last if there are fewer) and one that goes to a web
+/// address. (How much of the page a window shows depends on its shape, so a test takes a band that is in the middle of its window.)
+fn add_links(objs: &mut Vec<String>, pages: usize) {
+    let to = 5 + 2 * 2.min(pages - 1);
+    let first = objs.len() + 1;
+    let mut annots = Vec::new();
+    for slot in 0..10 {
+        let top = 792 - (120 + 60 * slot);
+        let rect = format!("/Rect [100 {} 300 {top}]", top - 20);
+        objs.push(if slot % 2 == 0 {
+            format!("<< /Type /Annot /Subtype /Link /Border [0 0 0] {rect} /Dest [{to} 0 R /XYZ 0 792 null] >>")
+        } else {
+            format!("<< /Type /Annot /Subtype /Link /Border [0 0 0] {rect} /A << /S /URI /URI (https://example.com/page) >> >>")
+        });
+        annots.push(format!("{} 0 R", first + slot));
+    }
+    objs[4] = objs[4].replace("/Resources", &format!("/Annots [{}] /Resources", annots.join(" ")));
+}
+
 fn main() {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     let with_outline = args.iter().any(|a| a == "--outline");
     let with_form = args.iter().any(|a| a == "--form");
-    args.retain(|a| a != "--outline" && a != "--form");
+    let with_links = args.iter().any(|a| a == "--links");
+    args.retain(|a| a != "--outline" && a != "--form" && a != "--links");
     let mut args = args.into_iter();
     let Some(out) = args.next() else {
-        eprintln!("usage: inkpdf-gen out.pdf [pages] [--outline] [--form]");
+        eprintln!("usage: inkpdf-gen out.pdf [pages] [--outline] [--form] [--links]");
         std::process::exit(2);
     };
     let pages: usize = args.next().and_then(|p| p.parse().ok()).unwrap_or(60).clamp(1, 5000);
@@ -190,6 +210,9 @@ fn main() {
     }
     if with_form {
         add_form(&mut objs);
+    }
+    if with_links && !with_form {
+        add_links(&mut objs, pages);
     }
 
     let mut pdf = b"%PDF-1.7\n".to_vec();

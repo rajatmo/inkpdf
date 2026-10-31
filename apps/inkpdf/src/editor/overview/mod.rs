@@ -91,6 +91,8 @@ pub struct OverviewState {
     drag: Option<Drag>,
     /// The page whose menu is open.
     menu: Option<usize>,
+    /// Only the pages that carry a flag are shown (see [`Editor::only_flagged`]).
+    pub filter: bool,
 }
 
 impl OverviewState {
@@ -166,6 +168,24 @@ impl Editor {
             self.motions.overview_left();
             self.ws.redraw = true;
         }
+    }
+
+    /// The pages the grid shows when it is only the flagged ones, in order: `None` when it is all of them (the flag button was not pressed, edit mode is on,
+    /// or no page has a flag any more).
+    pub(crate) fn only_flagged(&self) -> Option<Vec<usize>> {
+        let state = self.chrome.overview.as_ref()?;
+        let pages = self.ws.layout.len();
+        (state.filter && !state.edit && !self.flags.is_empty()).then(|| self.flags.iter().copied().filter(|&p| p < pages).collect())
+    }
+
+    /// How many places there are in the grid: a page each, or one for each flagged page.
+    pub(super) fn overview_count(&self) -> usize {
+        self.only_flagged().map_or(self.ws.layout.len(), |only| only.len())
+    }
+
+    /// The place of `page` in the grid: the first one after it, if it is not shown.
+    pub(crate) fn overview_place(&self, page: usize) -> usize {
+        self.only_flagged().map_or(page, |only| only.partition_point(|&p| p < page))
     }
 
     pub(super) fn overview_layout_for(&self, edit: bool) -> OverviewLayout {
@@ -276,6 +296,7 @@ impl Editor {
         let folded = |i: usize| state.folded.contains(&i);
         let selected: Vec<usize> = state.selected.iter().copied().collect();
         let flagged: Vec<usize> = self.flags.iter().copied().collect();
+        let only = self.only_flagged();
         let view = OverviewView {
             layout: &self.ws.layout,
             scroll: state.scroll,
@@ -296,6 +317,8 @@ impl Editor {
             menu: state.menu,
             menu_enabled: [true, true, self.ws.layout.len() < MAX_PAGES, true, self.ws.layout.len() > 1],
             flagged: &flagged,
+            only: only.as_deref(),
+            can_filter: !state.edit && (!flagged.is_empty() || state.filter),
             motion: &|page| toolbar::PageMotion {
                 shift: state.slides.offset(page),
                 grow: state.grows.offset(page)[0],
@@ -307,13 +330,25 @@ impl Editor {
     }
 
     /// The pages whose pictures the overview shows now, with a row more on each side so that scrolling finds them ready.
-    pub fn overview_pages(&self) -> Option<std::ops::Range<usize>> {
+    pub fn overview_pages(&self) -> Option<Vec<usize>> {
         let state = self.chrome.overview.as_ref()?;
         let layout = self.overview_layout();
-        let count = self.ws.layout.len();
+        let only = self.only_flagged();
+        let count = only.as_ref().map_or(self.ws.layout.len(), Vec::len);
         let shown = layout.visible_pages(count, state.scroll);
         let row = layout.columns();
-        Some(shown.start.saturating_sub(row)..(shown.end + row).min(count))
+        let places = shown.start.saturating_sub(row)..(shown.end + row).min(count);
+        Some(match only {
+            Some(only) => only[places].to_vec(),
+            None => places.collect(),
+        })
+    }
+
+    /// Where each item of the menu that is open is.
+    pub fn overview_menu(&self) -> Option<[(MenuItem, [f32; 4]); 5]> {
+        let state = self.chrome.overview.as_ref()?;
+        let page = state.menu?;
+        Some(self.overview_layout().menu(self.overview_place(page), state.scroll).1)
     }
 
     /// What `pos` is on.
@@ -322,7 +357,7 @@ impl Editor {
         let layout = self.overview_layout();
         // With a menu open, only it is pressed: what is outside it is nothing (and a press there puts it away).
         if let Some(page) = state.menu {
-            return layout.menu_item_at(pos, page, state.scroll).map(Hover::Menu);
+            return layout.menu_item_at(pos, self.overview_place(page), state.scroll).map(Hover::Menu);
         }
         if let Some(control) = layout.control_at(pos) {
             return Some(Hover::Control(control));
@@ -335,7 +370,9 @@ impl Editor {
         {
             return Some(Hover::Toc(hit));
         }
-        let page = layout.page_at(pos, self.ws.layout.len(), state.scroll)?;
-        Some(if crate::ink::rect_contains(layout.number_row(page, state.scroll), pos) { Hover::Number(page) } else { Hover::Page(page) })
+        let only = self.only_flagged();
+        let place = layout.page_at(pos, only.as_ref().map_or(self.ws.layout.len(), Vec::len), state.scroll)?;
+        let page = only.as_ref().map_or(place, |only| only[place]);
+        Some(if crate::ink::rect_contains(layout.number_row(place, state.scroll), pos) { Hover::Number(page) } else { Hover::Page(page) })
     }
 }

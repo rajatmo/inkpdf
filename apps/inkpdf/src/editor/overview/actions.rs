@@ -16,8 +16,24 @@ impl Editor {
                 if let Some(state) = &mut self.chrome.overview {
                     state.edit = !state.edit;
                     state.selected.clear();
+                    // (Every page is shown to choose among, and to move.)
+                    state.filter = false;
                 }
                 self.overview_settled();
+            }
+            Hover::Control(Control::Flagged) => {
+                let wanted = self.chrome.overview.as_ref().is_some_and(|s| !s.edit && (s.filter || !self.flags.is_empty()));
+                if wanted {
+                    let current = self.ws.view.current_page(&self.ws.layout);
+                    if let Some(state) = &mut self.chrome.overview {
+                        state.filter = !state.filter;
+                        state.menu = None;
+                        state.goal = None;
+                        state.scroll = 0.0;
+                    }
+                    self.overview_settled();
+                    self.overview_show_page(current);
+                }
             }
             Hover::Control(Control::Undo) => {
                 self.undo();
@@ -144,16 +160,16 @@ impl Editor {
     /// Look at `page` in the document, and put the overview away.
     pub(super) fn overview_go_to(&mut self, page: usize) {
         self.close_overview();
-        self.ws.scroll_to_page(page);
+        self.jump_to_page(page);
     }
 
     /// Scroll the pages so that `page` is in view.
     pub(super) fn overview_show_page(&mut self, page: usize) {
         let layout = self.overview_layout();
-        let count = self.ws.layout.len();
+        let (place, count) = (self.overview_place(page), self.overview_count());
         if let Some(state) = &mut self.chrome.overview {
             state.goal = None;
-            state.scroll = layout.show(page, count, state.scroll);
+            state.scroll = layout.show(place, count, state.scroll);
         }
     }
 
@@ -161,7 +177,7 @@ impl Editor {
     /// away), or after its mode changed: what it keeps still makes sense. `map` is what the change did to the pages, if it
     /// was one: the pages chosen go where their pages went.
     pub(in crate::editor) fn overview_follow(&mut self, map: Option<&Remap>, before: usize) {
-        let was = self.chrome.overview.as_ref().map(|s| s.scroll);
+        let was = self.chrome.overview.as_ref().filter(|s| !s.filter).map(|s| s.scroll);
         if let (Some(state), Some(map)) = (&mut self.chrome.overview, map) {
             state.selected = state.selected.iter().filter_map(|&p| map.page(p)).collect();
             state.ticked = state.selected.clone();
@@ -198,14 +214,21 @@ impl Editor {
 
     /// What the overview keeps is brought back into range.
     pub(in crate::editor) fn overview_settled(&mut self) {
+        // (With no flag left there is nothing to filter by: all the pages are shown.)
+        if self.flags.is_empty()
+            && let Some(state) = &mut self.chrome.overview
+        {
+            state.filter = false;
+        }
         let layout = self.overview_layout();
-        let (pages, rows) = (self.ws.layout.len(), self.toc_rows().len());
+        let (pages, rows) = (self.overview_count(), self.toc_rows().len());
+        let all = self.ws.layout.len();
         if let Some(state) = &mut self.chrome.overview {
             state.goal = state.goal.map(|g| layout.clamp_scroll(g, pages));
             state.toc_goal = state.toc_goal.map(|g| layout.clamp_toc_scroll(g, rows));
             state.scroll = layout.clamp_scroll(state.scroll, pages);
             state.toc_scroll = layout.clamp_toc_scroll(state.toc_scroll, rows);
-            state.selected.retain(|&p| p < pages);
+            state.selected.retain(|&p| p < all);
             if !state.edit {
                 state.selected.clear();
             }

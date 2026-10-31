@@ -21,6 +21,8 @@ impl Editor {
         let hit = self.overview_hit(pos);
         let over_toc = layout.toc.is_some_and(|t| crate::ink::rect_contains(t, pos));
         let count = self.ws.layout.len();
+        // (Pages are not carried about while only some of them are shown: where would they be dropped?)
+        let filtered = self.only_flagged().is_some();
         let dpr = self.ws.dpr;
         let Some(state) = &mut self.chrome.overview else { return };
         let mine = state.press.is_some_and(|p| p.dev == dev && p.id == id);
@@ -43,7 +45,7 @@ impl Editor {
                     let (on, in_toc, dragged) = (press.on, press.in_toc, press.dragged);
                     match on {
                         // A page pulled by a pen or a mouse is carried to another place; a finger pulls the pages past it.
-                        Some(Hover::Page(i)) if dragged && dev != Device::Touch => {
+                        Some(Hover::Page(i)) if dragged && dev != Device::Touch && !filtered => {
                             if state.drag.is_none() {
                                 let pages =
                                     if state.edit && state.selected.contains(&i) { state.selected.iter().copied().collect() } else { vec![i] };
@@ -129,7 +131,7 @@ impl Editor {
     /// Scroll the pages (or the table of contents) by `dy` pixels.
     pub(super) fn scroll_overview_by(&mut self, dy: f32, toc: bool) {
         let layout = self.overview_layout();
-        let (pages, rows) = (self.ws.layout.len(), self.toc_rows().len());
+        let (pages, rows) = (self.overview_count(), self.toc_rows().len());
         if let Some(state) = &mut self.chrome.overview {
             state.menu = None;
             if toc {
@@ -150,7 +152,7 @@ impl Editor {
             return self.scroll_overview_by(dy, toc);
         }
         let layout = self.overview_layout();
-        let (pages, rows) = (self.ws.layout.len(), self.toc_rows().len());
+        let (pages, rows) = (self.overview_count(), self.toc_rows().len());
         if let Some(state) = &mut self.chrome.overview {
             state.menu = None;
             if toc {
@@ -241,6 +243,7 @@ impl Editor {
             "a" => {
                 if let Some(state) = &mut self.chrome.overview {
                     state.edit = true;
+                    state.filter = false;
                 }
                 if let Some(state) = &mut self.chrome.overview {
                     state.selected = (0..self.ws.layout.len()).collect();

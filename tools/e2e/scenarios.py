@@ -116,6 +116,49 @@ def devices(s):
     s.check(s.healthy(), "no crash, nothing printed to stderr")
     s.stop()
 
+def finger(s):
+    """The finger button of the right pill: with it on a finger draws as the stylus does, in both modes (so that every tool works with no stylus), two
+    fingers still pinch, and the toolbar is still pressed by a finger; with it off a finger only pans."""
+    s.launch("tool pen\nslot 0\nwidth 6.00\n", "", DESKTOP)
+
+    def lit():
+        # (Where the button is is asked each time: on a narrow window it is in a pill that folds away.)
+        return s.count_near(s.ACCENT, s.spot("buttons", "finger"))
+
+    s.check(lit() < 5, "the finger button is plain at first")
+    s.finger_drag(0.3, 0.5, 0.7, 0.5, 20)
+    s.check(s.black() == 0, "a finger draws nothing while it is up")
+    s.press("finger")
+    s.check(lit() > 30, "pressed, the button shows that a finger draws")
+    s.finger_drag(0.3, 0.5, 0.7, 0.5, 20)
+    s.check(s.black() > 300 and s.dirty(), f"a finger now draws ({s.black()} px), and the document is marked changed")
+    s.press("undo")
+    s.check(s.black() == 0, "undo takes it away")
+    s.finger_pinch(0.5, 0.5, 0.05, 0.2, 15)
+    s.finger_pinch(0.5, 0.5, 0.2, 0.05, 15)
+    s.check(s.black() == 0, "two fingers still pinch, and draw nothing")
+    s.keys("ctrl+0")
+    s.wait(500)
+    # The tools work with the finger alone: the lasso's tap chooses the stroke, the bar's delete (pressed by a finger) takes it away.
+    s.finger_drag(0.3, 0.5, 0.7, 0.5, 20)
+    s.check(s.black() > 300, "drawn again")
+    s.finger_press("lasso")
+    s.d.finger([[(0.5, 0.5), (0.5, 0.5)]])
+    s.check(s.accent() > 100, "the lasso, with a finger: a tap chooses the stroke")
+    s.finger_bar("delete")
+    s.check(s.black() == 0, "and the bar's delete, pressed by a finger, takes it away")
+    # The tablet mode is the same.
+    s.press("mode")
+    s.finger_press("pen")
+    s.finger_drag(0.3, 0.6, 0.7, 0.6, 20)
+    s.check(s.mode() == "tablet" and s.black() > 300, "in the tablet mode a finger draws too")
+    s.finger_press("finger")
+    s.press("undo")
+    s.finger_drag(0.3, 0.6, 0.7, 0.6, 20)
+    s.check(s.black() == 0, "and with the button up again it draws nothing")
+    s.check(s.healthy(), "no crash, nothing printed to stderr")
+    s.stop()
+
 def notes(s):
     """Sticky notes, with the devices each mode guarantees: a click puts a note and opens its thread, the keyboard writes in it, a drag moves it; with the
     tip alone a tap puts one, the thread's own buttons close and delete it, and a finger makes none."""
@@ -145,21 +188,69 @@ def notes(s):
 
     s.press("mode")
     # (The upper part of the page: opening a thread raises a soft keyboard, which covers the lower half of a phone.)
-    s.pen_tap(0.3, 0.5)
-    s.check(amber(0.3, 0.5) > 60 and thread_open(), "tablet mode: a tap of the stylus's tip puts a note and opens its thread")
+    s.pen_tap(0.6, 0.4)
+    s.check(amber(0.6, 0.4) > 60 and thread_open(), "tablet mode: a tap of the stylus's tip puts a note and opens its thread")
     s.tap_spot(s.spot("card", "close"))
     s.check(not thread_open(), "the thread's close button, tapped with the tip, puts it away")
-    s.pen_line(0.3 + 8 / w, 0.5 + 8 / h, 0.5 + 8 / w, 0.4 + 8 / h, 20)
-    s.check(amber(0.5, 0.4) > 60 and amber(0.3, 0.5) < 10, "a drag of the tip moves the note")
-    s.pen_tap(0.5 + 8 / w, 0.4 + 8 / h)
+    s.pen_line(0.6 + 8 / w, 0.4 + 8 / h, 0.8 + 8 / w, 0.4 + 8 / h, 20)
+    s.check(amber(0.8, 0.4) > 60 and amber(0.6, 0.4) < 10, "a drag of the tip moves the note")
+    s.pen_tap(0.8 + 8 / w, 0.4 + 8 / h)
     s.check(thread_open(), "a tap on a note opens its thread")
     s.tap_spot(s.spot("card", "delete"))
-    s.check(amber(0.5, 0.4) < 10 and not thread_open(), "its delete button, tapped, takes the note away")
+    s.check(amber(0.8, 0.4) < 10 and not thread_open(), "its delete button, tapped, takes the note away")
     s.press("undo")
-    s.check(amber(0.5, 0.4) > 60, "and undo brings it back")
-    seen = amber(0.7, 0.3)
-    s.d.finger([[(0.7, 0.3), (0.7, 0.3)]])
-    s.check(amber(0.7, 0.3) == seen, "a finger makes no note: it pans and zooms")
+    s.check(amber(0.8, 0.4) > 60, "and undo brings it back")
+    seen = amber(0.15, 0.25)
+    s.d.finger([[(0.15, 0.25), (0.15, 0.25)]])
+    s.check(amber(0.15, 0.25) == seen, "a finger makes no note: it pans and zooms")
+    s.check(s.healthy(), "no crash, nothing printed to stderr")
+    s.stop()
+def links(s):
+    """Browsing through the document like the web: a link inside it is followed, the pill that opens goes back and forward (with its buttons and with
+    Alt and an arrow), and a link out to the web has a card that says where it goes; with each device the mode guarantees."""
+    s.launch("tool select\n", "links6", DESKTOP)
+    s.check(not s.has("trail", "back"), "no pill to go back and forward before a link has been followed")
+    s.click_spot(s.link("page3"))
+    s.wait(900)
+    s.check(s.pages()[0] == 3, f"a click on a link inside the document goes to its page ({s.pages()})")
+    s.check(s.has("trail", "back"), "and the pill that goes back and forward opens")
+    s.click_spot(s.spot("trail", "back"))
+    s.wait(900)
+    s.check(s.pages()[0] == 1, f"its back button, clicked, goes back to where the reader was ({s.pages()})")
+    s.keys("alt+right")
+    s.wait(900)
+    s.check(s.pages()[0] == 3, "Alt+Right goes forward again")
+    s.keys("alt+left")
+    s.wait(900)
+    s.check(s.pages()[0] == 1, "Alt+Left goes back")
+    # A link out to the web: a card, and nothing is opened unseen.
+    s.click_spot(s.link("url"))
+    s.wait(300)
+    s.check(s.has("link", "action0") and s.has("link", "action1") and s.has("link", "close"), "a link out to the web shows a card with Open, Copy and Close")
+    s.keys("esc")
+    s.wait(300)
+    s.check(not s.has("link", "close"), "Escape puts the card away")
+
+    # ---- the tablet mode: the stylus's tip alone, and a finger.
+    s.press("mode")
+    s.tap_spot(s.link("url"))
+    s.wait(300)
+    s.check(s.has("link", "action1"), "tablet mode: a tap of the stylus's tip on a link out to the web shows the card")
+    s.tap_spot(s.spot("link", "action1"))
+    s.wait(300)
+    s.check(not s.has("link", "close"), "its Copy button, tapped, copies the address and puts the card away")
+    s.tap_spot(s.link("page3"))
+    s.wait(900)
+    s.check(s.pages()[0] == 3 and s.has("trail", "back"), "a tap of the tip on a link inside the document follows it")
+    s.tap_spot(s.spot("trail", "back"))
+    s.wait(900)
+    s.check(s.pages()[0] == 1, "and the pill's back button, tapped, goes back")
+    s.finger_tap(s.link("page3"))
+    s.wait(900)
+    s.check(s.pages()[0] == 3, "a finger's tap follows a link with any tool")
+    s.finger_tap(s.spot("trail", "back"))
+    s.wait(900)
+    s.check(s.pages()[0] == 1, "and the pill's button, touched, goes back")
     s.check(s.healthy(), "no crash, nothing printed to stderr")
     s.stop()
 
@@ -296,6 +387,49 @@ def pages(s):
     s.check(r1 > 8 and r2 > 8 and r3 > 8, f"each picture has its page's ink, the added ones too ({r1}, {r2}, {r3})")
     control("close")
     s.check(s.healthy(), "no crash, nothing printed to stderr")
+
+    # ---- 4. Flags, and only the flagged pages: with the mouse, then with the stylus's tip alone.
+    def shown():
+        return sorted(int(k) for k in s.d.layout()["overview"]["pages"])
+
+    def flag(press, n):
+        press(s.spot("overview/numbers", str(n)))
+        s.wait(250)
+        press(s.spot("overview/menu", "flag"))
+        s.wait(250)
+
+    s.launch("tool select\n", "pages6", DESKTOP)
+    for how, press in (("the mouse", s.click_spot), ("the stylus's tip", s.tap_spot)):
+        if how != "the mouse":
+            s.press("mode")
+        press(s.spot("buttons", "pages"))
+        s.wait(900)
+        if how == "the mouse":
+            press(s.spot("overview/controls", "flagged"))
+            s.wait(300)
+            s.check(len(shown()) == 6, "the flag button does nothing while no page has a flag")
+        flag(press, 2)
+        flag(press, 5)
+        press(s.spot("overview/controls", "flagged"))
+        s.wait(400)
+        s.check(shown() == [2, 5], f"with {how}: the flag button shows only the flagged pages ({shown()})")
+        press(s.spot("overview/pages", "5"))
+        s.wait(900)
+        s.check(s.pages()[0] == 5, f"with {how}: a flagged page, pressed, is gone to ({s.pages()})")
+        press(s.spot("buttons", "pages"))
+        s.wait(900)
+        s.check(len(shown()) == 6, f"with {how}: the overview opens again with every page shown")
+        press(s.spot("overview/controls", "flagged"))
+        s.wait(400)
+        press(s.spot("overview/controls", "flagged"))
+        s.wait(400)
+        s.check(len(shown()) == 6, f"with {how}: pressed again, every page is shown")
+        flag(press, 2)
+        flag(press, 5)
+        s.check(not s.has("overview/menu", "flag"), f"with {how}: the menu is put away when its item is done")
+        control("close")
+        s.wait(500)
+    s.check(s.healthy(), "no crash, nothing printed to stderr")
     s.stop()
 
 
@@ -395,4 +529,4 @@ def forms(s):
     s.stop()
 
 
-ALL = {"devices": devices, "notes": notes, "pages": pages, "reader": reader, "forms": forms}
+ALL = {"devices": devices, "finger": finger, "links": links, "notes": notes, "pages": pages, "reader": reader, "forms": forms}

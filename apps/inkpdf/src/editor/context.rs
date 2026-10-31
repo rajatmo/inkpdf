@@ -59,6 +59,12 @@ impl Editor {
         if self.theme_layout().is_some_and(|c| c.contains(pos)) {
             return Some(Some(CardHit::Theme));
         }
+        if let Some(pill) = self.trail_layout().filter(|c| c.contains(pos)) {
+            return Some(pill.hit(pos).map(CardHit::Trail));
+        }
+        if let Some(card) = self.link_layout().filter(|c| c.contains(pos)) {
+            return Some(card.hit(pos).map(CardHit::Link));
+        }
         if let Some(card) = self.error_layout().filter(|c| c.contains(pos)) {
             return Some(card.on_close(pos).then_some(CardHit::ErrorClose));
         }
@@ -94,6 +100,8 @@ impl Editor {
             CardHit::Search(item) => self.press_search_item(item),
             CardHit::Item(item) => self.press_card_item(item),
             CardHit::ErrorClose => self.close_error(),
+            CardHit::Trail(item) => self.press_trail(item),
+            CardHit::Link(item) => self.press_link_item(item),
             CardHit::Context(item) => self.activate_context(item),
         }
     }

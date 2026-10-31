@@ -24,8 +24,10 @@ use crate::tools::{Dir, Key};
 use crate::view::{Layout, MAX_ZOOM, MIN_ZOOM};
 
 // The storms, grouped by what they put under stress (each file is `use super::*`: the helpers are here).
+mod cards;
 mod editor;
 mod files;
+mod finger;
 mod ink;
 mod overview;
 mod pages;
@@ -1194,8 +1196,20 @@ fn check_overview(ed: &Editor, doc: &Doc, what: &str) {
     let Some(state) = ed.chrome.overview.as_ref() else { return };
     let layout = ed.overview_layout();
     let count = ed.layout.len();
+    // (With only the flagged pages shown, the places are theirs: all flagged, in order, every page there is, and never in edit mode.)
+    let only = ed.only_flagged();
+    if let Some(only) = &only {
+        assert!(!state.edit && !ed.flags.is_empty(), "{what}: only the flagged pages are shown in edit mode or with no flag");
+        assert!(
+            only.windows(2).all(|w| w[0] < w[1]) && only.iter().all(|p| *p < count && ed.flags.contains(p)),
+            "{what}: shown {only:?} of {count}, flags {:?}",
+            ed.flags
+        );
+    }
+    assert!(ed.flags.iter().all(|&p| p < count), "{what}: a flag on a page that is not there: {:?} of {count}", ed.flags);
+    let places = only.as_ref().map_or(count, Vec::len);
     assert!(
-        state.scroll.is_finite() && state.scroll >= 0.0 && state.scroll <= layout.max_scroll(count) + 0.01,
+        state.scroll.is_finite() && state.scroll >= 0.0 && state.scroll <= layout.max_scroll(places) + 0.01,
         "{what}: the pages are scrolled to {}",
         state.scroll
     );
@@ -1213,7 +1227,7 @@ fn check_overview(ed: &Editor, doc: &Doc, what: &str) {
     assert!(ui.panels.iter().all(|p| p.rect.iter().all(|v| v.is_finite())), "{what}");
     assert!(ui.lines.iter().all(|c| c.a.iter().chain(&c.b).all(|v| v.is_finite()) && c.width.is_finite()), "{what}");
     assert!(ui.labels.iter().all(|l| l.at.iter().all(|v| v.is_finite()) && l.size > 0.0), "{what}");
-    assert!(ui.images.len() <= count, "{what}: a picture for every page at most");
+    assert!(ui.images.len() <= places, "{what}: a picture for every place at most");
 }
 
 /// What must hold of everything that moves, whatever the frames between were like: a number, within its ends.

@@ -150,7 +150,7 @@ impl Editor {
                 return true;
             }
             // (What scrolls the page, and the arrows that go up and down, are left to scroll it.)
-            Key::Arrow(Dir::Up | Dir::Down, _) | Key::Page(_) => return false,
+            Key::Arrow(Dir::Up | Dir::Down, _) | Key::Page(_) | Key::Trail(_) => return false,
             _ => {}
         }
         let edited = typing.edit.key(key, &mut *self.ws.clip.text, Rules { max_chars, multiline });

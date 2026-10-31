@@ -66,6 +66,14 @@ button or the stylus tip alone: the program's lasso, eraser and bar do the rest.
   every registered tool, yours included.
 * Colours: take them from `theme()` where you can; a colour of your own is fine for something that is the same in both looks.
 
+## Extensions with no button, and links out to the web
+
+An extension whose `icon_svg` is empty has no button on the toolbar: it is not a tool to choose, only what its item kinds and link handlers give. The
+web-link extension (`apps/inkpdf-ext/src/weblink/`) is one: `Tool::link_handlers` gives it a `LinkHandler` that is asked for every link in a PDF that goes
+out to the web. If it has a `Card` for the address (rows of text and buttons, no field), the program shows that card instead of handing the address to the
+system's browser; a press of one of its buttons is answered with a `LinkAct` (`Open`, `Copy`, `Close`), and the program does it: an extension touches neither
+the system nor the network.
+
 ## Versioning
 
 The API follows semantic versioning (`API_VERSION` is its major number). It changes by adding. A change that would break an extension is a new

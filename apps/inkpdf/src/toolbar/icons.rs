@@ -43,6 +43,7 @@ icons! {
     close = "close",
     trash = "trash",
     back = "back",
+    forward = "forward",
     pen = "pen",
     geometry = "geometry",
     plus = "plus",
@@ -57,7 +58,10 @@ icons! {
     node_remove = "node-remove",
     node_add = "node-add",
     node_smooth = "node-smooth",
+    /// Settings: a cog (the settings of the tool in use, and what the folded look pill is).
     options = "options",
+    /// A hand with one finger out: a finger standing in for the stylus.
+    finger = "finger",
     /// Four small pages: the pages overview.
     pages = "pages",
     /// A tick in a circle.

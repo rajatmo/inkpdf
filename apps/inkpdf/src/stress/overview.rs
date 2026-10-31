@@ -15,7 +15,7 @@ fn stress_the_pages_overview_under_hostile_input_keeps_the_pages_the_selection_a
     let mut rng = Rng::new(808);
     // (With motion on, and frames of any length in between: what moves must stay a number and within its ends.)
     ed.motions.set_prefs(crate::motion::Prefs::FULL);
-    let (mut opened, mut edits, mut saves, mut carried) = (0, 0, 0, 0);
+    let (mut opened, mut edits, mut saves, mut carried, mut filtered) = (0, 0, 0, 0, 0);
     // (More rounds than this find nothing new: a document of this size saves slower and slower, not differently.)
     for round in 0..(8_000 * scale().min(3)) {
         let what = format!("round {round}");
@@ -142,6 +142,16 @@ fn stress_the_pages_overview_under_hostile_input_keeps_the_pages_the_selection_a
             22 => {
                 ed.pan_px(rng.range(-100.0, 100.0), rng.range(-400.0, 400.0));
             }
+            23 => {
+                // A page is flagged or not, as the menu does it (with the flag button down, the pages shown follow).
+                let page = rng.below(ed.layout.len());
+                ed.toggle_flag(page);
+            }
+            24 => {
+                // The flag button of the header, pressed (it does something only when there is a flag to show, or it puts every page back).
+                let b = layout.button(crate::toolbar::OverviewControl::Flagged);
+                mouse_click(&mut ed, [(b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0]);
+            }
             _ => {
                 if rng.chance(0.3) {
                     ed.close_overview();
@@ -149,13 +159,17 @@ fn stress_the_pages_overview_under_hostile_input_keeps_the_pages_the_selection_a
             }
         }
         follow_pages(&mut ed, &mut doc);
+        filtered += usize::from(ed.only_flagged().is_some());
         // (Drawing it and walking every stroke is the dear part: every few rounds, and always when it has just been opened.)
         if round % 6 == 0 || ed.chrome.overview.is_none() == was_open {
             check_overview(&ed, &doc, &what);
         }
     }
     eprintln!("overview opened: {opened}; edits by hand: {edits}; drags and clicks: {carried}; saves: {saves}; pages: {}", ed.layout.len());
-    assert!(opened > 100 && edits > 50 && saves > 20, "the storm should have used the overview");
+    assert!(
+        opened > 100 && edits > 50 && saves > 20 && filtered > 100,
+        "the storm should have used the overview (and shown only the flagged pages: {filtered})"
+    );
     // Everything that was done can be undone and redone, with the document following.
     ed.close_overview();
     let mut undone = 0;

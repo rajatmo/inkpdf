@@ -123,9 +123,17 @@ impl Editor {
             self.fold_pill();
             return true;
         }
+        // Alt and an arrow, or the mouse's side buttons: back and forward through the places the reader has been.
+        if let Key::Trail(forward) = key {
+            return self.go_trail(!forward);
+        }
         // Esc puts away the card that says something went wrong.
         if self.error.is_some() && key == Key::Escape {
             self.close_error();
+            return true;
+        }
+        // Esc puts away the card for a link that goes out to the web.
+        if self.link.is_some() && self.link_key(key) {
             return true;
         }
         // The card of an item has the keyboard while it is open, and then the card of the search.
@@ -280,6 +288,36 @@ impl Editor {
         }
     }
 
+    /// A finger standing in for the stylus (see [`Editor::set_finger_draws`]): the tool gets it as a stylus with an id of its own, under the rules the
+    /// stylus has in the tablet mode, where the tip alone does everything, whatever mode the machine is in.
+    pub(super) fn finger_route_samples(&mut self, phase: Phase, samples: &[Sample]) {
+        let tool = self.tools.get_mut(self.ws.tool);
+        let (dev, id) = (Device::Pen, crate::input::FINGER_STYLUS_ID);
+        if tool.policy(Mode::Tablet).stylus || tool.owns(dev, id) {
+            let pen = PenButtons { in_range: true, contact: matches!(phase, Phase::Down | Phase::Move), ..PenButtons::default() };
+            tool.pointer(&mut self.ws, &PageEvent { dev, id, phase, samples, pen });
+            self.watch_link_click(dev, id, phase, samples);
+        }
+    }
+
+    /// Whether a finger draws as the stylus does.
+    #[cfg(test)]
+    pub fn finger_draws(&self) -> bool {
+        self.finger_draws
+    }
+
+    /// Let a finger draw like the stylus, or only pan and zoom. What was under way is ended first, so that a stroke is never left half done.
+    pub fn set_finger_draws(&mut self, on: bool) {
+        if on == self.finger_draws {
+            return;
+        }
+        self.tools.end_all(&mut self.ws);
+        self.cancel_touches();
+        self.finger_draws = on;
+        self.ws.requests.push(Request::SettingsChanged);
+        self.ws.redraw = true;
+    }
+
     /// A mouse message at `pos` (screen) on the page, with the buttons that stand for the stylus's.
     pub(super) fn route_mouse(&mut self, phase: Phase, pos: [f32; 2], pen: PenButtons) {
         let samples = [Sample { pos, pressure: 0.5, t_ms: (self.clock)() }];
@@ -294,6 +332,8 @@ impl Editor {
             || self.search_layout().is_some_and(|c| c.contains(p))
             || self.item_card_layout().is_some_and(|c| c.contains(p))
             || self.error_layout().is_some_and(|c| c.contains(p))
+            || self.trail_layout().is_some_and(|c| c.contains(p))
+            || self.link_layout().is_some_and(|c| c.contains(p))
             || self.theme_layout().is_some_and(|c| c.contains(p))
             || self.drawer().is_some_and(|d| crate::ink::rect_contains(d, p))
             || self

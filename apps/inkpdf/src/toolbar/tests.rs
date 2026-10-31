@@ -54,6 +54,7 @@ fn every_item_is_hit_at_its_centre_and_there_are_no_others() {
             Item::Tool(Tool::named("laser")),
             Item::Theme,
             Item::ModeSwitch,
+            Item::Finger,
             Item::Fullscreen
         ]
     );
@@ -248,12 +249,14 @@ fn the_delete_button_is_dim_and_does_not_light_up_when_there_is_only_one_page() 
 }
 
 #[test]
-fn the_mode_button_is_left_of_the_fullscreen_button_in_the_right_pill() {
+fn the_mode_button_and_the_finger_button_are_left_of_the_fullscreen_button_in_the_right_pill() {
     for (w, dpr) in WINDOWS {
         let tb = Toolbar::layout([w, 900.0], dpr);
-        let (mode, full) = (tb.button(Item::ModeSwitch).expect("mode"), tb.button(Item::Fullscreen).expect("fullscreen"));
-        assert!((full[0] - mode[2]).abs() < 1.0, "mode is right beside fullscreen, on its left, at {w}");
-        for button in [mode, full] {
+        let (mode, finger, full) =
+            (tb.button(Item::ModeSwitch).expect("mode"), tb.button(Item::Finger).expect("finger"), tb.button(Item::Fullscreen).expect("fullscreen"));
+        assert!((finger[0] - mode[2]).abs() < 1.0, "the finger button is right beside the mode button, on its right, at {w}");
+        assert!((full[0] - finger[2]).abs() < 1.0, "fullscreen is right beside the finger button, on its right, at {w}");
+        for button in [mode, finger, full] {
             assert!(rect_contains(tb.pills[2], [(button[0] + button[2]) / 2.0, (button[1] + button[3]) / 2.0]), "in the right pill at {w}");
         }
         assert!(tb.pills[1][2] < tb.pills[2][0], "and the right pill does not touch the middle one at {w}");

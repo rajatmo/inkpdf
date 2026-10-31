@@ -119,6 +119,9 @@ impl Editor {
         if self.search.open {
             return;
         }
+        // (One card at the right at a time: the one opened last.)
+        self.close_item_card();
+        self.close_link_card();
         // (What was being typed is made part of the document first: the keyboard is the card's from now on.)
         self.settle();
         self.chrome.panel = None;
@@ -140,13 +143,7 @@ impl Editor {
         if !self.search.open || self.chrome.prompt.is_some() {
             return None;
         }
-        let bar = self.toolbar();
-        let mut top = self.context_bar().map_or(bar.bottom(), |c| c.rect[3]) + 8.0 * self.ws.dpr;
-        // (Under the round button, which is at the same edge, while that is shown.)
-        if let Some(button) = self.theme_layout() {
-            top = top.max(button.rect[3] + 8.0 * self.ws.dpr);
-        }
-        Some(SearchLayout::new(&bar, self.ws.view.viewport, top, self.search.hits.len().min(crate::toolbar::SEARCH_ROWS)))
+        Some(SearchLayout::new(&self.toolbar(), self.ws.view.viewport, self.card_top(), self.search.hits.len().min(crate::toolbar::SEARCH_ROWS)))
     }
 
     /// What the card is drawn from.
@@ -294,7 +291,7 @@ impl Editor {
         let at = self.search.first_row + row;
         if at < self.search.hits.len() {
             self.search.current = at;
-            self.show_current();
+            self.jumping(|ed| ed.show_current());
             self.ws.redraw = true;
         }
     }
@@ -344,7 +341,7 @@ impl Editor {
                 true
             }
             // (A page key goes on to scroll the document, as the search card has no use for it.)
-            Key::Page(_) => false,
+            Key::Page(_) | Key::Trail(_) => false,
             _ => self.search.field.key(key, &mut *self.ws.clip.text, RULES) != Edited::Unused,
         };
         self.refresh_search();

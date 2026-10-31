@@ -51,6 +51,12 @@ impl Editor {
             if let (Some(card), Some(view)) = (self.item_card_layout(), self.item_card_view()) {
                 card.draw(&view, ui);
             }
+            if let (Some(pill), Some(view)) = (self.trail_layout(), self.trail_view()) {
+                pill.draw(&view, ui);
+            }
+            if let Some((card, view)) = self.link_parts() {
+                card.draw(&view, ui);
+            }
             if let Some((card, view)) = self.error_parts() {
                 card.draw(&view, ui);
             }
@@ -192,7 +198,8 @@ impl Editor {
     /// Switch the tool. Whatever was selected is let go (and any typing finished), the
     /// laser starts clean, and the panel (which belongs to the tool) goes away. The choice is
     /// remembered.
-    pub(super) fn set_tool(&mut self, tool: Tool) {
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn set_tool(&mut self, tool: Tool) {
         if self.ws.tool != tool {
             self.settle();
             self.ws.tool = tool;
@@ -232,6 +239,7 @@ impl Editor {
                 Item::Fullscreen => self.ws.requests.push(Request::Fullscreen),
                 // The other mode (the posture decides again when the machine is turned into a tablet or back).
                 Item::ModeSwitch => self.set_mode(if self.mode == Mode::Desktop { Mode::Tablet } else { Mode::Desktop }),
+                Item::Finger => self.set_finger_draws(!self.finger_draws),
                 // (The look goes round, and a round button drops down from it: whether the pages follow it.)
                 Item::Theme => {
                     self.cycle_appearance();

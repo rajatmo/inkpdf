@@ -203,6 +203,8 @@ impl State {
 
     pub fn new(el: &ActiveEventLoop, opts: Options) -> Result<State, String> {
         let mut attrs = Window::default_attributes().with_title("InkPDF").with_inner_size(LogicalSize::new(1100.0, 900.0)).with_maximized(true);
+        // (No smaller than a small phone held upright: below that the toolbars and cards no longer have room for their buttons.)
+        attrs = attrs.with_min_inner_size(LogicalSize::new(360.0, 480.0));
         if opts.topmost {
             attrs = attrs.with_window_level(WindowLevel::AlwaysOnTop);
         }
@@ -392,6 +394,14 @@ impl State {
                 self.feed(InputEvent::MouseMoved([position.x as f32, position.y as f32]));
                 self.sync_cursor();
             }
+            // (The side buttons of a mouse go back and forward, as in a browser.)
+            WindowEvent::MouseInput {
+                state: ElementState::Pressed,
+                button: side @ (winit::event::MouseButton::Back | winit::event::MouseButton::Forward),
+                ..
+            } => {
+                self.feed(InputEvent::Key(crate::input::KeyInput::Trail(side == winit::event::MouseButton::Forward)));
+            }
             WindowEvent::MouseInput { state, button, .. } => {
                 self.feed(InputEvent::MouseButton { state: translate::button_state(state), button: translate::button(button) });
                 // (A press changes what the pointer promises: a hand closes on the page it drags, a button that was pressed changed the tool.)
@@ -489,7 +499,9 @@ impl State {
         }
         // The tool in use says which of these it hears (see `InputPolicy`): a text box being typed into takes them
         // all; with something selected, Delete, Escape and the arrows work on that.
-        if let Some(key) = translate::key(&event.logical_key, event.text.as_deref(), self.modifiers.shift_key(), self.ed.is_typing()) {
+        if let Some(key) =
+            translate::key(&event.logical_key, event.text.as_deref(), self.modifiers.shift_key(), self.modifiers.alt_key(), self.ed.is_typing())
+        {
             self.feed(InputEvent::Key(key));
         }
     }

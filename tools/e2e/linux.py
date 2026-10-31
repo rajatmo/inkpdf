@@ -62,6 +62,8 @@ class Linux(Driver):
             args = [m.group(1)]
         elif m := re.fullmatch(r"outline(\d+)", kind):
             args = [m.group(1), "--outline"]
+        elif m := re.fullmatch(r"links(\d+)", kind):
+            args = [m.group(1), "--links"]
         elif kind == "form":
             args = ["1", "--form"]
         else:

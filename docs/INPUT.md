@@ -207,6 +207,10 @@ tool. The hardware shortcuts (barrel button, eraser end) are the only things tha
   laptop in desktop mode.
 - **Tool changes** come from the toolbar buttons (every device can press them) and, in desktop mode, from nothing else yet (no letter keys;
   they would steal typing).
+- **The finger button** (right pill, saved) is not a mode either: with it on, one finger on the page is the stylus tip for the tool in use, under the
+  tablet mode's rules (the tip alone does everything), in either mode, so that a person with no stylus has every tool. A stroke is begun when the finger has
+  moved 8 logical px or lifts, so a second finger that comes down with it (a pinch) draws nothing; a second finger later ends the stroke, and two fingers pan
+  and zoom. Chrome (toolbars, bar, cards, overview) is pressed by a finger as always, and the palm rule below still applies.
 - **Pen proximity** is not a mode but a filter: while a pen hovers or touches, finger touches are dropped (palm rule).
 - **Held modifiers** (B4) are the only transient modes.
 

@@ -407,6 +407,8 @@ pub struct RawKey {
     pub down: bool,
     pub ctrl: bool,
     pub shift: bool,
+    /// Alt is held: with an arrow, back and forward through the places a link took the reader from.
+    pub alt: bool,
     /// The character the key makes with the modifiers held, if it makes one.
     pub unicode: Option<char>,
 }
@@ -426,6 +428,8 @@ pub fn key(k: &RawKey, out: &mut Vec<InputEvent>) -> bool {
         KeyCode::Delete => named(KeyInput::Delete, out),
         KeyCode::Escape | KeyCode::Back => named(KeyInput::Escape, out),
         KeyCode::Enter => named(KeyInput::Text("\n".to_string()), out),
+        KeyCode::Left if k.alt => named(KeyInput::Trail(false), out),
+        KeyCode::Right if k.alt => named(KeyInput::Trail(true), out),
         KeyCode::Left => named(KeyInput::Arrow(crate::input::Dir::Left, k.shift), out),
         KeyCode::Right => named(KeyInput::Arrow(crate::input::Dir::Right, k.shift), out),
         KeyCode::Up => named(KeyInput::Arrow(crate::input::Dir::Up, k.shift), out),
@@ -728,7 +732,7 @@ mod tests {
     fn keys_become_the_editors_keys_and_what_is_for_the_system_is_left_to_it() {
         let press = |code, unicode: Option<char>, ctrl: bool, shift: bool| {
             let mut out = Vec::new();
-            let taken = key(&RawKey { code, down: true, ctrl, shift, unicode }, &mut out);
+            let taken = key(&RawKey { code, down: true, ctrl, shift, alt: false, unicode }, &mut out);
             (taken, out)
         };
         assert_eq!(press(KeyCode::Backspace, None, false, false), (true, vec![InputEvent::Key(KeyInput::Backspace)]));
@@ -740,15 +744,27 @@ mod tests {
         assert_eq!(press(KeyCode::Enter, None, false, false).1, vec![InputEvent::Key(KeyInput::Text("\n".to_string()))]);
         assert_eq!(press(KeyCode::PageDown, None, false, false), (true, vec![InputEvent::Key(KeyInput::Page(true))]));
         assert_eq!(press(KeyCode::PageUp, None, false, false), (true, vec![InputEvent::Key(KeyInput::Page(false))]));
+        // Alt and a sideways arrow go back and forward through the places a link took the reader from; an arrow alone is an arrow.
+        let alt = |code| {
+            let mut out = Vec::new();
+            let taken = key(&RawKey { code, down: true, ctrl: false, shift: false, alt: true, unicode: None }, &mut out);
+            (taken, out)
+        };
+        assert_eq!(alt(KeyCode::Left), (true, vec![InputEvent::Key(KeyInput::Trail(false))]));
+        assert_eq!(alt(KeyCode::Right), (true, vec![InputEvent::Key(KeyInput::Trail(true))]));
+        assert_eq!(alt(KeyCode::Up).1, vec![InputEvent::Key(KeyInput::Arrow(crate::input::Dir::Up, false))]);
         assert_eq!(press(KeyCode::Left, None, false, true).1, vec![InputEvent::Key(KeyInput::Arrow(crate::input::Dir::Left, true))]);
         assert_eq!(press(KeyCode::Other, Some('é'), false, false).1, vec![InputEvent::Key(KeyInput::Text("é".to_string()))]);
         assert_eq!(press(KeyCode::Other, Some('z'), true, false).1, vec![InputEvent::Shortcut { letter: "z".to_string(), shift: false }]);
         assert_eq!(press(KeyCode::Other, None, false, false), (false, vec![]), "volume and the like are the system's");
         assert_eq!(press(KeyCode::Other, Some('\u{7}'), false, false), (false, vec![]), "a control character types nothing");
         let mut out = Vec::new();
-        assert!(key(&RawKey { code: KeyCode::Back, down: false, ctrl: false, shift: false, unicode: None }, &mut out), "its release is taken too");
+        assert!(
+            key(&RawKey { code: KeyCode::Back, down: false, ctrl: false, shift: false, alt: false, unicode: None }, &mut out),
+            "its release is taken too"
+        );
         assert!(out.is_empty());
-        assert!(!key(&RawKey { code: KeyCode::Other, down: false, ctrl: false, shift: false, unicode: Some('a') }, &mut out));
+        assert!(!key(&RawKey { code: KeyCode::Other, down: false, ctrl: false, shift: false, alt: false, unicode: Some('a') }, &mut out));
     }
 
     #[test]

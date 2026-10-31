@@ -56,6 +56,7 @@ fn item_name(item: Item) -> String {
         Item::Search => "search".into(),
         Item::Tool(tool) => tool.name().into(),
         Item::ModeSwitch => "mode".into(),
+        Item::Finger => "finger".into(),
         Item::Fullscreen => "full".into(),
         Item::Theme => "theme".into(),
         // The round buttons of the folded pills.
@@ -130,10 +131,38 @@ fn describe(ed: &Editor) -> String {
         let name = ed.form.fields.get(field)?.name.clone();
         (x >= 0.0 && y >= 0.0 && x <= w && y <= h).then(|| (if widget == 0 { name } else { format!("{name}#{widget}") }, [x, y]))
     });
+    // The links that are in the window, by where they go: `page3` (the third page) or `url` (the web).
+    // (Several going to one place are `page3`, `page3#1`, …, as the boxes of a field are.)
+    let mut counts = std::collections::HashMap::<String, usize>::new();
+    let link_spots = ed.links.iter().filter_map(|l| {
+        let [x, y] = ed.view.doc_to_screen(middle(l.rect));
+        let name = match &l.target {
+            crate::links::Target::Page(p) => format!("page{}", p + 1),
+            crate::links::Target::Url(_) => "url".to_string(),
+            crate::links::Target::Field { .. } => return None,
+        };
+        let n = counts.entry(name.clone()).or_default();
+        *n += 1;
+        let name = if *n == 1 { name } else { format!("{name}#{}", *n - 1) };
+        (x >= 0.0 && y >= 0.0 && x <= w && y <= h).then_some((name, [x, y]))
+    });
+    let link_spots = points(link_spots);
+    if !link_spots.is_empty() {
+        let _ = write!(out, ",\"links\":{{{link_spots}}}");
+    }
     // The card of an item that is open, and the card that says something went wrong.
     let card = ed.item_card_layout().map(|l| points(l.named_parts().into_iter().map(|(name, r)| (name, middle(r))))).unwrap_or_default();
     if !card.is_empty() {
         let _ = write!(out, ",\"card\":{{{card}}}");
+    }
+    if let Some(l) = ed.link_layout() {
+        let parts = points(l.named_parts().into_iter().map(|(name, r)| (name, middle(r))));
+        let _ = write!(out, ",\"link\":{{{parts}}}");
+    }
+    if let Some(l) = ed.trail_layout() {
+        use crate::toolbar::TrailItem;
+        let (back, forward) = (l.centre_of(TrailItem::Back), l.centre_of(TrailItem::Forward));
+        let _ = write!(out, ",\"trail\":{{\"back\":[{:.0},{:.0}],\"forward\":[{:.0},{:.0}]}}", back[0], back[1], forward[0], forward[1]);
     }
     if let Some(l) = ed.error_layout() {
         let _ = write!(out, ",\"error\":{{\"close\":[{:.0},{:.0}]}}", l.close_middle()[0], l.close_middle()[1]);
@@ -142,19 +171,31 @@ fn describe(ed: &Editor) -> String {
     if !fields.is_empty() {
         let _ = write!(out, ",\"fields\":{{{fields}}}");
     }
-    if let (Some(state), Some(shown)) = (ed.chrome.overview.as_ref(), ed.overview_pages()) {
+    if let (Some(state), Some(shown_pages)) = (ed.chrome.overview.as_ref(), ed.overview_pages()) {
+        let shown = shown_pages.clone();
         let l = ed.overview_layout();
         let controls = points(l.controls.iter().map(|&(c, r)| (format!("{c:?}").to_lowercase(), middle(r))));
         // (The bar of actions is there only in edit mode; outside it its places are nothing.)
         let actions = points(l.actions.iter().filter(|(_, r)| r[2] > r[0]).map(|&(a, r)| (format!("{a:?}").to_lowercase(), middle(r))));
         let pages = shown
+            .into_iter()
             .filter_map(|i| {
                 let page = ed.layout.page(i)?;
-                let t = l.thumb(i, state.scroll, [page.w, page.h]);
+                let t = l.thumb(ed.overview_place(i), state.scroll, [page.w, page.h]);
                 Some(format!("\"{}\":[{:.0},{:.0},{:.0},{:.0}]", i + 1, (t[0] + t[2]) / 2.0, (t[1] + t[3]) / 2.0, t[2] - t[0], t[3] - t[1]))
             })
             .collect::<Vec<_>>()
             .join(",");
+        // (The numbers under the pictures open the page's menu, and the items of the menu that is open.)
+        let numbers = shown_pages
+            .iter()
+            .map(|&i| (format!("{}", i + 1), middle(l.number_row(ed.overview_place(i), state.scroll))))
+            .filter(|(_, p)| p[1] >= l.grid[1] && p[1] <= l.grid[3]);
+        let numbers = points(numbers);
+        let menu = ed
+            .overview_menu()
+            .map(|items| points(items.iter().map(|&(item, r)| (format!("{item:?}").to_lowercase(), middle(r)))))
+            .unwrap_or_default();
         // (A window too narrow for a table of contents beside the pages has none to press.)
         let rows = ed.toc_rows();
         let toc = points(
@@ -163,7 +204,10 @@ fn describe(ed: &Editor) -> String {
                 .filter(|_| l.toc.is_some())
                 .filter_map(|(k, row)| Some((ed.outline.get(row.item)?.title.clone(), middle(l.toc_row(k, state.toc_scroll))))),
         );
-        let _ = write!(out, ",\"overview\":{{\"controls\":{{{controls}}},\"actions\":{{{actions}}},\"pages\":{{{pages}}},\"toc\":{{{toc}}}}}");
+        let _ = write!(
+            out,
+            ",\"overview\":{{\"controls\":{{{controls}}},\"actions\":{{{actions}}},\"pages\":{{{pages}}},\"numbers\":{{{numbers}}},\"menu\":{{{menu}}},\"toc\":{{{toc}}}}}"
+        );
     }
     out.push('}');
     out

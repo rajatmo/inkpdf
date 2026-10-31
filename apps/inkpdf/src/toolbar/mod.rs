@@ -20,6 +20,7 @@ mod search_card;
 mod theme;
 mod theme_card;
 mod tool_panel;
+mod trail_card;
 
 #[cfg(test)]
 mod tests;
@@ -54,6 +55,7 @@ pub use theme_card::{ThemeLayout, ThemeView};
 #[cfg(test)]
 pub use tool_panel::ToolPanel;
 pub use tool_panel::{Channel, PanelState, PanelView, Slider};
+pub use trail_card::{TrailItem, TrailLayout, TrailView};
 
 /// A width in `range` for a position `t` (0 to 1) along the slider. Widths span a decade or two, so
 /// the slider is logarithmic: the same drag makes the same proportional change at any thickness.
@@ -98,6 +100,8 @@ pub enum Item {
     Tool(Tool),
     /// Switch between the desktop and the tablet mode (and show which it is).
     ModeSwitch,
+    /// A finger draws like the stylus (so that every tool works with no stylus), or only pans and zooms.
+    Finger,
     /// Fill the whole screen, or give it back.
     Fullscreen,
     /// The look of the interface: the system's, light, dark (each press goes to the next).
@@ -111,7 +115,7 @@ impl Item {
     pub fn pill(self) -> Pill {
         match self {
             Item::Tool(_) => Pill::Tools,
-            Item::Theme | Item::ModeSwitch | Item::Fullscreen => Pill::View,
+            Item::Theme | Item::ModeSwitch | Item::Finger | Item::Fullscreen => Pill::View,
             Item::Fold(pill) => pill,
             _ => Pill::Document,
         }
@@ -125,7 +129,7 @@ pub enum Pill {
     Document,
     /// The tools.
     Tools,
-    /// How the window looks and is used: the look, the mode, full screen.
+    /// How the window looks and is used: the look, the mode, the finger, full screen.
     View,
 }
 
@@ -148,6 +152,8 @@ pub struct State {
     pub fullscreen: bool,
     /// The mode the devices are used in, shown on its button.
     pub mode: Mode,
+    /// A finger draws like the stylus.
+    pub finger: bool,
     /// The look the user chose, whether the interface is dark now, and whether the pages follow it.
     pub appearance: Appearance,
     pub dark: bool,
@@ -177,6 +183,7 @@ impl Default for State {
             unsaved: false,
             fullscreen: false,
             mode: Mode::default(),
+            finger: false,
             appearance: Appearance::default(),
             dark: false,
             dark_pages: false,
@@ -205,10 +212,10 @@ const LEFT: [Option<Item>; 10] = [
     Some(Item::Pages),
     Some(Item::Search),
 ];
-const RIGHT: [Option<Item>; 3] = [Some(Item::Theme), Some(Item::ModeSwitch), Some(Item::Fullscreen)];
+const RIGHT: [Option<Item>; 4] = [Some(Item::Theme), Some(Item::ModeSwitch), Some(Item::Finger), Some(Item::Fullscreen)];
 
 /// Buttons at most: the left pill's, the right pill's and as many tools as a toolbar can hold. (A toolbar has the buttons of the tools there are.)
-pub const BUTTONS: usize = 9 + 4 + crate::tool::MAX_TOOLS;
+pub const BUTTONS: usize = 9 + 5 + crate::tool::MAX_TOOLS;
 
 /// How big a button is when all three pills fit (in points), the least it shrinks to before pills fold, and the least there is
 /// (past which the window is too small to use).
@@ -510,6 +517,8 @@ impl Toolbar {
                     Mode::Desktop => icons.desktop.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink),
                     Mode::Tablet => icons.tablet.draw(&mut ui.lines, cx, cy, half, line, ui.pal.accent),
                 },
+                // A finger that draws, in the accent colour as the tablet is: the one you chose.
+                Item::Finger => icons.finger.draw(&mut ui.lines, cx, cy, half, line, if state.finger { ui.pal.accent } else { ui.pal.ink }),
                 Item::Theme => {
                     let icon = match state.appearance {
                         Appearance::System => &icons.theme_system,

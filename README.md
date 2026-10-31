@@ -12,7 +12,8 @@ library, no sync: just the page and your pen.
 - **Real PDF annotations.** Ink and shapes are saved as standard Ink annotations, typed text as Free Text, marks as highlight, underline and
   strike-out. Any PDF reader shows them. Nothing is uploaded.
 - **Read the text.** Select, copy and mark a PDF's text; search with Ctrl+F (every place is lit and listed); follow links; fill in a PDF's form (text, check boxes, radio buttons, choices).
-- **Pages overview.** Jump to a page, reorder, duplicate, delete, flag (a bookmark any reader shows) or add pages; the table of contents; every step can be undone.
+- **No stylus needed.** A button on the right pill lets a finger draw like the stylus (two fingers still pinch and pan), so every tool works on a phone or a touch laptop.
+- **Pages overview.** Jump to a page, reorder, duplicate, delete, flag (a bookmark any reader shows) and show only the flagged pages, or add pages; the table of contents; every step can be undone.
 - **Light or dark,** following the system or your choice, with dark pages if you want them (your file is never changed).
 - **Every device does everything.** At a desk the left mouse button and keyboard are enough (zoom, scroll and read with the usual keys); on a
   tablet the stylus tip is enough. A finger pans, zooms, and a double tap fits the page to the width. The toolbar folds into round buttons on a

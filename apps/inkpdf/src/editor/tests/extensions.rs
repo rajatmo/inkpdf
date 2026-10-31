@@ -182,8 +182,15 @@ fn every_extension_this_build_has_is_served_named_once_and_draws_an_icon_inside_
     for e in &all {
         assert_eq!(e.problem(), None, "{}", e.id);
         assert!(names.insert(e.id), "{} is registered twice", e.id);
-        assert!(Tool::from_name(e.id).is_some(), "{} is in the registry", e.id);
-        assert!(crate::toolbar::icon_is_drawable(e.icon_svg), "{}'s icon draws something inside its box", e.id);
+        if e.icon_svg.is_empty() {
+            // (No button: it is not a tool to choose, and it has to be there for something else to give: item kinds or link handlers.)
+            let tool = (e.create)();
+            assert!(Tool::from_name(e.id).is_none(), "{} has no button, so it is not a tool", e.id);
+            assert!(!tool.item_kinds().is_empty() || !tool.link_handlers().is_empty(), "{} has no button and gives nothing else", e.id);
+        } else {
+            assert!(Tool::from_name(e.id).is_some(), "{} is in the registry", e.id);
+            assert!(crate::toolbar::icon_is_drawable(e.icon_svg), "{}'s icon draws something inside its box", e.id);
+        }
         assert!(!["pen", "geometry", "text", "select"].contains(&e.id), "{} is a name of the program's own", e.id);
     }
 }

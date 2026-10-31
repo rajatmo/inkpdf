@@ -69,8 +69,8 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "app" -> "indexer" [color="#55555599", penwidth=1.59, tooltip="2 uses"];
 "app" -> "ink" [color="#55555599", penwidth=1.59, tooltip="2 uses"];
 "app" -> "ink_io" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
-"app" -> "input" [color="#55555599", penwidth=2.65, tooltip="12 uses"];
-"app" -> "links" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
+"app" -> "input" [color="#55555599", penwidth=2.70, tooltip="13 uses"];
+"app" -> "links" [color="#55555599", penwidth=1.96, tooltip="4 uses"];
 "app" -> "pages" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "app" -> "palette" [color="#55555599", penwidth=1.96, tooltip="4 uses"];
 "app" -> "pdf" [color="#55555599", penwidth=1.59, tooltip="2 uses"];
@@ -83,7 +83,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "app" -> "store" [color="#55555599", penwidth=1.59, tooltip="2 uses"];
 "app" -> "text" [color="#55555599", penwidth=1.80, tooltip="3 uses"];
 "app" -> "tiles" [color="#55555599", penwidth=2.09, tooltip="5 uses"];
-"app" -> "toolbar" [color="#55555599", penwidth=2.38, tooltip="8 uses"];
+"app" -> "toolbar" [color="#55555599", penwidth=2.59, tooltip="11 uses"];
 "app" -> "tools" [color="#55555599", penwidth=1.80, tooltip="3 uses"];
 "doc" -> "coords" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
 "doc" -> "form" [color="#55555599", penwidth=1.30, tooltip="1 uses"];
@@ -107,7 +107,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "editor" -> "form" [color="#6a5acd99", penwidth=1.96, tooltip="4 uses"];
 "editor" -> "geometry" [color="#6a5acd99", penwidth=1.30, tooltip="1 uses"];
 "editor" -> "ink" [color="#6a5acd99", penwidth=2.53, tooltip="10 uses"];
-"editor" -> "input" [color="#6a5acd99", penwidth=3.03, tooltip="21 uses"];
+"editor" -> "input" [color="#6a5acd99", penwidth=3.06, tooltip="22 uses"];
 "editor" -> "links" [color="#6a5acd99", penwidth=2.09, tooltip="5 uses"];
 "editor" -> "motion" [color="#6a5acd99", penwidth=1.96, tooltip="4 uses"];
 "editor" -> "outline" [color="#6a5acd99", penwidth=1.96, tooltip="4 uses"];
@@ -119,8 +119,8 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "editor" -> "settings" [color="#6a5acd99", penwidth=2.09, tooltip="5 uses"];
 "editor" -> "text" [color="#6a5acd99", penwidth=1.80, tooltip="3 uses"];
 "editor" -> "tool" [color="#6a5acd99", penwidth=2.46, tooltip="9 uses"];
-"editor" -> "toolbar" [color="#6a5acd99", penwidth=2.80, tooltip="15 uses"];
-"editor" -> "tools" [color="#6a5acd99", penwidth=2.65, tooltip="12 uses"];
+"editor" -> "toolbar" [color="#6a5acd99", penwidth=2.88, tooltip="17 uses"];
+"editor" -> "tools" [color="#6a5acd99", penwidth=2.70, tooltip="13 uses"];
 "editor" -> "view" [color="#6a5acd99", penwidth=1.59, tooltip="2 uses"];
 "editor" -> "workspace" [color="#6a5acd99", penwidth=1.59, tooltip="2 uses"];
 "field" -> "clipboard" [color="#b8860b99", penwidth=1.30, tooltip="1 uses"];
@@ -195,7 +195,7 @@ subgraph cluster_Adapter { label="adapter — window, GPU, files, OS"; labeljust
 "toolbar" -> "colour" [color="#a14a9699", penwidth=1.30, tooltip="1 uses"];
 "toolbar" -> "figure" [color="#a14a9699", penwidth=1.59, tooltip="2 uses"];
 "toolbar" -> "geometry" [color="#a14a9699", penwidth=1.30, tooltip="1 uses"];
-"toolbar" -> "ink" [color="#a14a9699", penwidth=2.46, tooltip="9 uses"];
+"toolbar" -> "ink" [color="#a14a9699", penwidth=2.53, tooltip="10 uses"];
 "toolbar" -> "input" [color="#a14a9699", penwidth=1.30, tooltip="1 uses"];
 "toolbar" -> "outline" [color="#a14a9699", penwidth=1.30, tooltip="1 uses"];
 "toolbar" -> "palette" [color="#a14a9699", penwidth=1.30, tooltip="1 uses"];

@@ -134,22 +134,24 @@ fn the_keyboard_can_do_all_of_it_escape_puts_it_away_and_delete_in_an_empty_fiel
 }
 
 #[test]
-fn the_card_floats_under_the_search_card_and_not_over_it_and_is_in_every_window() {
+fn there_is_one_card_at_the_right_at_a_time_the_one_opened_last_and_it_is_not_a_press_on_the_page() {
     let mut ed = editor();
     let id = add_box(&mut ed, 100.0, 100.0, "first");
     open(&mut ed, id);
-    let alone = ed.item_card_layout().expect("card");
+    assert!(ed.item_card_layout().is_some());
+    // The search card opened after it puts it away.
     ed.open_search();
-    let under = ed.item_card_layout().expect("card");
-    let search = ed.search_layout().expect("search");
-    assert!(under.card[1] >= search.card[3], "{:?} under {:?}", under.card, search.card);
-    assert!(alone.card[1] < under.card[1]);
+    assert!(ed.search_open() && !ed.item_card_open(), "the search card, opened last, is the one that is up");
+    // A card opened by a tool (a press on a note) puts the search card away.
+    open(&mut ed, id);
+    ed.step_view(0.016);
+    assert!(ed.item_card_open() && !ed.search_open(), "and the card of an item opened after it puts it away");
+    let layout = ed.item_card_layout().expect("card");
     assert!(
-        ed.over_interface([(under.card[0] + under.card[2]) / 2.0, (under.card[1] + under.card[3]) / 2.0]),
+        ed.over_interface([(layout.card[0] + layout.card[2]) / 2.0, (layout.card[1] + layout.card[3]) / 2.0]),
         "a press on it is not a press on the page"
     );
 }
-
 #[test]
 fn what_an_item_says_is_found_by_the_search_and_nothing_else_is() {
     let mut ed = editor();

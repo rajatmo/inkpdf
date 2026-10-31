@@ -5,7 +5,7 @@ use crate::input::{Device, FINGER, POINTER, Phase, Sample};
 use crate::links::{self, Target};
 use crate::tool::Tool;
 
-use super::{Editor, Request};
+use super::Editor;
 
 /// How far a finger must pull up past the end of the document, in logical pixels, to add a page.
 const PULL_PX: f32 = 140.0;
@@ -62,8 +62,8 @@ impl Editor {
         self.leave_field(pos);
         let Some(link) = links::hit(&self.links, self.to_doc(pos)) else { return false };
         match link.target.clone() {
-            Target::Page(page) => self.ws.scroll_to_page(page),
-            Target::Url(url) => self.ws.requests.push(Request::OpenUrl(url)),
+            Target::Page(page) => self.jump_to_page(page),
+            Target::Url(url) => self.follow_web_link(url),
             Target::Field { .. } => return self.fill_field_at(pos),
         }
         true

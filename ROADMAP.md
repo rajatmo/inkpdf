@@ -405,10 +405,9 @@ emulator test, owner runs the checks. **Release 1.2.0.**
 ### Milestone 1.3.0: polish
 
 **P1.** *(Done 2026-10-30: `stress/` by topic and `editor/overview/` as state, input and actions; the storms are grouped, not one file each.)* Split the oversized files without changing behaviour: `stress.rs` (about 2,300 lines; one file per storm), `editor/overview.rs`.
-**P2.** *(Partly done 2026-10-30: the bar's exit animation (the editor keeps its last look, `held_bar`) and the thumbnails' fade-in (`app/overview.rs`, `arrival_fade`) are in. Left: the overview's CPU while the wheel scrolls, which needs measuring first.)* The motion gaps: exit animation for the bar under the tools (needs a held view like `Presence<PanelView>`), thumbnail
-fade-in when a picture arrives (per-key tween in `app/overview.rs`), the overview's CPU while scrolling with the wheel (measured 2.5%
-of a core; look at rebuilding the whole `Ui` each frame during a glide).
-**P3.** *(Flags done 2026-10-30: the owner chose a title prefix, `"Flag: page N"` (`outline::FLAG`), written on save through the seam (`PdfDocument::set_flags`, conformance `check_flags`) and kept in `Editor::flags`, apart from the contents; the page menu's flag button toggles it. Deviations: a flag is a mark, not a step of the history (pressing it again is the undo), and the flag of a page that is deleted is not given back by undoing the deletion. Not done: the "All pages" filter.)* Overview extras: bookmark flags per thumbnail (writes an outline entry; needs the seam's outline writer) and the
+**P2.** *(Partly done 2026-10-30: the bar's exit animation (the editor keeps its last look, `held_bar`) and the thumbnails' fade-in (`app/overview.rs`, `arrival_fade`) are in. The overview's CPU while the wheel scrolls was measured 2026-10-31 (Windows, 1,000 pages, 4K, a wheel notch every 40 ms): 8 to 11% of a core against 4 to 5% for the document, 0% still. Building what is drawn (`draw_overview` and the shell's labels and quads) is about 0.15 ms of a 16 ms frame, so rebuilding the whole `Ui` is not the cost; the GPU draw is (about 1 ms against 0.3 ms: one bind group and draw call for each picture and each number, a texture each). A text atlas would cut it, and has not been done; `measure_the_overview_frame_while_the_wheel_scrolls` (ignored test) is the editor's half of the measurement.)* The motion gaps: exit animation for the bar under the tools (needs a held view like `Presence<PanelView>`), thumbnail
+fade-in when a picture arrives (per-key tween in `app/overview.rs`), the overview's CPU while scrolling with the wheel (measured: see above).
+**P3.** *(Flags done 2026-10-30: the owner chose a title prefix, `"Flag: page N"` (`outline::FLAG`), written on save through the seam (`PdfDocument::set_flags`, conformance `check_flags`) and kept in `Editor::flags`, apart from the contents; the page menu's flag button toggles it. Deviations: a flag is a mark, not a step of the history (pressing it again is the undo), and the flag of a page that is deleted is not given back by undoing the deletion. The filter was done 2026-10-31: a flag button in the overview's header shows only the flagged pages (`Editor::only_flagged`, the grid's places are those pages; edit mode shows all; no carrying pages about while filtered).)* Overview extras: bookmark flags per thumbnail (writes an outline entry; needs the seam's outline writer) and the
 "All pages" filter (title only today).
 **P4 (optional, ask first).** Things pdfcraft already makes cheap: a "Make searchable" OCR option (opt-in, models and licence notice),
 filling form fields, printing. Only on the owner's say-so. *(Form filling done 2026-10-30, the owner's choice: `form.rs`, `PdfDocument::fields`/`set_fields` (`pdfcraft-forms`, same pinned revision), `editor/forms.rs`, conformance `check_form`, `tools/e2e/forms.ps1`. Text, check boxes, radio buttons and choices; a choice goes to its next option when pressed (no drop-down list); typing is at the end of the text (a text box's way); JavaScript actions are not run; a form edit is not a step of the history. OCR and printing are not done.)*
@@ -497,12 +496,13 @@ The barrel button, the eraser end and the mouse's right and middle buttons stay 
 
 Order: A4 and E0 first, together; E1; E2; E3; E4. Quality fixes from the owner's use go in between on small branches (the seam steps change no behaviour, so they merge around them). Quality loop: a report comes with a `--record` recording, becomes a failing replay test, and the fix lands with it; a ring buffer of the last minute of input saved on a panic, and a bug template, are the first small additions.
 
-### Ideas the owner has named, not planned yet (2026-10-31)
+### Ideas the owner has named (2026-10-31)
 
-- **Browsing through links, as on the web (core).** Following a link inside a document keeps a history: on the first link followed, a pill opens below
-  the top-left pill with a back and a forward button. (Not started: the owner said "not this for now".)
-- **A web card (extension).** A link that leaves the document, to the internet, opens in a card holding a web view, instead of handing the address to the
-  system's browser. (An idea to design after the history above; it would need a web view on each platform.)
+- **Browsing through links, as on the web (core). Done 2026-10-31.** `editor/trail.rs`, `toolbar/trail_card.rs`: the pill under the document's pill with back and
+  forward, Alt+arrows and the mouse's side buttons; links, contents entries, overview pages and search results pressed are jumps.
+- **A web card (extension). Done as a link card, 2026-10-31; the web view is not built.** `inkpdf-ext/src/weblink/` (no toolbar button; `LinkHandler` in the API):
+  the address, a warning for tricks, Open, Copy. A real web view needs an engine on every platform (WebView2 is not FOSS, WebKitGTK is X11 only,
+  Android needs Java glue): the owner chose the card first and the engine later.
 
 ### Beside the milestones: the platform backlog (`docs/PORTING.md` has the detail)
 
@@ -531,7 +531,7 @@ Owner-run checks per milestone (say which ones in the pull request):
 | Check | How |
 |---|---|
 | All tests and storms at 10x | `INKPDF_STRESS=10 cargo test --release -p inkpdf --lib -- --include-ignored` (about 40 s) |
-| Real-input checks | `tools/e2e/run.ps1` in the foreground on a quiet machine: the same 84 checks (`scenarios.py`: devices, notes, pages, reader, forms) on Windows, Linux (WSL) and the two Android emulators, about six minutes; buttons are pressed by name through the app's `--layout` file |
+| Real-input checks | `tools/e2e/run.ps1` in the foreground on a quiet machine: the same 100 or so checks (`scenarios.py`: devices, links, notes, pages, reader, forms) on Windows, Linux (WSL) and the two Android emulators, about six minutes; buttons are pressed by name through the app's `--layout` file |
 | Latency and idle CPU | `tools/e2e/latency.ps1` and the numbers in section 1; idle window 0% (Windows; Linux and Android: `--stats` on hardware) |
 | Linux and Android | `tools/e2e/run.ps1 -Platform linux,android` (above), `tools/e2e/linux-smoke.sh` (virtual display), the CI `android` and `android-emulator` jobs, and a try on a real tablet with a stylus (`adb logcat -s inkpdf` if it misbehaves) |
 | Soak | open and close the overview, add/delete/undo pages and draw for 30 rounds; memory, handles and threads must be flat after the texture cache fills (budget 768 MB) |

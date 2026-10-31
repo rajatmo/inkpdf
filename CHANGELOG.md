@@ -1,6 +1,32 @@
 # Changelog
 
-## 1.5.0
+## 1.6.0
+- **A finger can be the stylus.** A new button on the right pill (a hand with one finger out, between the mode button and full screen) lets one finger on the
+  page draw as the stylus does, with whatever tool is in use and in both modes, so that every tool works with no stylus (a phone, a touch laptop). It is
+  remembered. A second finger calls the stroke off and the two pinch and pan (a stroke is begun only once the finger has moved a few pixels, so a pinch
+  draws nothing), the toolbars, bar and cards are pressed by a finger as before, and a palm, or a hand beside a stylus that is near, is still ignored. With the
+  button up a finger only pans and zooms, as it did.
+- **New icons for the laser and for settings.** The laser is a pointer with its beam and the dot it makes (it was a sun); settings are a cog (they were
+  three sliders). The cog is the bar's settings button and the round button of the look's pill when it is folded.
+- **Only the flagged pages.** The overview's header has a flag button (left of the others): pressed, the grid shows only the pages that carry a flag, with the
+  title "Flagged pages (3)"; pressed again, every page. A flagged page pressed is gone to; its menu (copy, flag, delete) works as in the full grid. The button
+  is dim while no page has a flag; edit mode shows every page (to choose among and to move), and pages are not carried about while only some are shown. The
+  header's six buttons are a little smaller in a narrow window. (Measured for the overview's CPU while the wheel scrolls it: building what is drawn costs
+  about 0.15 ms a frame; the rest is the GPU draw, about a call for each picture and number, and 0% while still. See `ROADMAP.md` P2.)
+- **Browsing through the document like the web.** The first link you follow inside a document (or contents entry, page pressed in the overview, or search
+  result pressed) opens a small pill under the document's pill with back and forward buttons; they take you back to where you were, as you left it, and on
+  again. Alt+Left and Alt+Right do the same (also on an Android keyboard), and so do a mouse's side buttons. A new jump after going back forgets what was
+  ahead, scrolling by hand is not a jump, and editing the pages forgets the places. A page you jump to now has its first line below the toolbars (on a phone
+  they covered the page's heading).
+- **A card for links out to the web (an extension).** A link in a PDF that goes to the web is no longer handed to the browser unseen: a card says where it goes
+  (the site's name first and plainly, then the whole address), warns of an address with a name in front of the site's own or a site written in letters that
+  can stand for others, and has Open (in the system's browser), Copy and Close buttons. It is the new `weblink` extension, the first with no button on the
+  toolbar (`LinkHandler` in `inkpdf-api`): the card is where a web view would go once there is an engine for one on every platform.
+- **UI audit.** A test opens every card and pill at once in ten window sizes (a small phone to 4K, both ways round) and a storm of 32,000 random events (resizes,
+  the keyboard, links, notes, searches, errors) checks that nothing floats outside the window or over another thing. It found, and this fixes: the round button
+  under the theme button landing on the toolbar when its pill is folded; the cards at the right running over the back and forward pill and off the bottom of
+  short windows (their rows now fit the window, a card that cannot fit goes up to be whole, and there is one card at the right at a time, the one opened last);
+  and a window of any size (it cannot be made smaller than a small phone upright now).
 - **Sticky notes, with replies.** A new tool (the note, after the laser): a click of the mouse or a tap of the stylus on the page puts a note there and
   opens its thread, a click on a note opens it, a drag moves it. The thread is a card at the right: who said what and when, a field to reply in (Enter or
   the arrow sends; Esc puts it away), a button to mark it done (or open again) and one to delete the note; your name is written on what you send

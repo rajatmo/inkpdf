@@ -3,7 +3,7 @@
 //! the tools' own: see [`crate::tools`].)
 
 use crate::input::Device;
-use crate::toolbar::{CardItem, ContextItem, Item, SearchItem, Slider};
+use crate::toolbar::{CardItem, ContextItem, Item, SearchItem, Slider, TrailItem};
 
 /// A button of one of the cards that float over the page.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -16,6 +16,10 @@ pub(crate) enum CardHit {
     Item(CardItem),
     /// The close button of the card that says something went wrong.
     ErrorClose,
+    /// A button of the pill that goes back and forward through the places the reader has been.
+    Trail(TrailItem),
+    /// A part of the card for a link that goes out to the web (the item card's, drawn plain).
+    Link(CardItem),
     /// The round button under the theme button: whether the pages follow the look.
     Theme,
 }

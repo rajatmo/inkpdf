@@ -59,6 +59,9 @@ pub enum Key<'a> {
     Chord(char),
     /// Page Down (`true`) or Page Up, or the space bar when nothing is being typed.
     Page(bool),
+    /// Forward (`true`) or back through the places a link, a contents entry or a search result has taken the reader from: Alt and an arrow, or
+    /// the mouse's side buttons.
+    Trail(bool),
 }
 
 /// A [`Key`] that owns its text, so that it can be kept (in an event that is queued, or recorded).
@@ -73,6 +76,7 @@ pub enum KeyInput {
     End(bool),
     Chord(char),
     Page(bool),
+    Trail(bool),
 }
 
 impl KeyInput {
@@ -88,6 +92,7 @@ impl KeyInput {
             KeyInput::End(shift) => Key::End(*shift),
             KeyInput::Chord(c) => Key::Chord(*c),
             KeyInput::Page(down) => Key::Page(*down),
+            KeyInput::Trail(forward) => Key::Trail(*forward),
         }
     }
 }
@@ -104,6 +109,7 @@ impl From<Key<'_>> for KeyInput {
             Key::End(shift) => KeyInput::End(shift),
             Key::Chord(c) => KeyInput::Chord(c),
             Key::Page(down) => KeyInput::Page(down),
+            Key::Trail(forward) => KeyInput::Trail(forward),
         }
     }
 }

@@ -99,6 +99,8 @@ impl Editor {
         }
         // (The file has to be written for it: the page counts as changed.)
         self.ws.ink.mark_dirty(page as u32);
+        // (With only the flagged pages shown, one taken away leaves the grid: it is brought back in range, and with none left it shows every page.)
+        self.overview_settled();
         self.ws.redraw = true;
         true
     }
@@ -154,6 +156,7 @@ impl Editor {
         self.ws.layout = after;
         self.ws.prune_selection();
         self.tools.pages_edited(&mut self.ws);
+        self.forget_trail();
         self.ws.scroll_to_page(shown);
         self.overview_follow(map.as_ref(), before.len());
         self.ws.requests.push(Request::PagesEdited(edit.clone()));

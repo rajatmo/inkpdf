@@ -140,7 +140,6 @@ impl Editor {
     }
 
     /// How the machine is being used now (see [`Mode`]).
-    #[cfg(test)]
     pub fn mode(&self) -> Mode {
         self.mode
     }

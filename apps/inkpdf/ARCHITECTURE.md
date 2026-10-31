@@ -169,7 +169,9 @@ store, what waits on the unsaved-changes prompt and on Save As) and `UiLayers` (
 presenters that turn editor state into GPU data (`ink_layer`, `text_layer`, `overview`, `pages`) are methods of `UiLayers`; they take a
 `Paint` (the editor, the GPU, the document, the frame number) built by `paint!(self)`. `files.rs` is the document workflow
 (`Then`, open, save, close, serving the editor's `Request`s). `--record FILE` copies every event given to the editor (`replay.rs`,
-`input/record.rs`, a text line each) and `--replay FILE` plays a recording back at its pace.
+`input/record.rs`, a text line each) and `--replay FILE` plays a recording back at its pace. `--inject FILE` gives the editor, as they are
+appended to the file, lines in the same format, stamped with the moment (the real-input checks use it where the system has no stylus or finger to
+send); `--layout FILE` keeps where every control is and the page, page count, unsaved mark and mode (`layout.rs`).
 
 ## Pages: one edit, everything follows
 

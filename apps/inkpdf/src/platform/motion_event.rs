@@ -393,6 +393,8 @@ pub enum KeyCode {
     Down,
     Home,
     End,
+    PageUp,
+    PageDown,
     /// Any other: a letter or symbol, which `unicode` says, or nothing the program uses (volume, power, …).
     Other,
 }
@@ -430,6 +432,8 @@ pub fn key(k: &RawKey, out: &mut Vec<InputEvent>) -> bool {
         KeyCode::Down => named(KeyInput::Arrow(crate::input::Dir::Down, k.shift), out),
         KeyCode::Home => named(KeyInput::Home(k.shift), out),
         KeyCode::End => named(KeyInput::End(k.shift), out),
+        KeyCode::PageUp => named(KeyInput::Page(false), out),
+        KeyCode::PageDown => named(KeyInput::Page(true), out),
         KeyCode::Other => match k.unicode.filter(|c| !c.is_control()) {
             Some(c) if k.ctrl => {
                 out.push(InputEvent::Shortcut { letter: c.to_string(), shift: k.shift });
@@ -734,6 +738,8 @@ mod tests {
             "back puts away a card, as Escape does"
         );
         assert_eq!(press(KeyCode::Enter, None, false, false).1, vec![InputEvent::Key(KeyInput::Text("\n".to_string()))]);
+        assert_eq!(press(KeyCode::PageDown, None, false, false), (true, vec![InputEvent::Key(KeyInput::Page(true))]));
+        assert_eq!(press(KeyCode::PageUp, None, false, false), (true, vec![InputEvent::Key(KeyInput::Page(false))]));
         assert_eq!(press(KeyCode::Left, None, false, true).1, vec![InputEvent::Key(KeyInput::Arrow(crate::input::Dir::Left, true))]);
         assert_eq!(press(KeyCode::Other, Some('é'), false, false).1, vec![InputEvent::Key(KeyInput::Text("é".to_string()))]);
         assert_eq!(press(KeyCode::Other, Some('z'), true, false).1, vec![InputEvent::Shortcut { letter: "z".to_string(), shift: false }]);

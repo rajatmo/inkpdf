@@ -76,6 +76,9 @@ pub struct Options {
     pub record: Option<PathBuf>,
     /// Play this recorded input, then close (--replay).
     pub replay: Option<PathBuf>,
+    /// Give the editor, as it comes, the input appended to this file (--inject): for the real-input checks where the system has no stylus or finger to
+    /// send (a virtual display).
+    pub inject: Option<PathBuf>,
     /// Keep this file saying where every button is (--layout), for the real-input checks.
     pub layout: Option<PathBuf>,
 }
@@ -184,6 +187,8 @@ pub struct State {
     recorder: Option<replay::Recorder>,
     /// A recording being played (`--replay`).
     player: Option<replay::Player>,
+    /// Input appended to a file while the program runs (`--inject`).
+    injector: Option<replay::Injector>,
     /// Where the buttons are, kept in a file for the real-input checks (`--layout`).
     layout: Option<layout::Reporter>,
 }
@@ -269,6 +274,7 @@ impl State {
             last_appearance: crate::settings::Appearance::default(),
             recorder: opts.record.map(replay::Recorder::new),
             player: opts.replay.as_deref().map(replay::Player::load).transpose()?,
+            injector: opts.inject.map(replay::Injector::new),
             layout: opts.layout.map(layout::Reporter::new),
         };
         // (A recording starts from the window as it is, so that it replays from the same.)
@@ -497,6 +503,14 @@ impl State {
         if self.pointer.as_mut().is_some_and(|p| p.take_posture_change()) && !self.mode_forced {
             self.set_mode(self.platform.detect_mode());
         }
+        // Input handed in with `--inject`, looked for every few milliseconds.
+        let injected = self.injector.as_mut().map(|i| i.poll(crate::clock::now_ms()));
+        if let Some(events) = injected.filter(|e| !e.is_empty()) {
+            for event in events {
+                self.feed(event);
+            }
+            self.window.request_redraw();
+        }
         // `--exit-after` must fire even when the window is idle and nothing is redrawing.
         if self.timing.exit_at.is_some_and(|t| Instant::now() >= t) {
             self.timing.exit = true;
@@ -512,6 +526,10 @@ impl State {
             return;
         }
         let mut wake = self.timing.exit_at;
+        if self.injector.is_some() {
+            let soon = Instant::now() + Duration::from_millis(8);
+            wake = Some(wake.map_or(soon, |w| w.min(soon)));
+        }
         if let Some(t) = self.timing.wake_at {
             if Instant::now() >= t {
                 self.timing.wake_at = None;

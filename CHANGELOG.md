@@ -19,6 +19,12 @@
 - **Structure.** The ink store is made of the strokes, the undo history and the queries; an open document keeps no staged state (what a file holds comes
   out of opening it once, what a save adds goes in with the save) and its renderer is a part of its own; the window's cards share one press path; the
   workspace groups the styles, the look and the clipboards; opening and saving fail with a `DocError`.
+- **The same real-input checks on every platform.** The 70 checks that drove the Windows window (stylus, finger, mouse, keyboard, pages, reader, forms)
+  are written once (`tools/e2e/scenarios.py`) and run on Windows, on Linux (a virtual display) and on the Android phone and tablet emulators, each
+  with the devices the platform has: Windows' synthetic stylus and finger, X's mouse and keyboard with the stylus and finger handed to the new
+  `--inject FILE` option, Android's input dispatcher through a small driver app (a pen and a pinch). A check a platform cannot do (the posture
+  change) is reported as skipped. The program says where it is (page, pages, unsaved, mode) in its `--layout` file for the platforms with no window title.
+  Found by it: a hardware keyboard's Page Up and Page Down did nothing on Android.
 - **Two missed redraws fixed,** found by a new storm that checks every event that changes what is drawn asks for a frame: a finger's press on a toolbar
   button was not shown until something else drew, and nor was its release.
 ## 1.4.0

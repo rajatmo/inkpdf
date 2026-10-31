@@ -154,7 +154,7 @@ use linux as os;
 use windows as os;
 
 #[cfg(target_os = "android")]
-pub use os::{android_app_started, layout_request};
+pub use os::{android_app_started, layout_request, test_mode};
 
 /// The bridge to the Java side of the app, on the platform that has one (Android): files the system hands out, the clipboard, links.
 #[cfg(target_os = "android")]

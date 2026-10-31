@@ -65,6 +65,14 @@ pub fn layout_request() -> Option<PathBuf> {
     own.join("layout.on").exists().then(|| own.join("layout.json"))
 }
 
+/// The mode a test run says to keep (`desktop` or `tablet` in a file named mode.txt in the app's own folder, as `--mode` is on a desktop), only when
+/// layout.on is there too.
+pub fn test_mode() -> Option<Mode> {
+    let own = own_folder()?;
+    own.join("layout.on").exists().then_some(())?;
+    Mode::parse(std::fs::read_to_string(own.join("mode.txt")).ok()?.trim())
+}
+
 /// Show or hide the soft keyboard, as the app starts or stops wanting typed text (a text box, the name of a file).
 pub fn set_text_input(active: bool) {
     if let Some(app) = APP.get() {
@@ -93,8 +101,12 @@ pub fn documents_dir() -> PathBuf {
     first_folder(&[PathBuf::from(SHARED).join("Documents"), PathBuf::from("/sdcard/Documents")], home_dir().as_deref())
 }
 
-/// What the app remembers is kept in its private folder (no other app, and no file manager, sees it).
+/// What the app remembers is kept in its private folder (no other app, and no file manager, sees it); in a test run (layout.on is in the app's own
+/// folder) it is that folder, where `adb` can put the settings the run starts with.
 pub fn config_dir() -> Option<PathBuf> {
+    if layout_request().is_some() {
+        return own_folder();
+    }
     APP.get()?.internal_data_path()
 }
 

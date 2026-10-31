@@ -10,6 +10,12 @@ You need the Rust target (`rustup target add aarch64-linux-android`), the NDK (r
 `android.jar`, a JDK and `zip`; the script says which environment variables to set (`ANDROID_NDK_HOME`, `ANDROID_BUILD_TOOLS`,
 `ANDROID_JAR`). `emulator-test.sh` runs the APK on an emulator and leaves screenshots and the log (CI runs it too).
 
+**Real-input checks.** `tools/e2e/run.ps1 -Platform android` runs the same checks as on Windows and Linux on the emulators (`tools/e2e/scenarios.py`).
+The mouse and keyboard go through `adb shell input`; a pen and several fingers (a pinch) need a second, tiny app, the input driver (`driver/`, built by
+`build-driver.ps1` or `build-driver.sh`, installed by the checks themselves): `adb shell input` can send one pointer only, and `sendevent` is refused
+on a `user` build. The app is told what a run needs by files in its own folder (`layout.on`, `mode.txt`, `InkPDF/settings.txt`), and is handed the PDF as
+another app would, with a VIEW intent.
+
 What works: pen with pressure, hover and the points between events; an S Pen's one button erases (a second button lassos, a real eraser end
 erases); finger pan, pinch and taps on the buttons; palm rejection while the pen is near; the soft keyboard for text and the file name;
 Save As. The app starts on a blank page, as on the other platforms, and saves into its own folder, `Android/data/app.inkpdf.test/files/Documents` (no permission

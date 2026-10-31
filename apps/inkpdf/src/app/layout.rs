@@ -3,7 +3,7 @@
 //!
 //! ```text
 //! {"client":[w,h],"dpr":1.5,"buttons":{"undo":[x,y],"pen":[x,y],…},"bar":{"delete":[x,y],"swatch2":[x,y],…},
-//!  "fields":{"name":[x,y],"size#1":[x,y],…},
+//!  "state":{"page":1,"pages":3,"dirty":false,"mode":"desktop"},"fields":{"name":[x,y],"size#1":[x,y],…},
 //!  "overview":{"controls":{"edit":[x,y],…},"actions":{"duplicate":[x,y],…},"pages":{"1":[x,y,w,h],…},"toc":{"Chapter 2":[x,y],…}}}
 //! ```
 //!
@@ -113,6 +113,16 @@ fn describe(ed: &Editor) -> String {
     let buttons = points(ed.toolbar().items().iter().map(|&(item, r)| (item_name(item), middle(r))));
     let bar = ed.context_bar().map(|b| points(b.items().iter().map(|&(item, r)| (bar_name(item), middle(r))))).unwrap_or_default();
     let mut out = format!("{{\"client\":[{w:.0},{h:.0}],\"dpr\":{:.3},\"buttons\":{{{buttons}}},\"bar\":{{{bar}}}", ed.dpr);
+    // What a window's title says on a desktop (the page in view, how many there are, whether there is something to save), for the
+    // platforms with no title to read, and which of the two modes the program is in.
+    let _ = write!(
+        out,
+        ",\"state\":{{\"page\":{},\"pages\":{},\"dirty\":{},\"mode\":\"{}\"}}",
+        ed.view.current_page(&ed.layout) + 1,
+        ed.layout.len(),
+        ed.ink.is_dirty(),
+        format!("{:?}", ed.mode()).to_lowercase()
+    );
     // The boxes of a form's fields that are in the window (a field of several boxes: `size`, then `size#1`, …).
     let boxes = ed.field_places().filter_map(|(field, widget, r)| {
         let [x, y] = ed.view.doc_to_screen(middle(r));
@@ -136,9 +146,13 @@ fn describe(ed: &Editor) -> String {
             })
             .collect::<Vec<_>>()
             .join(",");
+        // (A window too narrow for a table of contents beside the pages has none to press.)
         let rows = ed.toc_rows();
         let toc = points(
-            rows.iter().enumerate().filter_map(|(k, row)| Some((ed.outline.get(row.item)?.title.clone(), middle(l.toc_row(k, state.toc_scroll))))),
+            rows.iter()
+                .enumerate()
+                .filter(|_| l.toc.is_some())
+                .filter_map(|(k, row)| Some((ed.outline.get(row.item)?.title.clone(), middle(l.toc_row(k, state.toc_scroll))))),
         );
         let _ = write!(out, ",\"overview\":{{\"controls\":{{{controls}}},\"actions\":{{{actions}}},\"pages\":{{{pages}}},\"toc\":{{{toc}}}}}");
     }
@@ -170,6 +184,7 @@ mod tests {
             assert!(text.contains(name), "{name} in {text}");
         }
         assert!(text.starts_with("{\"client\":[1600,1000]") && text.ends_with('}'));
+        assert!(text.contains("\"state\":{\"page\":1,\"pages\":3,\"dirty\":false,\"mode\":\""), "{text}");
         assert!(!text.contains("\"overview\""), "no overview while it is put away");
         ed.open_overview();
         assert!(!describe(&ed).contains("\"duplicate\":["), "the bar of actions only in edit mode");

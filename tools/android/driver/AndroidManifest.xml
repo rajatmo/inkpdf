@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The input driver of the real-input checks (see java/app/inkpdf/driver/Drive.java): not InkPDF, and never shipped. It instruments itself, so that
+     running it does not restart the app under test. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="app.inkpdf.driver">
+    <application android:label="InkPDF input driver" android:hasCode="true" />
+    <instrumentation
+        android:name="app.inkpdf.driver.Drive"
+        android:targetPackage="app.inkpdf.driver"
+        android:label="InkPDF input driver" />
+</manifest>

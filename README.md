@@ -53,8 +53,9 @@ tools/linux/build-portable.sh                # Linux tarball;  tools/linux/build
 tools/android/build-apk.sh                   # Android APK (needs the NDK and SDK; tools/android/README.md)
 ```
 
-Real-input checks: `tools/e2e/run.ps1` (Windows, drives the real window with a synthetic stylus, finger, mouse and keyboard),
-`tools/e2e/linux-smoke.sh` (Linux, on a virtual display), `tools/android/emulator-test.sh` (an Android emulator).
+Real-input checks, the same on every platform (`tools/e2e/scenarios.py`: stylus, finger, mouse and keyboard, pages, a reader, forms):
+`tools/e2e/run.ps1` runs them on Windows (the real window), Linux (a virtual display in WSL) and the Android emulators; `-Platform` and `-Only`
+pick some. `tools/e2e/linux-smoke.sh` and `tools/android/emulator-test.sh` are the smaller checks CI runs.
 
 ## How it is organised
 

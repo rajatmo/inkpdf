@@ -524,9 +524,9 @@ Owner-run checks per milestone (say which ones in the pull request):
 | Check | How |
 |---|---|
 | All tests and storms at 10x | `INKPDF_STRESS=10 cargo test --release -p inkpdf --lib -- --include-ignored` (about 40 s) |
-| Real-input checks | `tools/e2e/run.ps1` in the foreground on a quiet machine (`devices.ps1`, `pages.ps1`: 50 checks, about a minute; buttons are pressed by name through the app's `--layout` file) |
+| Real-input checks | `tools/e2e/run.ps1` in the foreground on a quiet machine: the same 70 checks (`scenarios.py`) on Windows, Linux (WSL) and the two Android emulators, about six minutes; buttons are pressed by name through the app's `--layout` file |
 | Latency and idle CPU | `tools/e2e/latency.ps1` and the numbers in section 1; idle window 0% (Windows; Linux and Android: `--stats` on hardware) |
-| Linux and Android | `tools/e2e/linux-smoke.sh` (virtual display), the CI `android` and `android-emulator` jobs, and a try on a real tablet with a stylus (`adb logcat -s inkpdf` if it misbehaves) |
+| Linux and Android | `tools/e2e/run.ps1 -Platform linux,android` (above), `tools/e2e/linux-smoke.sh` (virtual display), the CI `android` and `android-emulator` jobs, and a try on a real tablet with a stylus (`adb logcat -s inkpdf` if it misbehaves) |
 | Soak | open and close the overview, add/delete/undo pages and draw for 30 rounds; memory, handles and threads must be flat after the texture cache fills (budget 768 MB) |
 | Release | bump `apps/inkpdf/Cargo.toml`, rename the CHANGELOG heading, `apps/inkpdf/installer/build.ps1` and `build-portable.ps1` (Windows), `tools/linux/build-portable.sh` (Linux), `tools/android/build-apk.sh` (Android; the CI jobs build all of them as artifacts), re-record the GIF if the look changed |
 

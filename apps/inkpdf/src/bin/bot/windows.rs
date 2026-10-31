@@ -19,6 +19,9 @@
 //! * `finger down|move|up ID FX FY`
 //! * `drag FX0 FY0 FX1 FY1 STEPS` — one finger dragging
 //! * `pinch FCX FCY FR0 FR1 STEPS` — two fingers moving apart (or together)
+//! * `path FX FY FX FY ...` — a pen stroke through the given points (the rest of the arguments)
+//! * `touchpath ID FX FY ...` — one finger through the given points
+//! * `touchpaths N STEPS X Y ...` — N fingers moving together, each step giving every finger's point
 
 use std::thread::sleep;
 use std::time::Duration;
@@ -92,6 +95,11 @@ impl Bot {
 
     fn px(&self, fx: f32, fy: f32) -> POINT {
         POINT { x: self.origin.x + (fx * self.size[0]).round() as i32, y: self.origin.y + (fy * self.size[1]).round() as i32 }
+    }
+
+    /// Points given as the pairs `FX FY ...` of the arguments (a trailing odd one is dropped).
+    fn points(&self, args: &[String]) -> Vec<POINT> {
+        args.as_chunks::<2>().0.iter().map(|[x, y]| self.px(x.parse().unwrap_or(0.0), y.parse().unwrap_or(0.0))).collect()
     }
 
     fn pen_inject(&self, at: POINT, flags: u32, pressure: u32) {
@@ -314,6 +322,43 @@ pub fn main() {
                     .collect();
                 bot.pen_path(&path);
                 i += 5;
+            }
+            // The shapes the other platforms' checks send, so that every platform moves along the same points.
+            "path" => {
+                bot.pen_path(&bot.points(&ops[i + 1..]));
+                i = ops.len();
+            }
+            "touchpath" => {
+                let id = num(i + 1) as u32;
+                let path = bot.points(&ops[i + 2..]);
+                let (Some(&first), Some(&last)) = (path.first(), path.last()) else { return };
+                bot.finger("down", id, first);
+                for &p in &path[1..] {
+                    sleep(Duration::from_millis(8));
+                    bot.finger("move", id, p);
+                }
+                sleep(Duration::from_millis(8));
+                bot.finger("up", id, last);
+                i = ops.len();
+            }
+            // `touchpaths N STEPS` and then, for each step, each of the N fingers' x y: the fingers move together.
+            "touchpaths" => {
+                let (n, steps) = (num(i + 1) as usize, num(i + 2) as usize);
+                let at = bot.points(&ops[i + 3..]);
+                let frame = |k: usize| &at[k * n..(k + 1) * n];
+                let phase = |flags: u32, k: usize| -> Vec<POINTER_TYPE_INFO> {
+                    frame(k).iter().enumerate().map(|(f, &p)| bot.touch_item(f as u32, p, flags)).collect()
+                };
+                let down = POINTER_FLAG_INRANGE | POINTER_FLAG_INCONTACT | POINTER_FLAG_DOWN | POINTER_FLAG_FIRSTBUTTON;
+                let update = POINTER_FLAG_INRANGE | POINTER_FLAG_INCONTACT | POINTER_FLAG_UPDATE | POINTER_FLAG_FIRSTBUTTON;
+                bot.touch_inject(&phase(down, 0));
+                for k in 1..steps {
+                    sleep(Duration::from_millis(8));
+                    bot.touch_inject(&phase(update, k));
+                }
+                sleep(Duration::from_millis(8));
+                bot.touch_inject(&phase(POINTER_FLAG_UP, steps - 1));
+                i = ops.len();
             }
             "finger" => {
                 let phase = ops.get(i + 1).cloned().unwrap_or_default();

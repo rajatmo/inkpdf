@@ -122,7 +122,7 @@ impl ApplicationHandler for App {
     }
 }
 
-const USAGE: &str = "usage: inkpdf [file.pdf] [--gpu integrated|discrete|auto|NAME] [--list-gpus] [--smoothing 0..1] [--mode desktop|tablet|auto] [--bench] [--stats] [--record FILE] [--replay FILE] [--layout FILE] [--exit-after SECONDS] [--topmost] [--fullscreen]";
+const USAGE: &str = "usage: inkpdf [file.pdf] [--gpu integrated|discrete|auto|NAME] [--list-gpus] [--smoothing 0..1] [--mode desktop|tablet|auto] [--bench] [--stats] [--record FILE] [--replay FILE] [--inject FILE] [--layout FILE] [--exit-after SECONDS] [--topmost] [--fullscreen]";
 
 fn parse_args() -> Result<app::Options, String> {
     let mut options = app::Options {
@@ -138,6 +138,7 @@ fn parse_args() -> Result<app::Options, String> {
         mode: None,
         record: None,
         replay: None,
+        inject: None,
         layout: None,
     };
     let mut args = std::env::args().skip(1);
@@ -161,6 +162,7 @@ fn parse_args() -> Result<app::Options, String> {
             }
             "--record" => options.record = Some(args.next().ok_or("--record needs a file to write the input to")?.into()),
             "--replay" => options.replay = Some(args.next().ok_or("--replay needs a recorded file")?.into()),
+            "--inject" => options.inject = Some(args.next().ok_or("--inject needs a file the input is appended to")?.into()),
             "--layout" => options.layout = Some(args.next().ok_or("--layout needs a file to keep the buttons' places in")?.into()),
             "--list-gpus" => {
                 for gpu in gpu::list_gpus() {
@@ -242,9 +244,10 @@ pub fn run_android(android: winit::platform::android::activity::AndroidApp) {
         stats: false,
         select_all: false,
         smoothing: None,
-        mode: None,
+        mode: platform::test_mode(),
         record: None,
         replay: None,
+        inject: None,
         // (Where the buttons are, for the emulator test, if it asked: see `platform::layout_request`.)
         layout: platform::layout_request(),
     };

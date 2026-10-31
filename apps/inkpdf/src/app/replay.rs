@@ -62,10 +62,65 @@ impl Player {
     }
 }
 
+/// `--inject FILE`: input handed in while the program runs. Lines in the recording's format (the header is optional) are appended to the file, and each
+/// is given to the editor as it is found, as of that moment: whatever times it carries are dropped (a pointer's samples are stamped with the moment too).
+pub(super) struct Injector {
+    path: PathBuf,
+    /// How much of the file has been read.
+    read: usize,
+    /// The end of the file after its last whole line.
+    partial: String,
+}
+
+impl Injector {
+    pub fn new(path: PathBuf) -> Self {
+        Self { path, read: 0, partial: String::new() }
+    }
+
+    /// The events appended since the last ask, made to happen at `now_ms`.
+    pub fn poll(&mut self, now_ms: f64) -> Vec<InputEvent> {
+        let Ok(bytes) = std::fs::read(&self.path) else { return Vec::new() };
+        if bytes.len() <= self.read {
+            return Vec::new();
+        }
+        self.partial.push_str(&String::from_utf8_lossy(&bytes[self.read..]));
+        self.read = bytes.len();
+        let Some(end) = self.partial.rfind('\n') else { return Vec::new() };
+        let whole: String = self.partial.drain(..=end).collect();
+        let body: String = whole.lines().filter(|l| l.trim() != record::HEADER).map(|l| format!("{l}\n")).collect();
+        match record::decode(&format!("{}\n{body}", record::HEADER)) {
+            Ok(events) => events.into_iter().map(|r| r.shifted(now_ms - r.at_ms).event).collect(),
+            Err(e) => {
+                eprintln!("{}: {e}", self.path.display());
+                Vec::new()
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::input::{InputEvent, Wheel};
+
+    #[test]
+    fn injected_lines_are_given_once_each_when_whole_and_stamped_with_the_moment() {
+        let path = std::env::temp_dir().join(format!("inkpdf-inject-{}.txt", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let mut inject = Injector::new(path.clone());
+        assert!(inject.poll(10.0).is_empty(), "no file yet");
+        std::fs::write(&path, "0 ptr pen 1 down 3 0 1 5 6 0.5 0\n0 key escape").unwrap();
+        let first = inject.poll(100.0);
+        assert_eq!(first.len(), 1, "the half-written last line waits");
+        match &first[0] {
+            InputEvent::Pointer(p) => assert_eq!(p.samples[0].t_ms, 100.0),
+            other => panic!("{other:?}"),
+        }
+        std::fs::write(&path, "0 ptr pen 1 down 3 0 1 5 6 0.5 0\n0 key escape\n").unwrap();
+        assert_eq!(inject.poll(110.0), vec![InputEvent::Key(crate::input::KeyInput::Escape)]);
+        assert!(inject.poll(120.0).is_empty());
+        let _ = std::fs::remove_file(&path);
+    }
 
     fn at(ms: f64) -> Recorded {
         Recorded { at_ms: ms, event: InputEvent::Wheel(Wheel::Lines(0.0, ms as f32)) }

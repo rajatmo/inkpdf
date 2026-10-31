@@ -15,7 +15,7 @@
 use super::{ButtonState, Device, Dir, InputEvent, KeyInput, MouseButton, PenButtons, Phase, PointerEvent, Sample, Wheel};
 
 /// The first line of a recording.
-const HEADER: &str = "inkpdf-input 1";
+pub const HEADER: &str = "inkpdf-input 1";
 
 /// One event, and when it was given to the editor.
 #[derive(Clone, Debug, PartialEq)]

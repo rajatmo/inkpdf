@@ -92,6 +92,8 @@ fn key_code(code: Keycode) -> KeyCode {
         Keycode::DpadDown => KeyCode::Down,
         Keycode::MoveHome => KeyCode::Home,
         Keycode::MoveEnd => KeyCode::End,
+        Keycode::PageUp => KeyCode::PageUp,
+        Keycode::PageDown => KeyCode::PageDown,
         _ => KeyCode::Other,
     }
 }

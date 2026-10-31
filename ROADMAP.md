@@ -146,7 +146,7 @@ implements it over pdfcraft; tools and the editor use the trait and never see a 
 |---|---|
 | Order (owner, 2026-10-29) | **1.1.0** = the PDF backend seam (K tasks) *in parallel with* the dark theme (T tasks); **1.2.0** = text select and search (X tasks, built on the seam); **1.3.0** = polish. The platform backlog (L2, L3, A3, A4, `docs/PORTING.md`) runs beside them; the Android file picker and clipboard (A4) come before 1.2.0 ships on Android. The old 1.0.1 "foundations" milestone is gone (F1 became K1, F2 is parked, F3 opens 1.1.0). |
 | Platforms | Every feature is built for **Windows, Linux and Android together**. The platform work is not a release of its own for now: it ships inside the next release. |
-| PDF backend | **Pure Rust only.** No C or C++ PDF engine (so no pdfium or MuPDF). pdfcraft stays the backend, behind a seam with a conformance corpus (K1 to K3). |
+| PDF backend | **Pure Rust only.** No C or C++ PDF engine (so no engine written in C or C++ is linked in). pdfcraft stays the backend, behind a seam with a conformance corpus (K1 to K3). |
 | Own renderer | **Not planned.** If pdfcraft ever blocks something, fix it in `storytold/pdfcraft`; K3 writes down the criteria for reconsidering, from measured numbers. |
 | Theme button | One **three-state** button on the right pill cycling **System → Light → Dark** (System is the default and follows Windows). Pressing it also drops a small second toggle button just below it for **dark pages**. |
 | Dark pages | Only **active when the effective theme is dark** (Dark, or System while Windows is dark). In light the toggle is shown dim and does nothing, but its stored value is kept. Settings store `appearance` (System/Light/Dark) and `dark_pages` (bool); effective filter = `dark_pages && scheme == Dark`. It is display only: saved files and stored ink colours never change. |
@@ -186,8 +186,7 @@ create, ocr, forms, edit, redact, sign, compare, print, export, a11y, measure, e
   `plain_text()`, `find_opts_limited(needle, case_sensitive, whole_words, limit) -> Vec<Range<usize>>`, and `fold_case(&str)`
   (handles dotted/dotless i and Greek sigmas). Selection in reading order across columns, RTL and CJK is claimed by pdfcraft.
 - **Markup annotations** (`crates/annot/src/types.rs`, `create.rs`): `Shape::TextMarkup { kind: Markup, quads: Vec<[f64; 8]> }` with
-  `Markup::{Highlight, Underline, StrikeOut, Squiggly}`; quad order is top-left, top-right, bottom-left, bottom-right (what
-  Acrobat writes); `Style { color: Rgb, opacity, width, fill }`; `add_annotation(doc, NewAnnotation{ page, shape, style, contents,
+  `Markup::{Highlight, Underline, StrikeOut, Squiggly}`; quad order is top-left, top-right, bottom-left, bottom-right (the order PDF viewers expect); `Style { color: Rgb, opacity, width, fill }`; `add_annotation(doc, NewAnnotation{ page, shape, style, contents,
   author }, &Meta)`; appearance streams are generated; `delete_annotation`, `set_style`, `set_points`, `summaries`.
 - **Reading colours** (`crates/render/src/reading.rs`): `ReadingColors { params: Option<ReadingParams{ text: [u8;3], background:
   [u8;3], only_black, line_art }> }`, set on `RenderConfig.reading_colors` (public field, `crates/render/src/raster.rs`). Display
@@ -553,7 +552,7 @@ Owner-run checks per milestone (say which ones in the pull request):
 the real-input scripts press them by name. That was needed after all: by 1.3.7 the scripts' remembered 4K positions failed 26 of 71
 checks (new buttons, Select first, the bar's tip buttons gone). The four scripts became two (`devices.ps1`, `pages.ps1`).
 
-**An own PDF renderer and a second PDF engine.** Not planned (owner, 2026-10-29): pure Rust only, so no pdfium or MuPDF, and writing a
+**An own PDF renderer and a second PDF engine.** Not planned (owner, 2026-10-29): pure Rust only, so no second engine in C or C++, and writing a
 renderer is years of long-tail work (fonts, CMaps, JBIG2, transparency, shadings). K3 records the criteria for reconsidering it.
 
 Windows ARM64 (cross-compile, installers, CI on `windows-11-arm`) was planned and then scrapped for now; the facts gathered:

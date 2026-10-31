@@ -43,6 +43,8 @@ pub struct Loaded {
     pub form: Form,
     /// The table of contents the file has.
     pub outline: Vec<OutlineItem>,
+    /// What the file's owner allows to be done to it.
+    pub permissions: crate::permissions::Permissions,
 }
 
 struct Found {
@@ -174,9 +176,10 @@ pub fn load_with(engine: &dyn PdfBackend, bytes: &Arc<Vec<u8>>, geoms: &[PageGeo
     // (The boxes go last: where a link and a box overlap, the box is what a press finds.)
     links.extend(boxes);
     let outline = crate::pdf_read::outline(&*doc);
+    let permissions = doc.permissions();
     let found = find_ours(&*doc);
     if found.is_empty() {
-        return Ok(Loaded { strokes: Vec::new(), render_bytes: bytes.clone(), links, form, outline });
+        return Ok(Loaded { strokes: Vec::new(), render_bytes: bytes.clone(), links, form, outline, permissions });
     }
     let mut strokes = Vec::new();
     for f in &found {
@@ -202,13 +205,16 @@ pub fn load_with(engine: &dyn PdfBackend, bytes: &Arc<Vec<u8>>, geoms: &[PageGeo
             continue;
         }
         if let Some((kind, quads)) = &f.markup {
-            // Each box, wherever the page's rotation put its corners: the box that holds them.
+            // Each box, wherever the page's rotation put its corners: the box that holds them. All of an annotation's boxes are one stroke (two
+            // opposite corners for each, as a markup made in the program has them), so that it is saved as the one annotation it was.
+            let mut pts: Vec<P> = Vec::new();
             for q in quads {
                 let corners = [[q[0], q[1]], [q[2], q[3]], [q[4], q[5]], [q[6], q[7]]].map(|c| to_doc([c[0] as f32, c[1] as f32]));
                 let lo = corners.iter().fold([f32::MAX; 2], |m, c| [m[0].min(c[0]), m[1].min(c[1])]);
                 let hi = corners.iter().fold([f32::MIN; 2], |m, c| [m[0].max(c[0]), m[1].max(c[1])]);
-                strokes.push((f.page as u32, f.style, vec![lo, hi], None, None, Some(*kind), None));
+                pts.extend([lo, hi]);
             }
+            strokes.push((f.page as u32, f.style, pts, None, None, Some(*kind), None));
             continue;
         }
         for pts in &f.strokes {
@@ -228,7 +234,7 @@ pub fn load_with(engine: &dyn PdfBackend, bytes: &Arc<Vec<u8>>, geoms: &[PageGeo
         doc.delete_annotation(f.page, f.index)?;
     }
     let render_bytes = doc.save_full()?;
-    Ok(Loaded { strokes, render_bytes: Arc::new(render_bytes), links, form, outline })
+    Ok(Loaded { strokes, render_bytes: Arc::new(render_bytes), links, form, outline, permissions })
 }
 
 /// Put the pages of the file that are left (the deleted ones are out of it by now) in the order the document has them:
@@ -474,9 +480,7 @@ pub fn save_with(
             if let Some(kind) = s.markup {
                 flush(&mut *doc, &mut run, run_style, None, None)?;
                 run_style = None;
-                if marks.as_ref().is_some_and(|m| m.kind != kind || m.style != s.style) {
-                    finish_markup(&mut *doc, &mut marks, page, &serial, stamp, &now)?;
-                }
+                finish_markup(&mut *doc, &mut marks, page, &serial, stamp, &now)?;
                 // One annotation for the markup: each box as its four corners as they look on the page (top-left, top-right,
                 // bottom-left, bottom-right), put into the page's user space.
                 let user = |x: f32, y: f32| {
@@ -490,8 +494,10 @@ pub fn save_with(
                         [tl[0], tl[1], tr[0], tr[1], bl[0], bl[1], br[0], br[1]]
                     })
                     .collect();
-                // (Boxes of one kind and colour that follow one another are one annotation, as a reader's own would be.)
+                // (The boxes of one selection are one annotation, as a reader's own would be; two selections are two, so that each can be taken away by itself in any
+                // reader, even if they are of one kind and colour and follow one another.)
                 marks.get_or_insert_with(|| Marks { kind, style: s.style, quads: Vec::new() }).quads.extend(quads);
+                finish_markup(&mut *doc, &mut marks, page, &serial, stamp, &now)?;
                 continue;
             }
             finish_markup(&mut *doc, &mut marks, page, &serial, stamp, &now)?;
@@ -616,17 +622,19 @@ mod tests {
                 [(MarkupKind::Highlight, 2), (MarkupKind::Squiggly, 1)]
             );
             let loaded = load(&saved, &geoms, &layout).expect("load");
-            assert_eq!(loaded.strokes.len(), 3, "a box is a stroke: two highlighted, one wavy");
-            for ((page, style, pts, _, _, kind, _), (want_kind, want_box, want_style)) in loaded.strokes.iter().zip([
-                (MarkupKind::Highlight, boxes[0], mark),
-                (MarkupKind::Highlight, boxes[1], mark),
-                (MarkupKind::Squiggly, boxes[0], Style { rgba: [32, 96, 224, 255], ..mark }),
-            ]) {
+            assert_eq!(loaded.strokes.len(), 2, "an annotation is a stroke: the highlight of two boxes, and the wavy line");
+            for ((page, style, pts, _, _, kind, _), (want_kind, want_boxes, want_style)) in loaded
+                .strokes
+                .iter()
+                .zip([(MarkupKind::Highlight, &boxes[..], mark), (MarkupKind::Squiggly, &boxes[..1], Style { rgba: [32, 96, 224, 255], ..mark })])
+            {
                 assert_eq!((*page, kind.as_ref()), (0, Some(&want_kind)));
                 assert_eq!((style.rgba[0], style.rgba[3]), (want_style.rgba[0], want_style.rgba[3]), "its colour and opacity come back");
-                assert_eq!(pts.len(), 2);
-                for (got, want) in [pts[0][0], pts[0][1], pts[1][0], pts[1][1]].iter().zip(want_box) {
-                    assert!((got - want).abs() < 0.05, "rotation {rotation}: {pts:?} vs {want_box:?}");
+                assert_eq!(pts.len(), 2 * want_boxes.len(), "two corners for each box");
+                for (b, want_box) in want_boxes.iter().enumerate() {
+                    for (got, want) in [pts[2 * b][0], pts[2 * b][1], pts[2 * b + 1][0], pts[2 * b + 1][1]].iter().zip(want_box) {
+                        assert!((got - want).abs() < 0.05, "rotation {rotation}: {pts:?} vs {want_box:?}");
+                    }
                 }
             }
             // The renderer does not draw them as well (the ink layer does).
@@ -639,6 +647,30 @@ mod tests {
         }
     }
 
+    #[test]
+    fn two_selections_of_one_kind_and_colour_are_two_annotations_and_stay_two_when_the_file_is_opened_and_saved_again() {
+        let (bytes, geoms, _) = setup();
+        let layout = Layout::new(&[[612.0, 792.0]]);
+        let o = page_origin(&layout);
+        let mark = Style { rgba: [255, 235, 0, 110], width: 1.0 };
+        let (one, two) = (
+            [[o[0] + 100.0, o[1] + 100.0, o[0] + 200.0, o[1] + 114.0]],
+            [[o[0] + 300.0, o[1] + 400.0, o[0] + 360.0, o[1] + 414.0], [o[0] + 300.0, o[1] + 416.0, o[0] + 340.0, o[1] + 430.0]],
+        );
+        let mut store = InkStore::new();
+        store.add_markup(0, mark, MarkupKind::Highlight, &one);
+        store.add_markup(0, mark, MarkupKind::Highlight, &two);
+        let counts = |bytes: &Arc<Vec<u8>>| -> Vec<usize> {
+            find_ours(&*pdf::native().open(bytes).expect("open")).iter().filter_map(|f| f.markup.as_ref().map(|(_, q)| q.len())).collect()
+        };
+        let saved = Arc::new(save(&bytes, &store, &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save"));
+        assert_eq!(counts(&saved), [1, 2], "one annotation each, the second with its two lines");
+        let loaded = load(&saved, &geoms, &layout).expect("load");
+        let mut again = InkStore::new();
+        again.load(loaded.strokes);
+        let twice = Arc::new(save(&saved, &again, &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save again"));
+        assert_eq!(counts(&twice), [1, 2], "and after a reopen and a save the same");
+    }
     #[test]
     fn an_item_is_saved_as_a_note_with_its_replies_and_read_back_as_the_item_in_the_same_place_on_every_rotation() {
         for rotation in [0, 90, 270] {

@@ -58,8 +58,12 @@ icons! {
     node_remove = "node-remove",
     node_add = "node-add",
     node_smooth = "node-smooth",
-    /// Settings: a cog (the settings of the tool in use, and what the folded look pill is).
+    /// Settings: a cog (the settings of the tool in use, and the bar that folds into a round button).
     options = "options",
+    /// An eye: the folded right pill (the look, the mode, the finger, full screen).
+    view = "view",
+    /// A screen with a play triangle: show the document one page at a time, as slides.
+    present = "present",
     /// A hand with one finger out: a finger standing in for the stylus.
     finger = "finger",
     /// Four small pages: the pages overview.

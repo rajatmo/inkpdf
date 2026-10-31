@@ -79,6 +79,7 @@ impl State {
         self.gpu.clear_textures();
         self.session.failed.clear();
         self.ed.load(doc.layout(), contents.strokes);
+        self.ed.set_permissions(contents.permissions);
         self.ed.links = contents.links;
         self.ed.form = contents.form;
         self.ed.set_outline(contents.outline);
@@ -93,9 +94,10 @@ impl State {
     }
 
     /// Say that something went wrong (the first line is the heading, the rest the reason): in the system's message box where it has one, else in a
-    /// card of the program's own over the page.
+    /// card of the program's own over the page. (A file the program was started with fails before the first frame: a message box over a window with
+    /// nothing drawn in it is a black window, so the card is used, and is there when the window is.)
     fn problem(&mut self, text: &str) {
-        if self.platform.has_error_box() {
+        if self.platform.has_error_box() && self.timing.frame > 0 {
             self.platform.error_box(&*self.window, text);
         } else {
             self.ed.show_error(text);

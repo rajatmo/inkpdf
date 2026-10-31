@@ -125,6 +125,8 @@ pub struct View {
     /// Room below the end of the document that the scroll may use, in pixels: what an on-screen keyboard covers, so that the last lines of a
     /// document can be brought above it.
     bottom_room: f32,
+    /// One page is shown whole and centred (a slide), wherever that puts the document: the view is not kept inside the document's edges.
+    free: bool,
 }
 
 impl View {
@@ -141,7 +143,28 @@ impl View {
             lift_held: false,
             scroll_tau: SCROLL_TAU,
             bottom_room: 0.0,
+            free: false,
         }
+    }
+
+    /// Show `page` whole and centred, as big as the viewport lets it be (a slide), at once; the view is then free of the document's edges until
+    /// [`View::show_normally`].
+    pub fn show_whole(&mut self, page: Rect) {
+        self.free = true;
+        let zoom = (self.viewport[0] / page.w.max(1.0)).min(self.viewport[1] / page.h.max(1.0)).clamp(MIN_ZOOM, MAX_ZOOM);
+        let (vw, vh) = (self.viewport[0] / zoom, self.viewport[1] / zoom);
+        self.zoom = zoom;
+        self.zoom_target = zoom;
+        self.scroll = [page.x - (vw - page.w) / 2.0, page.y - (vh - page.h) / 2.0];
+        self.scroll_target = self.scroll;
+        self.lift = 0.0;
+        self.lift_held = false;
+    }
+
+    /// The view is kept inside the document again (after [`View::show_whole`]).
+    pub fn show_normally(&mut self, layout: &Layout) {
+        self.free = false;
+        self.clamp(layout);
     }
 
     /// Where the document is seen from: the scroll, and further down by how far it is lifted. (What is drawn is placed by this, so
@@ -205,6 +228,9 @@ impl View {
 
     /// Jump (no animation) to fit-width at the top of the document.
     pub fn fit_width(&mut self, layout: &Layout) {
+        if self.free {
+            return;
+        }
         let z = self.fit_width_zoom(layout);
         self.zoom = z;
         self.zoom_target = z;
@@ -216,6 +242,9 @@ impl View {
     /// Keep the document on screen: centred along an axis where it is smaller than the viewport,
     /// otherwise not scrolled past its edges. Applies to the glide target too.
     pub fn clamp(&mut self, layout: &Layout) {
+        if self.free {
+            return;
+        }
         let (vw, vh) = (self.viewport[0] / self.zoom, self.viewport[1] / self.zoom);
         // A non-finite position (from a bad input event) is put back at the start rather than kept.
         let fit = |pos: f32, doc: f32, vis: f32| {
@@ -246,6 +275,9 @@ impl View {
 
     /// Glide to the document y `y` at the top of the window.
     pub fn glide_to_y(&mut self, layout: &Layout, y: f32) {
+        if self.free {
+            return;
+        }
         if y.is_finite() {
             self.scroll_target[1] = y;
             self.clamp(layout);
@@ -256,6 +288,9 @@ impl View {
     /// little to spare, and not under the top `bars_px` pixels (the toolbars); a rect too tall for the room between has its top kept in view. Nothing
     /// moves if it is there already.
     pub fn scroll_to_clear(&mut self, layout: &Layout, rect: [f32; 4], covered_px: f32, bars_px: f32) {
+        if self.free {
+            return;
+        }
         if !rect.iter().all(|v| v.is_finite()) || !covered_px.is_finite() || !bars_px.is_finite() {
             return;
         }
@@ -276,6 +311,9 @@ impl View {
 
     /// Set the zoom immediately, keeping the document point under `anchor` (screen pixels) fixed.
     pub fn zoom_about(&mut self, layout: &Layout, zoom: f32, anchor: [f32; 2]) {
+        if self.free {
+            return;
+        }
         let zoom = if zoom.is_finite() { zoom.clamp(MIN_ZOOM, MAX_ZOOM) } else { self.zoom };
         // (A zoom is of the document at rest: whatever a pull had lifted it is put down first.)
         self.lift = 0.0;
@@ -292,6 +330,9 @@ impl View {
 
     /// Direct manipulation (drag, touch, precision touchpad): moves at once and cancels any glide.
     pub fn pan_px(&mut self, layout: &Layout, dx: f32, dy: f32) {
+        if self.free {
+            return;
+        }
         self.scroll = [self.scroll[0] - dx / self.zoom, self.scroll[1] - dy / self.zoom];
         self.scroll_target = self.scroll;
         self.scroll_tau = SCROLL_TAU;
@@ -301,6 +342,9 @@ impl View {
 
     /// Mouse wheel: glide towards a target `dx`, `dy` pixels further along.
     pub fn scroll_by_px(&mut self, layout: &Layout, dx: f32, dy: f32) {
+        if self.free {
+            return;
+        }
         self.scroll_tau = SCROLL_TAU;
         self.scroll_target = [self.scroll_target[0] - dx / self.zoom, self.scroll_target[1] - dy / self.zoom];
         self.clamp(layout);
@@ -308,6 +352,9 @@ impl View {
 
     /// Glide to the top of a page.
     pub fn scroll_to_page(&mut self, layout: &Layout, page: usize) {
+        if self.free {
+            return;
+        }
         if let Some(p) = layout.page(page) {
             self.scroll_target[1] = p.y - DOC_MARGIN;
             self.clamp(layout);
@@ -317,6 +364,9 @@ impl View {
     /// Glide so that `rect` (`[x0, y0, x1, y1]`, in document space) is in view, if it is not: a rectangle that is shown (below `top_px`
     /// pixels of the window, which toolbars cover) is left where it is; one that is not is brought to about a third of the way down.
     pub fn scroll_to_show(&mut self, layout: &Layout, rect: [f32; 4], top_px: f32) {
+        if self.free {
+            return;
+        }
         if !rect.iter().all(|v| v.is_finite()) {
             return;
         }
@@ -333,6 +383,9 @@ impl View {
 
     /// Glide the zoom to `zoom` about `anchor`.
     pub fn zoom_to(&mut self, zoom: f32, anchor: [f32; 2]) {
+        if self.free {
+            return;
+        }
         if zoom.is_finite() {
             self.zoom_target = zoom.clamp(MIN_ZOOM, MAX_ZOOM);
             self.zoom_anchor = anchor;

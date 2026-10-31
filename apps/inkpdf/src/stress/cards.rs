@@ -71,7 +71,7 @@ fn stress_the_cards_pills_and_keys_that_browse_and_annotate_in_any_order_in_any_
         let mut ed = with_everything();
         let notes = Tool::from_name("notes");
         for i in 0..(8_000 * scale()) {
-            let what = match rng.below(26) {
+            let what = match rng.below(29) {
                 0 => {
                     let size = rng.pick(&SIZES);
                     ed.set_viewport(size);
@@ -200,6 +200,30 @@ fn stress_the_cards_pills_and_keys_that_browse_and_annotate_in_any_order_in_any_
                     ed.chrome.panel = rng.chance(0.3).then(crate::toolbar::PanelState::default);
                     "menus"
                 }
+                26 => {
+                    // The slides begin (with the button or the shortcut) or end, whatever else is up.
+                    if rng.chance(0.5) {
+                        ed.shortcut("l", false);
+                    } else {
+                        let at = ed.toolbar().centre_of(crate::toolbar::Item::Present);
+                        tap(&mut ed, &mut rng, at);
+                    }
+                    "slides"
+                }
+                27 => {
+                    let key = rng.pick(&[
+                        Key::Page(true),
+                        Key::Page(false),
+                        Key::Home(false),
+                        Key::End(false),
+                        Key::Arrow(Dir::Left, false),
+                        Key::Arrow(Dir::Right, false),
+                        Key::Escape,
+                    ]);
+                    ed.press(key);
+                    ed.wheel(Wheel::Lines(0.0, rng.range(-3.0, 3.0)));
+                    "slide keys"
+                }
                 _ => {
                     ed.step_view(0.016);
                     "frame"
@@ -208,12 +232,23 @@ fn stress_the_cards_pills_and_keys_that_browse_and_annotate_in_any_order_in_any_
             *seen.entry(what).or_default() += 1;
             let _ = ed.take_redraw();
             check_floats(&ed, &format!("seed {seed}, event {i} ({what})"));
+            if let Some(v) = ed.presentation_view() {
+                let r = v.page_rect.map(f32::from_bits);
+                let [w, h] = ed.view.viewport;
+                assert!(v.page < ed.layout.len(), "seed {seed}, event {i}: slide {} of {}", v.page, ed.layout.len());
+                assert!(
+                    r.iter().all(|x| x.is_finite()) && r[0] >= -1.0 && r[1] >= -1.0 && r[2] <= w + 1.0 && r[3] <= h + 1.0,
+                    "seed {seed}, event {i}: the page {r:?} in {w}x{h}"
+                );
+            }
             if i % 200 == 0 {
                 check_editor(&ed, &format!("seed {seed}, event {i} ({what})"));
             }
         }
     }
-    for needed in ["link", "trail button", "trail key", "link card", "item card", "note tool", "search", "error", "keyboard", "resize"] {
+    for needed in
+        ["link", "trail button", "trail key", "link card", "item card", "note tool", "search", "error", "keyboard", "resize", "slides", "slide keys"]
+    {
         assert!(seen.get(needed).copied().unwrap_or(0) > 100, "the storm did {needed} only {:?} times: {seen:?}", seen.get(needed));
     }
 }

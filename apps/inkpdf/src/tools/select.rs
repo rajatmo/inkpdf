@@ -313,6 +313,11 @@ impl Tool for SelectTool {
         InputPolicy::editing_tool(mode)
     }
 
+    // (It selects text and what is on the page, to read and to copy: its marks are what add to the document, and they are dimmed where that is not allowed.)
+    fn edits(&self) -> bool {
+        false
+    }
+
     fn pointer(&mut self, ws: &mut Workspace, ev: &PageEvent<'_>) {
         match ev.phase {
             Phase::Down => self.begin(ws, ev),
@@ -370,12 +375,12 @@ impl Tool for SelectTool {
     }
 
     fn action_enabled(&self, ws: &Workspace, action: ToolAction) -> bool {
-        matches!(action, ToolAction::Mark(_)) && self.has_selection(ws)
+        matches!(action, ToolAction::Mark(_)) && !ws.permissions.read_only() && self.has_selection(ws)
     }
 
     fn act(&mut self, ws: &mut Workspace, action: ToolAction) -> bool {
         match action {
-            ToolAction::Mark(kind) => self.mark(ws, kind),
+            ToolAction::Mark(kind) => !ws.permissions.read_only() && self.mark(ws, kind),
             ToolAction::Node(_) => false,
         }
     }

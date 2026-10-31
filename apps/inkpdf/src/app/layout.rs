@@ -57,6 +57,7 @@ fn item_name(item: Item) -> String {
         Item::Tool(tool) => tool.name().into(),
         Item::ModeSwitch => "mode".into(),
         Item::Finger => "finger".into(),
+        Item::Present => "present".into(),
         Item::Fullscreen => "full".into(),
         Item::Theme => "theme".into(),
         // The round buttons of the folded pills.
@@ -75,6 +76,7 @@ fn bar_name(item: ContextItem) -> String {
         ContextItem::Delete => "delete".into(),
         ContextItem::Swatch(i) => format!("swatch{i}"),
         ContextItem::Style => "style".into(),
+        ContextItem::Unfold => "unfold".into(),
         // (`Mark(Highlight)` is pressed as "highlight": the innermost name.)
         ContextItem::Action(action) => {
             let name = format!("{action:?}").to_lowercase();
@@ -112,8 +114,11 @@ fn points(entries: impl Iterator<Item = (String, [f32; 2])>) -> String {
 
 fn describe(ed: &Editor) -> String {
     let [w, h] = ed.view.viewport;
-    let buttons = points(ed.toolbar().items().iter().map(|&(item, r)| (item_name(item), middle(r))));
-    let bar = ed.context_bar().map(|b| points(b.items().iter().map(|&(item, r)| (bar_name(item), middle(r))))).unwrap_or_default();
+    // (While the slides show there is no toolbar and no bar to press.)
+    let slides = ed.presentation_view().is_some();
+    let buttons = if slides { String::new() } else { points(ed.toolbar().items().iter().map(|&(item, r)| (item_name(item), middle(r)))) };
+    let bar =
+        ed.context_bar().filter(|_| !slides).map(|b| points(b.items().iter().map(|&(item, r)| (bar_name(item), middle(r))))).unwrap_or_default();
     let mut out = format!("{{\"client\":[{w:.0},{h:.0}],\"dpr\":{:.3},\"buttons\":{{{buttons}}},\"bar\":{{{bar}}}", ed.dpr);
     // What a window's title says on a desktop (the page in view, how many there are, whether there is something to save), for the
     // platforms with no title to read, and which of the two modes the program is in.
@@ -163,6 +168,15 @@ fn describe(ed: &Editor) -> String {
         use crate::toolbar::TrailItem;
         let (back, forward) = (l.centre_of(TrailItem::Back), l.centre_of(TrailItem::Forward));
         let _ = write!(out, ",\"trail\":{{\"back\":[{:.0},{:.0}],\"forward\":[{:.0},{:.0}]}}", back[0], back[1], forward[0], forward[1]);
+    }
+    // The slides: which page is shown, and where the button to leave is while it is showing.
+    if let Some(view) = ed.presentation_view() {
+        let exit = ed.presentation_layout().filter(|_| view.hint).map(|l| l.exit_centre());
+        let _ = write!(out, ",\"presentation\":{{\"page\":{},\"pages\":{}", view.page + 1, view.pages);
+        if let Some(c) = exit {
+            let _ = write!(out, ",\"exit\":[{:.0},{:.0}]", c[0], c[1]);
+        }
+        out.push('}');
     }
     if let Some(l) = ed.error_layout() {
         let _ = write!(out, ",\"error\":{{\"close\":[{:.0},{:.0}]}}", l.close_middle()[0], l.close_middle()[1]);

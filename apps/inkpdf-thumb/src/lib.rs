@@ -1,5 +1,5 @@
 //! The Explorer thumbnail handler for InkPDF: a COM DLL the shell loads to draw a PDF's first page
-//! as the file's icon, the way Acrobat does. The installer registers it for InkPDF's PDF type, so
+//! as the file's icon. The installer registers it for InkPDF's PDF type, so
 //! it applies when InkPDF is the default PDF app.
 //!
 //! The shell calls it with the file's bytes as a stream and asks for a bitmap of a given size. The

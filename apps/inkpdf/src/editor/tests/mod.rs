@@ -3,6 +3,7 @@
 
 mod anchors;
 mod appearance;
+mod bar_fold;
 mod capability;
 mod contract;
 mod delete_page;
@@ -27,6 +28,8 @@ mod notes;
 mod overview;
 mod pages;
 mod pen;
+mod permissions;
+mod presentation;
 mod prompt;
 mod reader;
 mod replay;

@@ -195,6 +195,10 @@ class Session:
         lay = self.d.layout() or {}
         return lay.get("state", {})
 
+    def state_of(self, group):
+        """One part of what the app says of itself (`presentation`: the page shown and, while it shows, where the button that leaves is)."""
+        return (self.d.layout() or {}).get(group, {})
+
     def pages(self):
         """(the page in view, how many pages), as the window's title says."""
         st = self.state()
@@ -256,6 +260,10 @@ class Session:
                 return ok[0]
             time.sleep(0.1)
         raise KeyError(f"no link to {kind} in the middle of the window: {spots}")
+
+    def toolbar_up(self):
+        """Whether the app says there are buttons to press at all (a folded toolbar has round buttons, not every one of them)."""
+        return bool((self.d.layout() or {}).get("buttons"))
 
     def has(self, group, name):
         """Whether the app says there is such a control now."""

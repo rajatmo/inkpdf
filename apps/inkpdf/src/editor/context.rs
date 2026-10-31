@@ -14,8 +14,46 @@ use super::{Act, Editor};
 impl Editor {
     /// The bar under the tools, if there is one: not without a document, and not with the pointer tool, which
     /// makes nothing to select (the text selection's has its marks).
+    ///
+    /// Where it would lie over the round button that hangs from the theme button (a window that is not wide enough for both) it is a round button of
+    /// its own that unfolds it, until the pointer presses on the page again; while something is selected, or the tool's panel is open, it stays whole.
     pub fn context_bar(&self) -> Option<ContextBar> {
-        (self.ws.has_doc && self.ws.tool.has_bar()).then(|| ContextBar::below(&self.toolbar(), self.ws.view.viewport, self.tool_actions()))
+        if !(self.ws.has_doc && self.ws.tool.has_bar()) {
+            return None;
+        }
+        let toolbar = self.toolbar();
+        // (Under the tools: with a pill unfolded over them there are none to be under, and the bar waits for the pill to fold.)
+        if toolbar.pills[1][2] <= toolbar.pills[1][0] {
+            return None;
+        }
+        let viewport = self.ws.view.viewport;
+        let whole = ContextBar::below(&toolbar, viewport, self.tool_actions());
+        let folded = !(self.chrome.bar_open || self.chrome.panel.is_some() || self.selection_is_up())
+            && self.theme_circle(&toolbar).is_some_and(|c| overlaps(inflated(c.rect, 8.0 * self.ws.dpr), whole.rect));
+        Some(if folded { ContextBar::folded(&toolbar, viewport) } else { whole })
+    }
+
+    /// Where the round button under the theme button would be (it is not always shown), if the theme button is on the toolbar now.
+    pub(super) fn theme_circle(&self, toolbar: &crate::toolbar::Toolbar) -> Option<crate::toolbar::ThemeLayout> {
+        toolbar
+            .items()
+            .iter()
+            .any(|(item, _)| *item == crate::toolbar::Item::Theme)
+            .then(|| crate::toolbar::ThemeLayout::new(toolbar, self.ws.view.viewport))
+    }
+
+    /// Something is selected, so the bar's buttons are what a person is after.
+    fn selection_is_up(&self) -> bool {
+        !self.ws.selection.is_empty() || (self.ws.tool == Tool::Select && self.tools.select.has_selection(&self.ws))
+    }
+
+    /// A press is beginning at `pos`: the bar that was unfolded from its round button folds again (and its panel with it) unless the press is on it.
+    pub(super) fn dismiss_bar(&mut self, pos: [f32; 2]) {
+        if self.chrome.bar_open && !self.over_interface(pos) {
+            self.chrome.bar_open = false;
+            self.chrome.panel = None;
+            self.ws.redraw = true;
+        }
     }
 
     /// The actions of its own the tool in use offers now (what it is editing decides which).
@@ -33,7 +71,7 @@ impl Editor {
         }
         let state = ContextState {
             tool: self.ws.tool,
-            selection: !self.ws.selection.is_empty() || (self.ws.tool == Tool::Select && self.tools.select.has_selection(&self.ws)),
+            selection: self.selection_is_up(),
             paste: self.can_paste(),
             actions,
             style_open: self.chrome.panel.is_some(),
@@ -47,7 +85,7 @@ impl Editor {
     /// not on a control of the panel does nothing to (and does not close the panel).
     pub fn drawer(&self) -> Option<[f32; 4]> {
         let state = self.chrome.panel?;
-        let bar = self.context_bar()?;
+        let bar = self.context_bar().filter(|b| !b.is_folded())?;
         let panel = self.toolbar().tool_panel(self.ws.tool, self.ws.view.viewport[0], state.editing.is_some())?;
         // (A little below the panel's last row, for the card's rounded corners.)
         Some(bar.card(panel.rect[3] + 0.2 * panel.unit()))
@@ -107,6 +145,7 @@ impl Editor {
     }
     fn activate_context(&mut self, item: ContextItem) {
         match item {
+            ContextItem::Unfold => self.chrome.bar_open = true,
             ContextItem::Style => {
                 self.settle();
                 self.chrome.panel = if self.chrome.panel.is_some() { None } else { Some(PanelState::default()) };
@@ -154,4 +193,13 @@ impl Editor {
         self.ws.redraw = true;
         used
     }
+}
+
+/// Whether two rectangles [x0, y0, x1, y1] share any room.
+fn overlaps(a: [f32; 4], b: [f32; 4]) -> bool {
+    a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3]
+}
+
+fn inflated(r: [f32; 4], by: f32) -> [f32; 4] {
+    [r[0] - by, r[1] - by, r[2] + by, r[3] + by]
 }

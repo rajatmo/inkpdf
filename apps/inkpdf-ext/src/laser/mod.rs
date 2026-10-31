@@ -45,6 +45,10 @@ impl Pointer {
 }
 
 impl Tool for Pointer {
+    fn edits(&self) -> bool {
+        false
+    }
+
     fn policy(&self, desktop: bool) -> Policy {
         Policy::stylus_tool(desktop)
     }

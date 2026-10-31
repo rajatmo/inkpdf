@@ -40,6 +40,7 @@ impl Editor {
                 if first_finger {
                     self.dismiss_theme_menu(first.pos);
                     self.dismiss_pill(first.pos);
+                    self.dismiss_bar(first.pos);
                 }
                 if first_finger && self.press_panel(Device::Touch, ev.id, first.pos) {
                     return;

@@ -14,6 +14,8 @@ fn stress_shapes_drawn_by_the_pen_stay_on_their_page_undo_redo_exactly_and_survi
     let mut rng = Rng::new(404);
     let (mut made, mut edits) = (0usize, 0usize);
     for round in 0..(4_000 * scale()) {
+        // (Nor is it about the slides, which a press on the button for them begins.)
+        ed.stop_presentation();
         let size = ed.view.viewport;
         // (A random press can land on a toolbar button; the storm is about the shape tool. Back to it the way the
         // toolbar changes tools, which ends what the other was doing: the mode button can make the stylus place text.)

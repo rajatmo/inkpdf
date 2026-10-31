@@ -61,6 +61,7 @@ pub fn form(doc: &dyn PdfDocument, geoms: &[PageGeom], layout: &Layout) -> (Form
                 name: raw.name,
                 multiline: raw.multiline,
                 max_len: raw.max_len,
+                bold: raw.bold,
                 on_states: raw.widgets.into_iter().map(|w| w.on_state).collect(),
                 options: raw.options,
                 value: raw.value,

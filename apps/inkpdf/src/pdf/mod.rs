@@ -156,6 +156,8 @@ pub struct RawField {
     pub options: Vec<(String, String)>,
     pub multiline: bool,
     pub max_len: Option<usize>,
+    /// The field's font is a bold one (by its name in the default appearance): what the person types is drawn as heavy as the file draws it.
+    pub bold: bool,
     pub widgets: Vec<RawWidget>,
 }
 
@@ -275,8 +277,15 @@ impl std::fmt::Display for OrganizeError {
     }
 }
 
+pub use crate::permissions::Permissions;
+
 /// A PDF open for change: read what it holds, change its annotations and pages, and write it.
 pub trait PdfDocument {
+    /// What the file's owner allows (see [`Permissions`]).
+    fn permissions(&self) -> Permissions {
+        Permissions::default()
+    }
+
     fn page_count(&self) -> Result<usize, String>;
     /// Every link that goes somewhere the program can follow.
     fn links(&self) -> Vec<RawLink>;

@@ -34,6 +34,8 @@ pub struct Spec {
     pub name: String,
     pub multiline: bool,
     pub max_len: Option<usize>,
+    /// What is typed in a text field is drawn heavy (the file's font for it is a bold one).
+    pub bold: bool,
     /// For a check box or a radio group, the name of the "on" look of each of its boxes, in the order of their widgets.
     pub on_states: Vec<Option<String>>,
     /// A choice's options: (value, shown text).
@@ -47,6 +49,7 @@ pub struct Field {
     pub name: String,
     pub kind: Kind,
     pub multiline: bool,
+    pub bold: bool,
     max_len: Option<usize>,
     on_states: Vec<Option<String>>,
     options: Vec<(String, String)>,
@@ -65,6 +68,7 @@ impl Field {
             name: spec.name,
             kind,
             multiline: spec.multiline,
+            bold: spec.bold,
             max_len: spec.max_len.filter(|&n| n > 0),
             on_states: spec.on_states,
             options: spec.options,

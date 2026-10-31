@@ -102,6 +102,8 @@ pub struct Workspace {
     pub clip: Clipboards,
     pub styles: Styles,
     pub look: Look,
+    /// What the owner of the document allows to be done to it (everything, but for a PDF that is restricted).
+    pub permissions: crate::permissions::Permissions,
     /// The card of the item that is open, if one is.
     pub card: ItemCard,
     /// The text of the pages, as far as it has been read (see `doctext`).
@@ -127,6 +129,7 @@ impl Workspace {
             clip: Clipboards::default(),
             styles: Styles::default(),
             look: Look::default(),
+            permissions: crate::permissions::Permissions::default(),
             card: ItemCard::default(),
             text: crate::doctext::DocText::default(),
             requests: Requests::default(),

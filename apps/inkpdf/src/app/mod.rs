@@ -315,8 +315,8 @@ impl State {
             state.open_blank();
         }
         // After the surface exists: asking for full screen while the window is being created
-        // leaves the swap chain with an invalid surface.
-        if opts.fullscreen {
+        // leaves the swap chain with an invalid surface. (On Android the program always starts with the system's bars away: the button brings them back.)
+        if opts.fullscreen || state.platform.controls_system_bars() {
             state.toggle_fullscreen();
         }
         state.window.request_redraw();

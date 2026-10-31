@@ -111,6 +111,8 @@ pub(super) struct UiStamp {
     /// The card for a link that goes out to the web, if it is up.
     link: Option<crate::toolbar::ItemCardView>,
     theme_menu: Option<crate::toolbar::ThemeView>,
+    /// The slides, while the document is shown as them.
+    presentation: Option<crate::toolbar::PresentationView>,
 }
 
 /// Line work drawn over the committed ink.
@@ -222,6 +224,7 @@ impl UiLayers {
             trail: ed.trail_view(),
             link: ed.link_view(),
             theme_menu: ed.theme_view(),
+            presentation: ed.presentation_view(),
         };
         if self.ui_built.as_ref() == Some(&stamp) {
             return;
@@ -241,6 +244,10 @@ pub(super) fn overlays(ed: &Editor, now_ms: f64, mut out: Overlays) -> Overlays 
     out.doc.clear();
     out.screen.clear();
     out.now_ms = now_ms;
+    // (Nothing is over a slide but its curtain.)
+    if ed.presenting() {
+        return out;
+    }
     selection_overlay(ed, &mut out);
     search_overlay(ed, &mut out);
     form_overlay(ed, &mut out);

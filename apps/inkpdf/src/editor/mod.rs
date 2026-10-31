@@ -41,7 +41,9 @@ mod navigation;
 mod overview;
 mod pages;
 mod pen;
+mod permissions;
 mod pills;
+mod presentation;
 mod prompt;
 mod reader;
 mod routing;
@@ -131,6 +133,8 @@ pub struct Editor {
     registry: crate::tool::Registry,
     /// The extensions those tools came from, to make them afresh when a document is loaded.
     extensions: Vec<inkpdf_api::Extension>,
+    /// The slides, while the document is shown as them (see [`presentation`]).
+    presentation: Option<presentation::Presentation>,
     /// The tools that own their interaction (see [`crate::tools`]).
     pub tools: ToolSet,
     /// The window's own controls (see [`Chrome`]).
@@ -195,6 +199,7 @@ impl Editor {
             held_bar: None,
             link_tap: None,
             search: search::Search::default(),
+            presentation: None,
             tools: ToolSet::with_extensions(extensions),
             chrome: Chrome::default(),
             motions: motions::Motions::new(prefs),
@@ -213,6 +218,8 @@ impl Editor {
     pub fn load(&mut self, layout: Layout, strokes: Vec<PageStroke>) {
         self.ws.layout = layout;
         self.ws.has_doc = true;
+        self.ws.permissions = crate::permissions::Permissions::default();
+        self.presentation = None;
         self.ws.view = View::new(self.ws.view.viewport);
         self.ws.ink.load(strokes);
         self.ws.selection.clear();
@@ -377,7 +384,7 @@ impl Editor {
 
     /// One frame of the view's glide and zoom animation: whether it is still moving.
     pub fn step_view(&mut self, dt: f32) -> bool {
-        let overview = self.step_overview(dt);
+        let overview = self.step_overview(dt) | self.step_presentation(dt);
         let interface = self.step_motions(dt);
         self.refresh_search();
         self.one_card_at_the_right();
@@ -408,6 +415,7 @@ impl Editor {
     /// The window changed size: the view follows it.
     pub fn set_viewport(&mut self, size: [f32; 2]) {
         self.ws.set_viewport(size);
+        self.reshow_slide();
         self.refold_pills();
         // (The pages overview is laid out by the window: what it keeps is brought back into range.)
         self.overview_settled();

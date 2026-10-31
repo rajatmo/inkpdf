@@ -38,6 +38,7 @@ mod palette;
 mod path_store;
 mod pdf;
 mod pdf_read;
+mod permissions;
 mod plane;
 mod platform;
 mod renderer;

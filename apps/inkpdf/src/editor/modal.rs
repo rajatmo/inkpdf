@@ -14,6 +14,8 @@ pub(super) enum Modal {
     Prompt,
     /// The pages overview.
     Overview,
+    /// The document shown as slides (see [`super::presentation`]).
+    Presentation,
 }
 
 impl Editor {
@@ -22,6 +24,7 @@ impl Editor {
         match modal {
             Modal::Prompt => self.prompt_pointer(dev, id, phase, pos),
             Modal::Overview => self.overview_pointer(dev, id, phase, pos),
+            Modal::Presentation => self.presentation_pointer(dev, id, phase, pos),
         }
     }
 
@@ -29,6 +32,8 @@ impl Editor {
     pub(super) fn modal(&self) -> Option<Modal> {
         if self.chrome.prompt.is_some() {
             Some(Modal::Prompt)
+        } else if self.presentation.is_some() {
+            Some(Modal::Presentation)
         } else if self.chrome.overview.is_some() {
             Some(Modal::Overview)
         } else {

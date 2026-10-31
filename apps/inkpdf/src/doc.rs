@@ -65,6 +65,8 @@ pub struct Contents {
     pub links: Vec<Link>,
     pub form: Form,
     pub outline: Vec<OutlineItem>,
+    /// What the file's owner allows to be done to it (everything, for a file that is not restricted).
+    pub permissions: crate::permissions::Permissions,
 }
 
 pub struct Doc {
@@ -132,20 +134,20 @@ impl Doc {
         let layout = Layout::new(&sizes);
         // A file this app inked earlier shows that ink from the ink layer, not the page raster.
         let (contents, render_bytes) = match ink_io::load_with(engine, &bytes, &geoms, &layout) {
-            Ok(l) => (Contents { strokes: l.strokes, links: l.links, form: l.form, outline: l.outline }, l.render_bytes),
+            Ok(l) => (Contents { strokes: l.strokes, links: l.links, form: l.form, outline: l.outline, permissions: l.permissions }, l.render_bytes),
             Err(e) => {
                 eprintln!("could not read earlier ink: {e}");
                 (Contents::default(), bytes.clone())
             }
         };
         // (In a damaged file the outline and the links can name pages the renderer does not show.)
-        let Contents { strokes, mut links, form, mut outline } = contents;
+        let Contents { strokes, mut links, form, mut outline, permissions } = contents;
         crate::outline::limit_to(&mut outline, sizes.len());
         crate::links::limit_to(&mut links, sizes.len());
         let renderer = Renderer::new(engine, render_bytes, sizes.clone());
         let doc =
             Doc { id, name, open_millis: started.elapsed().as_millis(), engine, base: bytes, pages: PageTable::of_file(sizes, geoms), renderer };
-        Ok((doc, Contents { strokes, links, form, outline }))
+        Ok((doc, Contents { strokes, links, form, outline, permissions }))
     }
 
     pub fn page_count(&self) -> usize {

@@ -22,6 +22,11 @@ pub struct Bitmap {
 /// The text drawn at `scale` pixels per point in `rgba`. `None` if there is nothing to
 /// draw or the size is nonsense. The scale is reduced if the bitmap would be too big.
 pub fn raster(text: &str, size: f32, scale: f32, rgba: [u8; 4]) -> Option<Bitmap> {
+    raster_weighted(text, size, scale, rgba, false)
+}
+
+/// [`raster`], heavy (`bold`): each outline is drawn again a little to the right, which thickens its strokes as a bold face does.
+pub fn raster_weighted(text: &str, size: f32, scale: f32, rgba: [u8; 4], bold: bool) -> Option<Bitmap> {
     if !(size.is_finite() && scale.is_finite() && size > 0.0 && scale > 0.0) || text.chars().all(|c| c.is_whitespace()) {
         return None;
     }
@@ -53,6 +58,11 @@ pub fn raster(text: &str, size: f32, scale: f32, rgba: [u8; 4]) -> Option<Bitmap
                 );
             }
             pen_x += glyph.advance * size;
+        }
+        if bold {
+            let by = 0.045 * size * scale;
+            let again: Vec<(P, P)> = edges.iter().map(|&(a, b)| ([a[0] + by, a[1]], [b[0] + by, b[1]])).collect();
+            edges.extend(again);
         }
         fill(&edges, &mut coverage, width, height, (i as f32 * line_h * scale) as usize, ((i + 1) as f32 * line_h * scale + 2.0 * pad) as usize + 1);
     }

@@ -39,6 +39,8 @@ pub struct BoxDraw {
     /// A text or choice's text, the size it is set at and where its top-left corner is (a long text of one line is shown by its end).
     pub text: String,
     pub size: f32,
+    /// The text is drawn heavy, as the file's font for the field is.
+    pub bold: bool,
     pub top_left: [f32; 2],
     /// Where the caret is, if this box is the one being typed into.
     pub caret: Option<[f32; 4]>,
@@ -71,7 +73,7 @@ impl Editor {
             }
             let caret =
                 at.map(|at| [top_left[0] + at[0], top_left[1] + at[1], top_left[0] + at[0], top_left[1] + at[1] + size * crate::text::LINE_HEIGHT]);
-            out.push(BoxDraw { page, rect, kind: f.kind, changed: f.changed(), on: f.is_on(widget), text, size, top_left, caret });
+            out.push(BoxDraw { page, rect, kind: f.kind, changed: f.changed(), on: f.is_on(widget), text, size, bold: f.bold, top_left, caret });
         }
         out
     }
@@ -92,6 +94,11 @@ impl Editor {
 
     /// A press on box `widget` of field `field`, which is on `rect`: it is filled as its kind is.
     pub(super) fn press_field(&mut self, field: usize, widget: usize, rect: [f32; 4]) {
+        // (A form the owner has not allowed to be filled is read as it is.)
+        if !self.fields_allowed() {
+            self.refuse_fields();
+            return;
+        }
         // (Another field that was being typed into is let go of: its text stays.)
         if self.form_typing.as_ref().is_some_and(|t| !t.is(field, widget)) {
             self.end_form_typing();

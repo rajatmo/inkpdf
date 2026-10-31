@@ -49,17 +49,22 @@ impl TextIndex {
     }
 }
 
-fn key_of(text: &str, size: f32, rgba: [u8; 4], level: i16) -> u64 {
+fn key_of(text: &str, size: f32, rgba: [u8; 4], level: i16, bold: bool) -> u64 {
     let mut hasher = DefaultHasher::new();
-    (text, size.to_bits(), rgba, level).hash(&mut hasher);
+    (text, size.to_bits(), rgba, level, bold).hash(&mut hasher);
     hasher.finish()
 }
 
 /// Make sure the bitmap of `text` is on the GPU at `level`; the key it is under.
 fn ensure(gpu: &mut Gpu, text: &str, size: f32, rgba: [u8; 4], level: i16) -> u64 {
-    let key = key_of(text, size, rgba, level);
+    ensure_weighted(gpu, text, size, rgba, level, false)
+}
+
+/// [`ensure`], heavy if `bold`.
+fn ensure_weighted(gpu: &mut Gpu, text: &str, size: f32, rgba: [u8; 4], level: i16, bold: bool) -> u64 {
+    let key = key_of(text, size, rgba, level, bold);
     if gpu.text_size(key).is_none()
-        && let Some(bitmap) = text::raster(text, size, tiles::level_scale(level), rgba)
+        && let Some(bitmap) = text::raster_weighted(text, size, tiles::level_scale(level), rgba, bold)
     {
         gpu.upload_text(key, bitmap.width, bitmap.height, &bitmap.pixels);
     }
@@ -111,7 +116,7 @@ impl UiLayers {
         }
         // What the person put in a field of a form.
         for b in ed.form_boxes(&visible).into_iter().filter(|b| b.changed && !b.text.is_empty()) {
-            let key = ensure(cx.gpu, &b.text, b.size, ed.on_page([24, 26, 34, 255]), level);
+            let key = ensure_weighted(cx.gpu, &b.text, b.size, ed.on_page([24, 26, 34, 255]), level, b.bold);
             used.insert(key);
             self.text_draws.push(TextDraw {
                 page: b.page as u32,

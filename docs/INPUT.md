@@ -88,7 +88,7 @@ asserts it has exactly one answer, so "which rule wins" cannot arise. The tools'
 
 From strongest to weakest, and the first that applies wins:
 
-1. **Modal**: the unsaved-changes prompt, the pages overview. Nothing reaches the page.
+1. **Modal**: the unsaved-changes prompt, the slides (presentation mode: a click, tap or swipe turns the page, Escape leaves), the pages overview. Nothing reaches the page.
 2. **Chrome**: toolbar, the bar under the tools, the tool panel, the search card, the theme card. A press that **begins** on chrome is the
    chrome's until it lifts, even if the pointer leaves it (sliders, a pressed button). The toolbar is reachable by every device.
 3. **Gesture under way**: a press that began on the page keeps the pointer until release. Moves and the release go to the tool that has it

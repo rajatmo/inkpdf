@@ -26,6 +26,10 @@ impl Editor {
     /// Do `edit` to the pages as one step of the history. `false`, and nothing done, if it cannot be done to this
     /// document (a page that is not there, none left, too many).
     pub fn edit_pages(&mut self, mut edit: PageEdit) -> bool {
+        if !self.pages_allowed() {
+            self.refuse();
+            return false;
+        }
         // A deleted page is kept, under a name of its own, so that undoing the deletion can bring it back.
         if let PageEdit::Delete { grave, .. } = &mut edit
             && *grave == 0
@@ -94,6 +98,10 @@ impl Editor {
         if page >= self.ws.layout.len() {
             return false;
         }
+        if !self.pages_allowed() {
+            self.refuse();
+            return false;
+        }
         if !self.flags.remove(&page) {
             self.flags.insert(page);
         }
@@ -159,6 +167,8 @@ impl Editor {
         self.forget_trail();
         self.ws.scroll_to_page(shown);
         self.overview_follow(map.as_ref(), before.len());
+        // (The slides show a page that may be another now, or gone: one is shown again, as near as there is.)
+        self.reshow_slide();
         self.ws.requests.push(Request::PagesEdited(edit.clone()));
         self.ws.redraw = true;
     }

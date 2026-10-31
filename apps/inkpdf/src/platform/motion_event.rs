@@ -72,7 +72,7 @@ pub struct RawMotion {
     pub action_index: usize,
     /// When, in nanoseconds on the monotonic clock.
     pub t_ns: i64,
-    /// The stylus's first button. On Android it is the one button a Samsung S Pen has, and it erases (as in Samsung Notes) for a
+    /// The stylus's first button. On Android it is the one button an S Pen has, and it erases for a
     /// pen with no eraser end; the eraser end itself is `Tool::Eraser`.
     pub stylus_primary: bool,
     /// The stylus's second button: the barrel button, which lassos.

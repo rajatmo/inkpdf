@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.7.0
+- **Presentation mode.** A new button on the right pill (a slide with a play triangle on a stand, left of full screen) and Ctrl+L show the document as slides: one page at a time, whole,
+  as big as the window lets it be, over black, with nothing of the program's own on it. The window is made full screen for it and put back as it was. A click
+  or a tap of the tip or of a finger on the right of the window, a swipe of a finger to the left, the right and down arrows, Page Down, the space bar, Enter and a
+  turn of the wheel show the next page; the left third of the window, a swipe to the right, the left and up arrows, Page Up, Backspace and the wheel back show
+  the one before; Home and End go to the first and the last; Escape, Ctrl+L, or the button that shows in a corner for a moment after anything is done leaves.
+  It is a modal layer like the pages overview, so it needs only the left mouse button and keyboard, or the stylus tip, and a finger does it too.
+- **Files that cannot be opened say so.** A file that cannot be opened (password-protected, empty, not a PDF) left a black window with no message when it was
+  the first one; the error card now shows, and the program is usable (open another file) behind it.
+- **A PDF's permissions are kept.** A PDF whose owner has not allowed changes (or whose copy or page edits are not allowed) is no longer annotated, saved over
+  or edited anyway: the tools that change the document, the page edits and the form fields are off for it, a card says why, and what is allowed (reading,
+  searching, copying where allowed, saving a copy of a form's fields where allowed) still works.
+- **Two highlights are two annotations.** Two marks on one page were saved as one annotation (and read back as one, so one eraser stroke or one undo took both);
+  each stroke of a mark is now its own annotation, and files saved before are read as they were.
+- **Typed text in a form keeps its weight.** Text typed into a form field looked regular while typing and bold once the file was reopened: the field's font is
+  now read (bold or not) and drawn the same way both times.
+- **The look's pill and the bar no longer overlap.** When the window is too narrow for the bar under the tools and the right pill's drop-down cards, the bar folds
+  into the round cog button (the one the look's pill shows when folded) and unfolds when it is pressed, or when there is room again; a test sweeps window sizes
+  to check that nothing overlaps.
+- **Android opens full screen** (the status and navigation bars hide, and come back with a swipe from the edge), and **the two settings icons differ**: the cog is
+  the bar's settings button, and the look's folded pill has a new icon of its own (an eye).
+- **Clean-up.** Mentions of other programs are out of the code and the documents; an empty stray file is gone.
+
 ## 1.6.0
 - **A finger can be the stylus.** A new button on the right pill (a hand with one finger out, between the mode button and full screen) lets one finger on the
   page draw as the stylus does, with whatever tool is in use and in both modes, so that every tool works with no stylus (a phone, a touch laptop). It is
@@ -247,7 +270,7 @@ A dark look, and the PDF engine behind a seam of its own.
 - The Android reader lets go of touches the system cancels (a screen cancels its touches when the pen comes near; they used to stay
   down, so the next one-finger pan zoomed), and tells a pen and a finger with the same pointer number apart.
 - The README is for users first (where it runs, how to get it, how to use it), with the developer notes after.
-- On Android the stylus's first button (the S Pen's one button) erases, as in Samsung Notes; a second button is the barrel button (lasso), and a
+- On Android the stylus's first button (the S Pen's one button) erases; a second button is the barrel button (lasso), and a
   real eraser end erases as before. Windows and Linux are unchanged: the eraser end erases and the barrel button lassos.
 - `--record FILE` saves the input the program was given (pen, touch, mouse, keys) as text, and `--replay FILE` plays it back at its
   old pace and closes: the same recording gives the same document on every system, so a problem seen on one machine can be played
@@ -330,8 +353,8 @@ finger (which scrolls, and uses the bar to move pages), and at a desk Ctrl+A, Ct
   straight guess, which stuck out of a turn by up to several pixels and snapped back with the next sample. It is now
   aimed along the path's heading and cut short on a tight turn (at most half a pixel off the path), and is full length
   on a straight run.
-- The ends of a tap-drawn spline are no longer pointed: an open end leaves with no curvature, as in Inkscape's Spiro
-  and a natural spline, instead of running straight along the chord to the next point. Closed splines and the inner
+- The ends of a tap-drawn spline are no longer pointed: an open end leaves with no curvature, as in a natural
+  spline, instead of running straight along the chord to the next point. Closed splines and the inner
   points are as before, and splines already saved keep their shape.
 
 ## 0.6.0

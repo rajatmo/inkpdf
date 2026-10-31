@@ -66,6 +66,11 @@ class Linux(Driver):
             args = [m.group(1), "--links"]
         elif kind == "form":
             args = ["1", "--form"]
+        elif kind == "broken":
+            # (A file that is no PDF: the program has to say so, not leave a window with nothing in it.)
+            with open(out, "wb") as f:
+                f.write(b"this is not a PDF\n")
+            return
         else:
             raise ValueError(kind)
         subprocess.run([self.gen, out, *args], capture_output=True, check=True)

@@ -89,6 +89,12 @@ pub trait Tool {
     /// Which devices the tool listens to in `mode`.
     fn policy(&self, mode: Mode) -> InputPolicy;
 
+    /// Whether using the tool adds to the document: such a tool is not available for a PDF its owner has not allowed changes to (see
+    /// [`crate::permissions::Permissions`]).
+    fn edits(&self) -> bool {
+        true
+    }
+
     /// A stylus or mouse message on the page (only ones the policy lets through).
     fn pointer(&mut self, ws: &mut Workspace, ev: &PageEvent<'_>);
 

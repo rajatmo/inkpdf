@@ -19,8 +19,8 @@ use pdfcraft_render::{
 };
 
 use super::{
-    AnnotKind, Annotation, NewAnnotation, NewShape, OrganizeError, PageLook, PdfBackend, PdfDocument, Pixels, RawField, RawFieldKind, RawLink,
-    RawOutlineItem, RawTarget, RawValue, RawWidget, RenderPool, RenderRequest, Rendered, Reply, TextSource,
+    AnnotKind, Annotation, NewAnnotation, NewShape, OrganizeError, PageLook, PdfBackend, PdfDocument, Permissions, Pixels, RawField, RawFieldKind,
+    RawLink, RawOutlineItem, RawTarget, RawValue, RawWidget, RenderPool, RenderRequest, Rendered, Reply, TextSource,
 };
 use crate::coords::PageGeom;
 use crate::ink::MarkupKind;
@@ -235,6 +235,15 @@ fn org_err(e: OrgError) -> OrganizeError {
 }
 
 impl PdfDocument for PdfcraftDoc {
+    fn permissions(&self) -> Permissions {
+        self.doc.permissions().map_or_else(Permissions::default, |p| Permissions {
+            annotate: p.annotate(),
+            modify: p.modify(),
+            assemble: p.assemble(),
+            fill_forms: p.fill_forms(),
+        })
+    }
+
     fn page_count(&self) -> Result<usize, String> {
         page_count(&self.doc).map_err(|e| e.to_string())
     }
@@ -312,7 +321,9 @@ impl PdfDocument for PdfcraftDoc {
                     .filter(|w| !w.hidden && !w.read_only)
                     .filter_map(|w| Some(RawWidget { page: w.page?, rect: w.rect.map(|v| v as f32), on_state: w.on_state.clone() }))
                     .collect();
+                let bold = font_is_bold(&f.da);
                 (!widgets.is_empty()).then(|| RawField {
+                    bold,
                     multiline: f.has(forms::flags::MULTILINE),
                     max_len: f.max_len,
                     name: f.name,
@@ -678,6 +689,67 @@ impl<'a> NamedDests<'a> {
             for kid in kids {
                 self.walk(kid, depth + 1, seen, table);
             }
+        }
+    }
+}
+
+/// Whether the font a default appearance string (`/Name 9 Tf 0 g`) sets is a bold one, by its name: `HelveticaLTStd-Bold`, `Arial,Bold`, `Helv-Bd`, the
+/// conventional `HeBo` and `TiBo` and the like. (A guess from a name: the file's own appearance says what is drawn, and this only makes what is typed look alike.)
+fn font_is_bold(da: &str) -> bool {
+    let tokens: Vec<&str> = da.split_whitespace().collect();
+    let Some(name) = tokens.windows(3).find(|w| w[2] == "Tf").map(|w| w[0].trim_start_matches('/').to_ascii_lowercase()) else { return false };
+    ["bold", "black", "heavy", "semibold", "demi"].iter().any(|k| name.contains(k))
+        || name.ends_with("-bd")
+        || name.ends_with(",bd")
+        || name.ends_with("-bl")
+        || (name.len() <= 5 && name.ends_with("bo"))
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pdfcraft_cos::{Algorithm, NewEncryption};
+
+    /// A blank file encrypted with `permissions` (the user's password is empty: it opens without asking).
+    fn encrypted(algorithm: Algorithm, permissions: i32) -> Arc<Vec<u8>> {
+        let blank = Pdfcraft.blank([612.0, 792.0]).expect("blank");
+        let mut doc = Document::open(Arc::new(blank)).expect("open");
+        let params =
+            NewEncryption { algorithm, user_password: "", owner_password: "the owner's", permissions, encrypt_metadata: true, seed: [7; 32] };
+        doc.set_encryption(&params).expect("protect");
+        Arc::new(write_full(&doc, &SaveOptions::default()).expect("write"))
+    }
+
+    #[test]
+    fn a_fields_font_is_bold_by_the_name_in_its_default_appearance() {
+        for bold in ["/HelveticaLTStd-Bold 9 Tf 0 g", "/Arial,Bold 12 Tf", "/Helv-Bd 0 Tf", "/HeBo 10 Tf 0 g", "/TiBo 9 Tf", "0 g /Arial-Black 8 Tf"]
+        {
+            assert!(font_is_bold(bold), "{bold}");
+        }
+        for plain in ["/Helv 0 Tf 0 g", "/ArialMT 9 Tf", "/HelveticaLTStd-Roman 9 Tf", "/Cour 12 Tf", "", "0 g"] {
+            assert!(!font_is_bold(plain), "{plain}");
+        }
+    }
+
+    #[test]
+    fn a_file_that_is_not_restricted_allows_everything() {
+        let blank = Arc::new(Pdfcraft.blank([612.0, 792.0]).expect("blank"));
+        assert_eq!(Pdfcraft.open(&blank).expect("open").permissions(), Permissions::default());
+        // (An encrypted file with every bit set allows everything too.)
+        let all = encrypted(Algorithm::Aes256, -1);
+        assert_eq!(Pdfcraft.open(&all).expect("open").permissions(), Permissions::default());
+    }
+
+    #[test]
+    fn what_the_owner_did_not_allow_is_read_from_the_permission_bits_of_every_kind_of_encryption() {
+        // Table 22: bit 3 print, 4 modify, 5 copy, 6 annotate, 9 fill forms, 11 assemble. Only printing allowed:
+        for algorithm in [Algorithm::Rc4_40, Algorithm::Rc4_128, Algorithm::Aes128, Algorithm::Aes256] {
+            let bytes = encrypted(algorithm, 1 << 2);
+            let p = Pdfcraft.open(&bytes).expect("a file that opens without a password").permissions();
+            assert!(p.read_only() && !p.annotate && !p.modify && !p.assemble && !p.fill_forms, "{algorithm:?}: {p:?}");
+            // Annotating allowed, nothing else:
+            let bytes = encrypted(algorithm, 1 << 5);
+            let p = Pdfcraft.open(&bytes).expect("open").permissions();
+            assert!(!p.read_only() && p.annotate && !p.modify && !p.assemble, "{algorithm:?}: {p:?}");
         }
     }
 }

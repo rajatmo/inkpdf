@@ -67,7 +67,7 @@ impl Editor {
     pub fn is_typing(&self) -> bool {
         match self.modal() {
             Some(Modal::Prompt) => false,
-            Some(Modal::Overview) => false,
+            Some(Modal::Overview | Modal::Presentation) => false,
             None => {
                 self.search.open || self.item_card_open() || self.form_typing.is_some() || (self.ws.tool == Tool::Text && self.tools.text.is_typing())
             }
@@ -110,6 +110,7 @@ impl Editor {
         match self.modal() {
             Some(Modal::Prompt) => return false,
             Some(Modal::Overview) => return self.overview_key(key),
+            Some(Modal::Presentation) => return self.presentation_key(key),
             None => {}
         }
 
@@ -188,6 +189,14 @@ impl Editor {
         let letter = key.to_ascii_lowercase();
         match self.modal() {
             Some(Modal::Prompt) => return false,
+            // The slides take Ctrl+L, which began them, to leave, and nothing else.
+            Some(Modal::Presentation) => {
+                let leave = self.mode == Mode::Desktop && letter == "l";
+                if leave {
+                    self.stop_presentation();
+                }
+                return leave;
+            }
             // The overview takes the document's own shortcuts (undo, redo, save) and leaves the rest of them alone.
             Some(Modal::Overview) if !matches!((letter.as_str(), self.mode), ("z" | "y" | "s", Mode::Desktop)) => {
                 return self.mode == Mode::Desktop && self.overview_shortcut(&letter);
@@ -217,6 +226,8 @@ impl Editor {
             ("z", false) => self.undo(),
             ("z", true) | ("y", _) => self.redo(),
             ("f", _) => self.toggle_search(),
+            // (Ctrl+L: the slides, as the button of the right pill is.)
+            ("l", _) => self.start_presentation(),
             ("s", true) => {
                 self.settle();
                 self.ws.requests.push(Request::SaveAs);

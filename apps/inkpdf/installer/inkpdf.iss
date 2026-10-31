@@ -74,7 +74,7 @@ Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}"; ValueType: string;
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".pdf"; ValueData: ""; Tasks: openwith
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""; Tasks: openwith
 
-; The first page of a PDF as its icon in Explorer (the way Acrobat does it), for PDFs that open in
+; The first page of a PDF as its icon in Explorer, for PDFs that open in
 ; InkPDF: a small thumbnail-handler DLL. Windows runs a handler registered for one user inside the
 ; program showing the thumbnails (DisableProcessIsolation), so the DLL contains no PDF code: it
 ; only starts inkpdf.exe --thumbnail, a separate short-lived process that does the drawing.

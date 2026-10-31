@@ -13,7 +13,7 @@ mod raster;
 
 pub use font::set_font;
 pub use layout::{caret_at, clean, fit_box, follow_wrap, index_at, line_range, measure, outline, selection_rects, vertical, wrap};
-pub use raster::raster;
+pub use raster::{raster, raster_weighted};
 
 /// How tall a line is, as a multiple of the font size.
 pub const LINE_HEIGHT: f32 = 1.25;
@@ -260,5 +260,14 @@ mod tests {
         assert!(long.width <= 4096);
         // Characters the font has no letter for do not break it.
         assert!(raster("\u{10FFFF}é€漢", 20.0, 1.0, [0, 0, 0, 255]).is_some());
+    }
+
+    #[test]
+    fn heavy_text_has_more_ink_than_plain_text_and_the_same_size() {
+        let (plain, heavy) =
+            (raster("Hello", 24.0, 2.0, [0, 0, 0, 255]).expect("plain"), raster_weighted("Hello", 24.0, 2.0, [0, 0, 0, 255], true).expect("heavy"));
+        assert_eq!((plain.width, plain.height), (heavy.width, heavy.height));
+        let ink = |b: &raster::Bitmap| b.pixels.chunks(4).map(|p| u32::from(p[3])).sum::<u32>();
+        assert!(ink(&heavy) as f32 > ink(&plain) as f32 * 1.1, "{} vs {}", ink(&heavy), ink(&plain));
     }
 }

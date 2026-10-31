@@ -40,6 +40,8 @@ pub struct Chrome {
     pub theme_menu: bool,
     /// The pill unfolded from its round button, in a window too narrow for all three whole (see [`super::pills`]).
     pub pill: Option<Pill>,
+    /// The bar under the tools is unfolded from its round button (see [`super::context`]).
+    pub bar_open: bool,
     /// The press under way on the window's own controls, if any.
     pub(crate) act: Act,
 }
@@ -49,6 +51,7 @@ impl Chrome {
     pub(super) fn clear_press_and_prompt(&mut self) {
         self.act = Act::Idle;
         self.pill = None;
+        self.bar_open = false;
         self.theme_menu = false;
         self.overview = None;
         self.prompt = None;

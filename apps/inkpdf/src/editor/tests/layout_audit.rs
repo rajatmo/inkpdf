@@ -142,3 +142,47 @@ fn every_card_and_pill_is_inside_the_window_and_none_lies_over_another_in_any_si
     }
     assert!(bad.is_empty(), "{} problems:\n{}", bad.len(), bad.join("\n"));
 }
+
+#[test]
+fn the_bar_under_the_tools_never_lies_over_the_round_button_under_the_theme_button_or_a_pill_at_any_width_a_window_can_have() {
+    let mut bad = Vec::new();
+    for dpr in [1.0f32, 1.5, 2.0, 2.6] {
+        // (The windows the program lets be: no narrower than 360 points.)
+        let mut w = 360.0 * dpr;
+        while w < 2700.0 {
+            for tool in [crate::tool::Tool::Pen, crate::tool::Tool::Text, crate::tool::Tool::Select, crate::tool::Tool::Lasso] {
+                for (pill, bar_open) in
+                    [(None, false), (None, true), (Some(crate::toolbar::Pill::View), false), (Some(crate::toolbar::Pill::Document), false)]
+                {
+                    let mut ed = Editor::with_extensions([w, 1000.0], dpr, crate::motion::Prefs::REDUCED, &[]);
+                    ed.load(crate::view::Layout::new(&[[612.0, 792.0], [612.0, 792.0]]), vec![]);
+                    ed.set_tool(tool);
+                    ed.chrome.theme_menu = true;
+                    ed.chrome.pill = pill;
+                    ed.chrome.bar_open = bar_open;
+                    let mut things: Vec<(String, [f32; 4])> = Vec::new();
+                    if let Some(b) = ed.context_bar() {
+                        things.push(("bar".into(), b.rect));
+                    }
+                    if let Some(c) = ed.theme_layout() {
+                        things.push(("theme".into(), c.rect));
+                    }
+                    for (i, p) in ed.toolbar().pills.iter().enumerate() {
+                        if p[2] > p[0] {
+                            things.push((format!("pill {i}"), *p));
+                        }
+                    }
+                    for (i, (a, ra)) in things.iter().enumerate() {
+                        for (b, rb) in &things[i + 1..] {
+                            if overlap(*ra, *rb) {
+                                bad.push(format!("{w}@{dpr} {tool:?} pill {pill:?} bar_open {bar_open}: {a} {ra:?} over {b} {rb:?}"));
+                            }
+                        }
+                    }
+                }
+            }
+            w += 10.0;
+        }
+    }
+    assert!(bad.is_empty(), "{} overlaps, the first few:\n{}", bad.len(), bad.iter().take(8).cloned().collect::<Vec<_>>().join("\n"));
+}

@@ -416,6 +416,11 @@ the accent colour) and flips it through the same `set_mode`; it is not saved, an
 `Item::Finger` (right pill, between the mode button and full screen) turns `Editor::finger_draws` on and off (saved as `finger-draws`): `editor/touch.rs`
 then hands the first finger on the page to the tool as a stylus with the id `FINGER_STYLUS_ID`, under the tablet mode's policy (`finger_route_samples` in
 `routing.rs`), beginning the stroke only after 8 logical px of movement; a second finger ends it and the two pinch.
+Item::Present (right pill, left of full screen; Ctrl+L) starts editor/presentation.rs: a modal layer (Prompt > Presentation > Overview in editor/modal.rs)
+that shows one page whole over black, takes every device (click, tap or swipe, keys, wheel) and nothing else, and puts the view, and the full-screen state, back on
+leaving. 	oolbar/presentation.rs draws the counter and the button to leave (plain data, PresentationView and PresentationLayout); View has a ree state in
+which its pan and zoom are not the reader's. A document's permissions are the Model module permissions (pdf::PdfDocument::permissions); editor/permissions.rs
+asks it before a tool that edits (Tool::edits), a page edit or a form field changes anything.
 
 `SM_CONVERTIBLESLATEMODE` alone cannot be trusted: an ordinary desktop PC reports 0 ("slate"). So `posture::decide`
 also needs a touch or pen digitizer and a platform role of mobile or slate (`PowerDeterminePlatformRole`). The

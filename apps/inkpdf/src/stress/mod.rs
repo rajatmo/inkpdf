@@ -531,7 +531,12 @@ fn poke(ed: &mut Editor, rng: &mut Rng, hostile: bool) -> String {
             what = format!("set_viewport {size:?}");
             ed.set_viewport(size);
         }
-        16 => ed.dpr = rng.pick(&[0.5, 1.0, 1.25, 1.5, 2.0, 3.0, 4.0]),
+        16 => {
+            // The window's scale changes (the shell asks for a frame after it, as it does after a resize).
+            let dpr = rng.pick(&[0.5, 1.0, 1.25, 1.5, 2.0, 3.0, 4.0]);
+            what = format!("shell: scale {dpr}");
+            ed.set_dpr(dpr);
+        }
         17 => ed.mouse_left(),
         18 => {
             let phase = rng.pick(&[Phase::Down, Phase::Move, Phase::Up, Phase::Cancel]);

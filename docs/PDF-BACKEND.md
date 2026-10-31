@@ -84,7 +84,7 @@ vector drawing): a floor, because it has no images and no embedded fonts, so rea
 | Stay on pdfcraft, with the seam and the suite | low | **the choice** |
 | Vendor the pdfcraft source into this repository | a bigger repository, merges to carry | if the other repository stops being under our control |
 | A second pure-Rust backend behind the seam | the three traits, then the suite | only if a trigger below fires; it must pass `backend_contract` |
-| Platform renderers (Android `PdfRenderer`, Windows.Data.Pdf), pdfium, MuPDF | not pure Rust, no text or annotation access on some | **ruled out** (the owner's rule: pure Rust only) |
+| Platform renderers (Android `PdfRenderer`, Windows.Data.Pdf), C and C++ engines | not pure Rust, no text or annotation access on some | **ruled out** (the owner's rule: pure Rust only) |
 | An own renderer | years: fonts, CMaps, JBIG2, JPEG 2000, transparency and shadings, a spec of about 1000 pages | **not planned** |
 
 **Reconsider** (write to the owner, with the number) when any of these is true:

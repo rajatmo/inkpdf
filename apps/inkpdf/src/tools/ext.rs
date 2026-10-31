@@ -190,6 +190,10 @@ impl ExtTool {
 }
 
 impl Tool for ExtTool {
+    fn edits(&self) -> bool {
+        self.inner.edits()
+    }
+
     fn policy(&self, mode: Mode) -> InputPolicy {
         let p = self.inner.policy(mode == Mode::Desktop);
         let mouse = match p.mouse {

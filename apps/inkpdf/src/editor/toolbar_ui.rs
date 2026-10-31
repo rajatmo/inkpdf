@@ -13,6 +13,11 @@ impl Editor {
     /// from it (or the prompt, which takes the window and puts the toolbars out of the way), each as far in as its motion has come. (The
     /// pages overview is drawn by [`Editor::draw_overview`].)
     pub fn draw_interface(&self, ui: &mut Ui) {
+        // The slides take the whole window: nothing of the interface is over them but their own.
+        if let Some((view, layout)) = self.presentation_view().zip(self.presentation_layout()) {
+            layout.draw(&view, self.ws.view.viewport, ui);
+            return;
+        }
         let (state, look) = (self.toolbar_state(), self.toolbar_look());
         // The prompt takes over the window: the toolbars step out of the way.
         if self.chrome.prompt.is_none() {
@@ -200,9 +205,14 @@ impl Editor {
     /// remembered.
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn set_tool(&mut self, tool: Tool) {
+        if !self.tool_allowed(tool) {
+            self.refuse();
+            return;
+        }
         if self.ws.tool != tool {
             self.settle();
             self.ws.tool = tool;
+            self.chrome.bar_open = false;
             self.ws.selection.clear();
             self.tools.leave_all(&mut self.ws);
             self.chrome.panel = None;
@@ -240,6 +250,7 @@ impl Editor {
                 // The other mode (the posture decides again when the machine is turned into a tablet or back).
                 Item::ModeSwitch => self.set_mode(if self.mode == Mode::Desktop { Mode::Tablet } else { Mode::Desktop }),
                 Item::Finger => self.set_finger_draws(!self.finger_draws),
+                Item::Present => self.start_presentation(),
                 // (The look goes round, and a round button drops down from it: whether the pages follow it.)
                 Item::Theme => {
                     self.cycle_appearance();

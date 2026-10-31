@@ -2,7 +2,7 @@
 //! round-ended line segments, so it needs no text or image rendering; the icons are TikZ drawings
 //! (see [`icons`]).
 //!
-//! There are three pills along the top, as in Notewise: the document's buttons on the left (close,
+//! There are three pills along the top: the document's buttons on the left (close,
 //! undo, redo, save), the tools in the middle (pen, laser) and full screen on the right. In a window too
 //! narrow for all three, the pills fold into round buttons (the left one first, then the right, then the
 //! middle one), each of which unfolds its pill over the others when it is pressed (see [`Pill`]). The pen's
@@ -15,6 +15,7 @@ mod icons;
 mod item_card;
 mod look;
 mod overview;
+mod presentation;
 mod prompt;
 mod search_card;
 mod theme;
@@ -48,6 +49,7 @@ pub use overview::{
     Action as OverviewAction, Control as OverviewControl, DragView, Hover as OverviewHover, MenuItem as OverviewMenuItem, OverviewLayout,
     OverviewView, PageMotion, TocHit, TocRow, draw as draw_overview,
 };
+pub use presentation::{PresentationLayout, PresentationView};
 pub use prompt::{PromptLayout, PromptView};
 pub use search_card::{ROWS as SEARCH_ROWS, SearchItem, SearchLayout, SearchRow, SearchView};
 pub use theme::{Align, Image, Label, Ui};
@@ -102,6 +104,8 @@ pub enum Item {
     ModeSwitch,
     /// A finger draws like the stylus (so that every tool works with no stylus), or only pans and zooms.
     Finger,
+    /// Show the document one page at a time, as slides.
+    Present,
     /// Fill the whole screen, or give it back.
     Fullscreen,
     /// The look of the interface: the system's, light, dark (each press goes to the next).
@@ -115,7 +119,7 @@ impl Item {
     pub fn pill(self) -> Pill {
         match self {
             Item::Tool(_) => Pill::Tools,
-            Item::Theme | Item::ModeSwitch | Item::Finger | Item::Fullscreen => Pill::View,
+            Item::Theme | Item::ModeSwitch | Item::Finger | Item::Present | Item::Fullscreen => Pill::View,
             Item::Fold(pill) => pill,
             _ => Pill::Document,
         }
@@ -212,10 +216,10 @@ const LEFT: [Option<Item>; 10] = [
     Some(Item::Pages),
     Some(Item::Search),
 ];
-const RIGHT: [Option<Item>; 4] = [Some(Item::Theme), Some(Item::ModeSwitch), Some(Item::Finger), Some(Item::Fullscreen)];
+const RIGHT: [Option<Item>; 5] = [Some(Item::Theme), Some(Item::ModeSwitch), Some(Item::Finger), Some(Item::Present), Some(Item::Fullscreen)];
 
 /// Buttons at most: the left pill's, the right pill's and as many tools as a toolbar can hold. (A toolbar has the buttons of the tools there are.)
-pub const BUTTONS: usize = 9 + 5 + crate::tool::MAX_TOOLS;
+pub const BUTTONS: usize = 9 + 6 + crate::tool::MAX_TOOLS;
 
 /// How big a button is when all three pills fit (in points), the least it shrinks to before pills fold, and the least there is
 /// (past which the window is too small to use).
@@ -528,19 +532,20 @@ impl Toolbar {
                     // (The accent while its round button is shown.)
                     icon.draw(&mut ui.lines, cx, cy, half, line, if state.theme_menu { ui.pal.accent } else { ui.pal.ink });
                 }
+                Item::Present => icons.present.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink),
                 Item::Fullscreen => {
                     let icon = if state.fullscreen { &icons.exit_fullscreen } else { &icons.fullscreen };
                     icon.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink);
                 }
                 Item::Tool(tool) => self.draw_tool(tool, r, state, tool_ink(tool), ui),
                 // The round buttons of the folded pills: a page for the document's, the tool in use (as the mark has it) for the
-                // tools', sliders for the look's.
+                // tools', an eye for the look's.
                 Item::Fold(Pill::Document) => icons.document.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink),
                 Item::Fold(Pill::Tools) => {
                     ui.panel(square, 0.3 * u, ui.pal.accent_wash);
                     self.draw_tool(state.tool, r, state, ui.pal.accent, ui);
                 }
-                Item::Fold(Pill::View) => icons.options.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink),
+                Item::Fold(Pill::View) => icons.view.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink),
             }
             // A round button goes as its pill comes out of it; what is in a pill comes out of the button.
             let xform = if matches!(item, Item::Fold(_)) { Xform::fade(1.0 - look.unfold[pill.index()]) } else { unfolding(pill) };

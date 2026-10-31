@@ -33,6 +33,8 @@ pub enum ContextItem {
     /// Unfold the panel with the thickness and the tool's other settings. (On a narrow window this is the one dot
     /// that stands for the colours.)
     Style,
+    /// The round button the bar is folded into, where the window has no room for it whole (see [`ContextBar::folded`]): it unfolds the bar.
+    Unfold,
 }
 
 /// Everything the bar's look depends on.
@@ -124,6 +126,8 @@ pub struct ContextBar {
     gap_count: usize,
     /// The colours are one dot, the window being too narrow for five.
     compact: bool,
+    /// The bar is its round button (see [`ContextBar::folded`]).
+    folded: bool,
     unit: f32,
     dpr: f32,
 }
@@ -172,7 +176,45 @@ impl ContextBar {
                 }
             }
         }
-        ContextBar { rect: [left, top, left + width, top + height], items, count: placed, gaps: gap_x, gap_count: placed_gaps, compact, unit, dpr }
+        ContextBar {
+            rect: [left, top, left + width, top + height],
+            items,
+            count: placed,
+            gaps: gap_x,
+            gap_count: placed_gaps,
+            compact,
+            folded: false,
+            unit,
+            dpr,
+        }
+    }
+
+    /// The bar as a round button, where it would take room that something else needs: in the middle under the tools, as big as a pill is high, with
+    /// one button that unfolds it.
+    pub fn folded(toolbar: &Toolbar, viewport: [f32; 2]) -> ContextBar {
+        let dpr = toolbar.dpr;
+        let pad = CONTEXT_PAD * dpr;
+        let size = toolbar.unit + 2.0 * pad;
+        let left = ((viewport[0] - size) / 2.0).max(0.0);
+        let top = toolbar.bottom() + CONTEXT_GAP * dpr;
+        let mut items = [(ContextItem::Style, [0.0; 4]); BUTTONS];
+        items[0] = (ContextItem::Unfold, [left + pad, top + pad, left + pad + toolbar.unit, top + pad + toolbar.unit]);
+        ContextBar {
+            rect: [left, top, left + size, top + size],
+            items,
+            count: 1,
+            gaps: [0.0; GAPS],
+            gap_count: 0,
+            compact: false,
+            folded: true,
+            unit: toolbar.unit,
+            dpr,
+        }
+    }
+
+    /// Whether the bar is its round button.
+    pub fn is_folded(&self) -> bool {
+        self.folded
     }
 
     pub(crate) fn items(&self) -> &[(ContextItem, [f32; 4])] {
@@ -206,7 +248,7 @@ impl ContextBar {
             ContextItem::Duplicate | ContextItem::Copy | ContextItem::Delete => state.selection,
             ContextItem::Paste => state.paste,
             ContextItem::Action(a) => state.actions.iter().flatten().any(|(own, on)| *own == a && *on),
-            ContextItem::Swatch(_) | ContextItem::Style => true,
+            ContextItem::Swatch(_) | ContextItem::Style | ContextItem::Unfold => true,
         }
     }
 
@@ -214,12 +256,18 @@ impl ContextBar {
     pub fn draw(&self, state: &ContextState, drawer_bottom: Option<f32>, ui: &mut Ui) {
         let (u, px) = (self.unit, self.dpr);
         let (top, bottom) = (self.rect[1], self.rect[3]);
-        match drawer_bottom {
+        match drawer_bottom.filter(|_| !self.folded) {
             Some(end) => {
                 ui.floating(self.card(end), 0.45 * u, px);
                 ui.line([self.rect[0] + 0.5 * u, bottom], [self.rect[2] - 0.5 * u, bottom], px.max(1.0), ui.pal.separator);
             }
             None => ui.floating(self.rect, 0.5 * (bottom - top), px),
+        }
+        if self.folded {
+            // (The cog of the tool's settings: what the bar holds is the tool's.)
+            let (cx, cy) = ((self.rect[0] + self.rect[2]) / 2.0, (self.rect[1] + self.rect[3]) / 2.0);
+            icons().options.draw(&mut ui.lines, cx, cy, 0.33 * self.unit, (self.unit * 0.04).max(1.4 * px), ui.pal.ink);
+            return;
         }
         let mid = (top + bottom) / 2.0;
         for &x in &self.gaps[..self.gap_count] {
@@ -278,7 +326,7 @@ impl ContextBar {
                     ui.disc([cx, cy], 0.54 * u, state.palette[state.colour % state.palette.len()]);
                     continue;
                 }
-                ContextItem::Style => &all.options,
+                ContextItem::Style | ContextItem::Unfold => &all.options,
             };
             icon.draw(&mut ui.lines, cx, cy, half, line, colour);
         }

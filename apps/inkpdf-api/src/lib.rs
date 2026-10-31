@@ -418,6 +418,12 @@ pub trait Tool {
     fn item_kinds(&self) -> Vec<Box<dyn ItemKind>> {
         Vec::new()
     }
+
+    /// Whether using the tool adds to the document (ink, a note, text): such a tool is not offered for a PDF whose owner has not allowed that. A tool
+    /// that only shows something (a pointer) says `false`. Every tool is taken to edit unless it says it does not.
+    fn edits(&self) -> bool {
+        true
+    }
 }
 
 /// What an extension is: the name the program knows it by, what its toolbar button shows, and how to make it.

@@ -59,6 +59,7 @@ impl Editor {
     pub(crate) fn focus_lost(&mut self) {
         self.palm.reset();
         self.overview_gestures_lost();
+        self.presentation_gestures_lost();
         if self.mouse_press.take().is_some() {
             self.tools.end_all(&mut self.ws);
             self.ws.redraw = true;
@@ -124,6 +125,7 @@ impl Editor {
         self.tools.end_all(&mut self.ws);
         self.dismiss_theme_menu(self.cursor);
         self.dismiss_pill(self.cursor);
+        self.dismiss_bar(self.cursor);
         let bar = self.toolbar();
         if button == MouseButton::Left && self.press_panel(Device::Mouse, 0, self.cursor) {
             // The tool panel took the press.
@@ -154,6 +156,7 @@ impl Editor {
         match self.modal() {
             Some(Modal::Prompt) => return,
             Some(Modal::Overview) => return self.overview_wheel(delta),
+            Some(Modal::Presentation) => return self.presentation_wheel(delta),
             None => {}
         }
         match delta {

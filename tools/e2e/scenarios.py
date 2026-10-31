@@ -159,6 +159,81 @@ def finger(s):
     s.check(s.healthy(), "no crash, nothing printed to stderr")
     s.stop()
 
+def present(s):
+    """The document as slides: one page at a time over black; the mouse and the keyboard turn the pages and leave, and so does the stylus's tip alone, and a
+    finger; and the toolbar is not there while they are shown."""
+
+    def shown():
+        return s.state_of("presentation").get("page")
+
+    def pause():
+        s.wait(500)
+
+    s.launch("tool select\n", "pages6", DESKTOP)
+    s.check(not s.has("presentation", "page"), "no slides at first")
+    s.press("present")
+    s.wait(1200)
+    s.check(shown() == 1, f"the present button begins the slides on the first page ({shown()})")
+    s.check(not s.toolbar_up(), "and the toolbar is not there to press")
+    w, h = s.d.size
+    s.keys("right")
+    pause()
+    s.check(shown() == 2, "the right arrow shows the next page")
+    s.click(0.85, 0.5)
+    pause()
+    s.check(shown() == 3, "a click on the right of the window shows the next page")
+    s.click(0.1, 0.5)
+    pause()
+    s.check(shown() == 2, "a click on the left of it, the one before")
+    s.keys("end")
+    pause()
+    s.check(shown() == 6, "End shows the last page")
+    s.keys("home")
+    pause()
+    s.check(shown() == 1, "Home the first")
+    s.mouse_drag(0.3, 0.5, 0.35, 0.5)
+    s.check(s.black() < 0.9 * w * h * 0.8, "the page is on the screen")
+    s.keys("esc")
+    s.wait(900)
+    s.check(not s.has("presentation", "page") and s.toolbar_up(), "Escape leaves, and the toolbar is back")
+    # ---- the tablet mode: the stylus's tip alone, and a finger.
+    s.press("mode")
+    s.pen_press("present")
+    s.wait(1200)
+    s.check(shown() == 1, "tablet mode: a tap of the stylus's tip on the button begins the slides")
+    s.pen_tap(0.85, 0.5)
+    pause()
+    s.check(shown() == 2, "a tap of the tip on the right shows the next page")
+    s.d.finger([[(0.85, 0.5), (0.85, 0.5)]])
+    pause()
+    s.check(shown() == 3, "a finger's tap does the same")
+    s.finger_drag(0.8, 0.5, 0.2, 0.5, 15)
+    pause()
+    s.check(shown() == 4, "a finger's swipe to the left shows the next")
+    s.finger_drag(0.2, 0.5, 0.8, 0.5, 15)
+    pause()
+    s.check(shown() == 3, "a swipe to the right, the one before")
+    s.pen_tap(0.85, 0.5)
+    s.wait(300)
+    s.check(s.has("presentation", "exit"), "a tap shows the button that leaves")
+    s.tap_spot(s.spot("presentation", "exit"))
+    s.wait(900)
+    s.check(not s.has("presentation", "page"), "and the tip, tapping it, leaves")
+    s.check(s.healthy(), "no crash, nothing printed to stderr")
+    s.stop()
+
+def broken(s):
+    """A file that cannot be opened: the window says so in a card (it was a black window with nothing in it), the card closes, and the toolbar works."""
+    s.launch("", "broken", DESKTOP)
+    s.wait(800)
+    s.check(s.has("error", "close"), "a file that is no PDF: a card says it could not be opened")
+    s.check(s.toolbar_up(), "and the toolbar is there")
+    s.click_spot(s.spot("error", "close"))
+    s.wait(500)
+    s.check(not s.has("error", "close"), "the card's button closes it")
+    s.press("pen")
+    s.check(s.healthy(), "and the program goes on working")
+
 def notes(s):
     """Sticky notes, with the devices each mode guarantees: a click puts a note and opens its thread, the keyboard writes in it, a drag moves it; with the
     tip alone a tap puts one, the thread's own buttons close and delete it, and a finger makes none."""
@@ -529,4 +604,4 @@ def forms(s):
     s.stop()
 
 
-ALL = {"devices": devices, "finger": finger, "links": links, "notes": notes, "pages": pages, "reader": reader, "forms": forms}
+ALL = {"devices": devices, "finger": finger, "present": present, "broken": broken, "links": links, "notes": notes, "pages": pages, "reader": reader, "forms": forms}

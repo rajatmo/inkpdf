@@ -59,6 +59,12 @@ impl Editor {
         if self.theme_layout().is_some_and(|c| c.contains(pos)) {
             return Some(Some(CardHit::Theme));
         }
+        if let Some(card) = self.error_layout().filter(|c| c.contains(pos)) {
+            return Some(card.on_close(pos).then_some(CardHit::ErrorClose));
+        }
+        if let Some(card) = self.item_card_layout().filter(|c| c.contains(pos)) {
+            return Some(card.hit(pos).map(CardHit::Item));
+        }
         if let Some(card) = self.search_layout().filter(|c| c.contains(pos)) {
             return Some(card.hit(pos).map(CardHit::Search));
         }
@@ -86,6 +92,8 @@ impl Editor {
         match hit {
             CardHit::Theme => self.set_dark_pages(!self.dark_pages()),
             CardHit::Search(item) => self.press_search_item(item),
+            CardHit::Item(item) => self.press_card_item(item),
+            CardHit::ErrorClose => self.close_error(),
             CardHit::Context(item) => self.activate_context(item),
         }
     }

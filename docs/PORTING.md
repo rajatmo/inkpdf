@@ -23,12 +23,12 @@ Linux and Android live on `main` beside Windows (merged 2026-10-29). Written 202
 | Builds | yes | yes | yes (arm64 APK, `tools/android`) |
 | 717 unit/editor/storm tests | CI and by hand | pass | the pure parts (the decoder) run on every OS |
 | Window + GPU + render | yes (DX12) | runs (X11 on Xvfb, Wayland on headless Weston, software Vulkan) | runs on a Samsung tablet (S Pen), Vulkan |
-| Pen pressure / eraser / barrel / hover / history | yes | **not yet** (L2): basic mouse and touch | yes (the S Pen's one button erases) |
+| Pen pressure / eraser / barrel / hover / history | yes | **Wayland: yes** (L2, the tablet protocol; untried on a real tablet); X11: basic mouse and touch | yes (the S Pen's one button erases) |
 | Touch: pan, pinch, taps on the buttons | yes | basic | yes |
 | Palm rejection | touch is off while the pen is near | same rule (with basic input there is no hover) | yes |
-| Clipboard for text boxes | yes | in-memory only (L3) | the system's, through the Java side (A4; untried on a device) |
+| Clipboard for text boxes | yes | the system's (L3: arboard, Wayland data-control or X11; in-memory where neither is reachable) | the system's, through the Java side (A4; untried on a device) |
 | Save As | in-app card, opens on Documents | in-app card, opens on Documents (XDG) | the system's picker (Storage Access Framework; A4, untried on a device): `DocId::Uri` through `platform/saf.rs` |
-| Error box | yes | terminal | terminal |
+| Error box | yes | a card over the page (L3) | a card over the page |
 | Portable package | zip (`build-portable.ps1`, CI) | tarball (`tools/linux/build-portable.sh`, CI) | APK (CI artifact) |
 
 What has been tried by hand: Windows (pen, touch and the portable build), Linux on WSL, and Android on an S Pen tablet. What has not:
@@ -92,7 +92,16 @@ Android has had `MotionEvent` historical samples and `TOOL_TYPE_STYLUS` for a lo
 
 **L1. Done:** build, run and test on Linux; smoke test, portable tarball and CI jobs.
 
-**L2. Linux pen (the main task).** `platform/linux/tablet.rs`, a `PointerSource` over `zwp_tablet_manager_v2`.
+**L2. Linux pen. Done on Wayland (2026-10-31); X11 is not done (the owner chose Wayland only), and nothing has been tried on a real tablet.**
+What there is: `platform/tablet_frames.rs` (pure: what a tablet tool says, frame by frame, becomes the program's pointer events: tested on every OS with scripted
+frames and a 200-round storm that the stream keeps `input::check`), `platform/linux/tablet.rs` (the binding: a second event queue on winit's own
+Wayland connection, `zwp_tablet_manager_v2`, read in `pump` right after the display wait, only tools over our own surface, touches that winit
+reports handed through) and `platform/linux/tablet/fake_compositor.rs` (a compositor of our own, `wayland-server` on a socket pair, serving a tablet and
+a scripted pen to the real binding: hover, press, moves, lift, leave, scale, the eraser end, the side button and a pen over another window). Tried
+against WSLg's compositor, which has no tablet protocol: the reader says so and the pen is the mouse, as before. The design notes that follow were
+the plan; `PointerSource::set_scale` and `Platform::install_pointer(&dyn WindowHandles)` came of it.
+
+The plan was: `platform/linux/tablet.rs`, a `PointerSource` over `zwp_tablet_manager_v2`.
 * Share winit's Wayland connection (`wayland-backend` `from_foreign_display` with the display pointer from
   raw-window-handle; the fork already builds `wayland-backend` with `dlopen`). A second connection cannot work: tablet
   events are delivered for *our* `wl_surface`.
@@ -105,7 +114,10 @@ Android has had `MotionEvent` historical samples and `TOOL_TYPE_STYLUS` for a lo
 * X11 fallback: XInput2 (`XI_Motion` with valuators for pressure; `XIGetDeviceProperty` for tool type).
 * Posture: no reliable signal on Linux; keep `--mode` and the toolbar's mode button.
 
-**L3. Linux polish.** Clipboard (Wayland: the fork already carries a clipboard in `platform::wayland::Clipboard`; X11:
+**L3. Linux polish. Done (2026-10-31)** except the Flatpak (the AppImage was chosen: `tools/linux/build-appimage.sh`) and a HiDPI check on a real screen:
+the clipboard is arboard (`platform/linux/clipboard.rs`; Xvfb runs its round-trip test, a session with neither Wayland data-control nor X11 keeps the program's
+own), an error is a card over the page where the system has no message box (`toolbar/error_card.rs`, `Platform::has_error_box`), and animations follow
+GNOME's `enable-animations` unless `INKPDF_MOTION` says otherwise. The plan was: Clipboard (Wayland: the fork already carries a clipboard in `platform::wayland::Clipboard`; X11:
 `arboard`), an in-app error card (like Save As), animations setting (`gsettings`/portal), packaging (AppImage or
 Flatpak; a `.desktop` file and icon), HiDPI check, the real `latency.sh` equivalent.
 
@@ -127,8 +139,17 @@ number their pointers from 0, so a pointer is told by its device *and* its id; a
 the editor. Still to evaluate on a device: unbuffered input dispatch, `Choreographer`-aligned frames (Swappy), Vulkan `FIFO` vs `MAILBOX`,
 front-buffer rendering.
 
-**A3. Android UI fit.** Touch targets (the toolbar is sized for a mouse and a pen), system bars and cutouts, the
-soft keyboard for the text tool (`Ime` events), default `Mode::Tablet` (already set).
+**A3. Android UI fit. Done (2026-10-31; watched on the phone emulator, not on a device).** What was found on the emulator: the soft keyboard
+does not resize the window (`client` stays 1080x2400) and covered the lowest 40% of it, so a text box typed low on the page was out of sight.
+`Host.java` now watches the window's insets and tells Rust how many pixels the keyboard covers (`Bridge::keyboard_height`,
+`Platform::keyboard_covered`); the shell looks at it while the keyboard is up or on its way (a bounded 60 ms look for 1.5 s after it is asked for,
+so an idle window still costs nothing); `editor/keyboard.rs` brings the text box or form field being typed above it (`View::scroll_to_clear`),
+lets the scroll go past the end of the document by the room it takes (`View::set_bottom_room`) and puts the view back when it goes, unless the person
+scrolled meanwhile. Cut-outs: the activity no longer forces `LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES` with the bars hidden, so the window is never
+drawn under a camera hole (the toolbars would have been); with `targetSdk` 34 the system also keeps it inside the bars. (Raising `targetSdk` to 35
+makes Android draw edge to edge: the insets would then have to be passed down as the keyboard's height is.) Touch targets: the buttons are never
+under 30 points (folding pills take over before they shrink: 1.4.0), 30 dp being above the 24 dp Material minimum but under its 48 dp advice; a
+phone and a tablet are checked by `tools/e2e` with real touches and a pen.
 
 **A4. Android files.** Storage Access Framework (open/save `Intent`, `content://` URIs, so `Doc` needs a bytes-based
 open and save, not just a path), clipboard, `ACTION_VIEW` for links. Needs JNI (`jni` crate + `ndk-context`).

@@ -84,6 +84,11 @@ pub trait Platform {
     fn open_url(&self, url: &str);
     /// Tell the user something went wrong, over `window`.
     fn error_box(&self, window: &dyn HasWindowHandle, text: &str);
+    /// Whether the system has a message box of its own for [`Platform::error_box`] (Windows'): where it has none, the program says it on the screen,
+    /// in a card of its own.
+    fn has_error_box(&self) -> bool {
+        false
+    }
     /// Show or hide an on-screen keyboard.
     fn set_text_input(&self, active: bool);
     /// The system clipboard for the text of text boxes, if there is one.
@@ -95,6 +100,11 @@ pub trait Platform {
     }
     /// Hide the system's bars, or show them again (see [`Platform::controls_system_bars`]).
     fn set_system_bars_hidden(&self, _hidden: bool) {}
+    /// How many pixels from the bottom of the window the on-screen keyboard covers now (Android's: it does not resize the window, it covers it),
+    /// 0 where there is none or it is not up. Asked while the keyboard is up or is being brought up (see `app`).
+    fn keyboard_covered(&self) -> f32 {
+        0.0
+    }
     /// Show the pointer the rules ask for, where the platform has a pointer of its own to set (Android's, for a mouse or a hovering stylus;
     /// a desktop's is the window's, set by the shell).
     fn set_pointer_icon(&self, _kind: crate::input::CursorKind) {}
@@ -119,7 +129,7 @@ pub trait Platform {
     /// Start the OS's own pen and touch reader for `window`. An `Err` is not fatal: the shell falls back to the basic mouse
     /// and touch the toolkit reports (no pressure, eraser or buttons for a pen), and says why on the terminal. `wake` asks
     /// the event loop for a frame.
-    fn install_pointer(&self, window: &dyn HasWindowHandle, wake: Waker) -> Result<Box<dyn PointerSource>, String>;
+    fn install_pointer(&self, window: &dyn WindowHandles, wake: Waker) -> Result<Box<dyn PointerSource>, String>;
 }
 
 #[cfg(test)]
@@ -143,6 +153,8 @@ mod unix_dirs;
 mod linux;
 #[allow(dead_code, reason = "read by the Android reader, tested everywhere")]
 pub(crate) mod motion_event;
+#[allow(dead_code, reason = "read by the Wayland tablet reader, tested everywhere")]
+pub(crate) mod tablet_frames;
 #[cfg(windows)]
 mod windows;
 
@@ -222,6 +234,10 @@ impl Platform for Native {
         os::error_box(window, text);
     }
 
+    fn has_error_box(&self) -> bool {
+        cfg!(windows)
+    }
+
     fn set_text_input(&self, active: bool) {
         os::set_text_input(active);
     }
@@ -235,6 +251,10 @@ impl Platform for Native {
 
     fn controls_system_bars(&self) -> bool {
         bridge().is_some()
+    }
+
+    fn keyboard_covered(&self) -> f32 {
+        bridge().map_or(0.0, |b| b.keyboard_height().max(0) as f32)
     }
 
     fn set_system_bars_hidden(&self, hidden: bool) {
@@ -297,7 +317,7 @@ impl Platform for Native {
         bridge()?.take_launch().filter(|u| !u.is_empty()).map(crate::store::DocId::Uri)
     }
 
-    fn install_pointer(&self, window: &dyn HasWindowHandle, wake: Waker) -> Result<Box<dyn PointerSource>, String> {
+    fn install_pointer(&self, window: &dyn WindowHandles, wake: Waker) -> Result<Box<dyn PointerSource>, String> {
         os::install_pointer(window, wake)
     }
 }
@@ -350,6 +370,9 @@ pub trait PointerSource {
     /// the source makes it the pointer it already was, or a finger. Nothing for a source that swallows pen and touch before the
     /// toolkit sees them.
     fn late_touch(&mut self, _ev: PointerEvent) {}
+
+    /// The window's scale changed (and is told once, as the source is made): a source that reads positions in logical pixels needs it.
+    fn set_scale(&mut self, _scale: f32) {}
 
     /// Stop receiving; called when the app exits.
     fn uninstall(&mut self);

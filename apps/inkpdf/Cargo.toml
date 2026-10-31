@@ -58,6 +58,12 @@ rfd = { workspace = true }
 # library is loaded when needed, so one binary starts on either.
 [target.'cfg(all(unix, not(target_os = "android")))'.dependencies]
 winit = { version = "0.30", default-features = false, features = ["rwh_06", "x11", "wayland", "wayland-dlopen"] }
+# The system clipboard: Wayland's data-control protocol where the compositor has it, X11's selections otherwise (see `platform/linux/clipboard.rs`).
+arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
+# The pen on Wayland: the tablet protocol, read on winit's own connection (see `platform/linux/tablet.rs`). The versions are the ones winit uses.
+wayland-client = "0.31"
+wayland-backend = { version = "0.3", features = ["client_system"] }
+wayland-protocols = { version = "0.32", features = ["client", "unstable"] }
 
 # Android: NativeActivity (no Java glue to start with; the file picker and clipboard will need a little, see docs/PORTING.md).
 [target.'cfg(target_os = "android")'.dependencies]
@@ -87,3 +93,8 @@ windows-sys = { version = "0.61", features = [
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }
+
+# A compositor of our own, in the tests of the Wayland pen reader (it says what a tablet would, over a socket pair).
+[target.'cfg(all(unix, not(target_os = "android")))'.dev-dependencies]
+wayland-server = "0.31"
+wayland-protocols = { version = "0.32", features = ["server", "unstable"] }

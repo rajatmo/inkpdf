@@ -230,9 +230,11 @@ impl Editor {
             }
         }
         for s in self.ws.ink.strokes() {
-            let Some(block) = &s.text else { continue };
-            for range in find_in(&block.text, query, case, words, PER_PAGE) {
-                let chars: Vec<char> = block.text.chars().collect();
+            // (The text boxes typed on the pages, and what an extension's items say of themselves, such as the words of a note.)
+            let said = s.text.as_ref().map(|block| block.text.clone()).or_else(|| crate::tools::items::text_of(s));
+            let Some(said) = said else { continue };
+            for range in find_in(&said, query, case, words, PER_PAGE) {
+                let chars: Vec<char> = said.chars().collect();
                 let from = range.start.saturating_sub(CONTEXT);
                 let to = (range.end + CONTEXT).min(chars.len());
                 let snippet: String = chars[from..to].iter().map(|c| if c.is_control() { ' ' } else { *c }).collect();

@@ -13,7 +13,7 @@ use super::drawing::Drawing;
 use super::history::MAX_HISTORY;
 use super::history::{Cmd, History, PageStep};
 use super::query;
-use super::{MarkupKind, P, PageStroke, Stroke, Style, TextBlock};
+use super::{Item, MarkupKind, P, PageStroke, Stroke, Style, TextBlock};
 
 /// Longest stroke kept, in points; a stray gesture cannot grow without bound.
 const MAX_POINTS: usize = 100_000;
@@ -52,16 +52,16 @@ impl InkStore {
     /// Replace everything with strokes read from a file: no undo history, nothing dirty.
     pub fn load(&mut self, strokes: Vec<PageStroke>) {
         *self = Self::new();
-        for (page, style, pts, figure, text, markup) in strokes {
+        for (page, style, pts, figure, text, markup, item) in strokes {
             if let Some(pts) = sanitize(pts) {
-                let pts = if markup.is_some() { box_points(pts) } else { pts };
+                let pts = if markup.is_some() || item.is_some() { box_points(pts) } else { pts };
                 if pts.is_empty() {
                     continue;
                 }
                 let id = self.take_id();
                 // A figure that does not draw what was stored is not to be trusted.
                 let figure = figure.filter(|f| f.points() == pts);
-                self.drawing.strokes.push(Stroke::new(id, page, style, pts, figure, text, markup));
+                self.drawing.strokes.push(Stroke::new(id, page, style, pts, figure, text, markup, item));
             }
         }
         self.revision += 1;
@@ -140,26 +140,44 @@ impl InkStore {
 
     /// Add a finished stroke. `None` when it has no usable points.
     pub fn add(&mut self, page: u32, style: Style, pts: Vec<P>) -> Option<u64> {
-        self.add_stroke(page, style, pts, None, None, None)
+        self.add_stroke(page, style, pts, None, None, None, None)
     }
 
     /// Add a text markup of `kind` over `quads` (boxes, `[x0, y0, x1, y1]` in document space); `style.rgba` is its colour and opacity.
     pub fn add_markup(&mut self, page: u32, style: Style, kind: MarkupKind, quads: &[[f32; 4]]) -> Option<u64> {
         let pts = box_points(quads.iter().flat_map(|q| [[q[0], q[1]], [q[2], q[3]]]));
-        self.add_stroke(page, style, pts, None, None, Some(kind))
+        self.add_stroke(page, style, pts, None, None, Some(kind), None)
+    }
+
+    /// Add an extension's item of `kind` holding `data`, in the box `bounds` (`[x0, y0, x1, y1]`, document space); `style.rgba` is its colour.
+    pub fn add_item(&mut self, page: u32, style: Style, kind: &str, data: String, bounds: [f32; 4]) -> Option<u64> {
+        let pts = box_points([[bounds[0], bounds[1]], [bounds[2], bounds[3]]]);
+        self.add_stroke(page, style, pts, None, None, None, Some(Item { kind: kind.to_string(), data }))
+    }
+
+    /// Change what an item holds as one undo step. `false` if there is no such item or it holds that already.
+    pub fn edit_item(&mut self, id: u64, data: String) -> bool {
+        let Some(old) = self.drawing.strokes.iter().find(|s| s.id == id) else { return false };
+        let Some(item) = old.item.as_ref().filter(|i| i.data != data) else { return false };
+        let after = Stroke::new(id, old.page, old.style, old.pts.clone(), None, None, None, Some(Item { kind: item.kind.clone(), data }));
+        let cmd = Cmd::Reshape { before: Box::new(old.clone()), after: Box::new(after) };
+        cmd.apply(&mut self.drawing, &mut self.page_edit);
+        self.done(cmd);
+        true
     }
 
     /// Add a text box: `outline` is its rectangle (see [`TextBlock`]), `style.rgba` the text's colour.
     pub fn add_text(&mut self, page: u32, style: Style, text: TextBlock, outline: Vec<P>) -> Option<u64> {
-        self.add_stroke(page, style, outline, None, Some(text), None)
+        self.add_stroke(page, style, outline, None, Some(text), None, None)
     }
 
     /// Add a shape, drawn from `figure`, so that its anchors can be edited later.
     pub fn add_figure(&mut self, page: u32, style: Style, figure: Figure) -> Option<u64> {
         let pts = figure.points();
-        self.add_stroke(page, style, pts, Some(figure), None, None)
+        self.add_stroke(page, style, pts, Some(figure), None, None, None)
     }
 
+    #[allow(clippy::too_many_arguments, reason = "the parts a stroke is made of: exactly one of the four optional ones says what kind it is")]
     fn add_stroke(
         &mut self,
         page: u32,
@@ -168,10 +186,11 @@ impl InkStore {
         figure: Option<Figure>,
         text: Option<TextBlock>,
         markup: Option<MarkupKind>,
+        item: Option<Item>,
     ) -> Option<u64> {
         let pts = sanitize(pts)?;
         let id = self.take_id();
-        let stroke = Stroke::new(id, page, style, pts, figure, text, markup);
+        let stroke = Stroke::new(id, page, style, pts, figure, text, markup, item);
         self.drawing.push(stroke.clone());
         self.done(Cmd::Add(vec![stroke]));
         Some(id)
@@ -288,7 +307,7 @@ impl InkStore {
         if old.pts == pts && old.style == style && old.text == text {
             return false;
         }
-        let after = Stroke::new(id, old.page, style, pts, figure, text, None);
+        let after = Stroke::new(id, old.page, style, pts, figure, text, None, None);
         let cmd = Cmd::Reshape { before: Box::new(old.clone()), after: Box::new(after) };
         cmd.apply(&mut self.drawing, &mut self.page_edit);
         self.done(cmd);
@@ -302,7 +321,7 @@ impl InkStore {
         for s in copies {
             let Some(pts) = sanitize(s.pts) else { continue };
             let id = self.take_id();
-            added.push(Stroke::new(id, s.page, s.style, pts, s.figure, s.text, s.markup));
+            added.push(Stroke::new(id, s.page, s.style, pts, s.figure, s.text, s.markup, s.item));
         }
         if added.is_empty() {
             return Vec::new();
@@ -324,7 +343,7 @@ impl InkStore {
             if old.pts == pts && old.style == it.style && old.text == it.text {
                 continue;
             }
-            after.push(Stroke::new(it.id, old.page, it.style, pts, it.figure, it.text, old.markup));
+            after.push(Stroke::new(it.id, old.page, it.style, pts, it.figure, it.text, old.markup, old.item.clone()));
             before.push(old.clone());
         }
         if after.is_empty() {
@@ -465,11 +484,83 @@ mod tests {
         let mut store = InkStore::new();
         assert!(store.add_markup(0, BLACK, MarkupKind::Highlight, &[]).is_none());
         assert!(store.add_markup(0, BLACK, MarkupKind::Highlight, &[[f32::NAN, 0.0, 1.0, 1.0]]).is_none());
-        store.load(vec![(2, BLACK, vec![[0.0, 0.0], [30.0, 12.0]], None, None, Some(MarkupKind::StrikeOut))]);
+        store.load(vec![(2, BLACK, vec![[0.0, 0.0], [30.0, 12.0]], None, None, Some(MarkupKind::StrikeOut), None)]);
         assert_eq!(store.strokes()[0].markup, Some(MarkupKind::StrikeOut));
         assert_eq!(MarkupKind::from_name("squiggly"), Some(MarkupKind::Squiggly));
         assert!(MarkupKind::from_name("wavy").is_none());
         assert!(MarkupKind::ALL.iter().all(|k| MarkupKind::from_name(k.name()) == Some(*k)));
+    }
+
+    fn boxed(store: &mut InkStore, page: u32, bounds: [f32; 4], data: &str) -> u64 {
+        store.add_item(page, Style { rgba: [255, 204, 0, 255], width: 1.0 }, "testbox", data.to_string(), bounds).expect("an item")
+    }
+
+    #[test]
+    fn an_item_is_a_box_that_is_hit_inside_and_nowhere_else_and_holds_what_its_kind_gave_it() {
+        let mut store = InkStore::new();
+        let id = boxed(&mut store, 0, [10.0, 10.0, 30.0, 30.0], "hello");
+        let s = store.get(id).expect("get");
+        assert_eq!(s.item.as_ref().map(|i| (i.kind.as_str(), i.data.as_str())), Some(("testbox", "hello")));
+        assert!(s.boxy() && s.markup.is_none() && s.text.is_none() && s.figure.is_none());
+        assert_eq!(s.quads().collect::<Vec<_>>(), [[10.0, 10.0, 30.0, 30.0]]);
+        assert_eq!(store.hit_test([20.0, 20.0], 1.0), Some(id), "anywhere inside the box");
+        assert_eq!(store.hit_test([60.0, 20.0], 1.0), None);
+        assert_eq!(store.touched_by_segment([20.0, 0.0], [20.0, 50.0], 1.0), vec![id], "an eraser across it");
+        assert_eq!(store.in_polygon(&[[0.0, 0.0], [50.0, 0.0], [50.0, 50.0], [0.0, 50.0]]), vec![id], "a lasso round it");
+        assert!(store.add_item(0, BLACK, "testbox", String::new(), [f32::NAN, 0.0, 1.0, 1.0]).is_none(), "a box that is not one is refused");
+    }
+
+    #[test]
+    fn an_item_is_moved_erased_copied_restyled_changed_and_undone_like_any_stroke_and_keeps_what_it_holds() {
+        let mut store = InkStore::new();
+        let id = boxed(&mut store, 0, [10.0, 10.0, 30.0, 30.0], "one");
+        store.mark_clean();
+        assert_eq!(store.move_by(&[id], 5.0, 7.0, Some(1)), 1);
+        assert_eq!((store.get(id).expect("get").page, store.get(id).expect("get").quads().next()), (1, Some([15.0, 17.0, 35.0, 37.0])));
+        assert!(store.dirty_pages().contains(&0) && store.dirty_pages().contains(&1), "both pages have to be saved");
+        assert!(store.undo());
+        assert_eq!(store.get(id).expect("get").quads().next(), Some([10.0, 10.0, 30.0, 30.0]));
+        // What it holds changes as one undo step, and nothing changes when it holds that already.
+        assert!(!store.edit_item(id, "one".into()));
+        assert!(store.edit_item(id, "one\ntwo".into()));
+        assert_eq!(store.get(id).expect("get").item.as_ref().map(|i| i.data.as_str()), Some("one\ntwo"));
+        assert!(store.undo());
+        assert_eq!(store.get(id).expect("get").item.as_ref().map(|i| i.data.as_str()), Some("one"));
+        assert!(store.redo());
+        assert!(!store.edit_item(99, "x".into()), "no such item");
+        let plain = store.add(0, BLACK, line(5.0)).expect("stroke");
+        assert!(!store.edit_item(plain, "x".into()), "a stroke that is not an item");
+        // A new colour keeps it what it is.
+        let green = Replacement {
+            id,
+            style: Style { rgba: [0, 200, 0, 255], width: 1.0 },
+            pts: store.get(id).expect("get").pts.clone(),
+            figure: None,
+            text: None,
+        };
+        assert!(store.replace_many(vec![green], false));
+        let after = store.get(id).expect("get");
+        assert_eq!((after.style.rgba, after.item.as_ref().map(|i| i.data.as_str())), ([0, 200, 0, 255], Some("one\ntwo")));
+        // Copies keep the kind and what it holds.
+        let copies: Vec<Stroke> = store.strokes().iter().filter(|s| s.item.is_some()).map(|s| s.moved(100.0, 0.0, 0)).collect();
+        let ids = store.add_copies(copies);
+        assert_eq!(store.get(ids[0]).expect("copy").item, store.get(id).expect("get").item);
+        // Erased and brought back.
+        assert_eq!(store.remove(&[id]), 1);
+        assert!(store.undo());
+        assert!(store.get(id).expect("back").item.is_some());
+    }
+
+    #[test]
+    fn an_item_read_from_a_file_keeps_its_kind_and_what_it_holds_and_its_box() {
+        let mut store = InkStore::new();
+        let item = Item { kind: "testbox".into(), data: "hello".into() };
+        store.load(vec![(1, BLACK, vec![[10.0, 10.0], [30.0, 30.0]], None, None, None, Some(item.clone()))]);
+        assert_eq!(store.strokes()[0].item.as_ref(), Some(&item));
+        assert_eq!(store.strokes()[0].quads().collect::<Vec<_>>(), [[10.0, 10.0, 30.0, 30.0]]);
+        let mut odd = InkStore::new();
+        odd.load(vec![(0, BLACK, vec![[f32::NAN, 0.0], [1.0, 1.0]], None, None, None, Some(item))]);
+        assert_eq!(odd.len(), 0, "a box with a corner that is not a number is dropped");
     }
 
     #[test]
@@ -641,9 +732,9 @@ mod tests {
     fn dirty_tracking_and_load() {
         let mut store = InkStore::new();
         store.load(vec![
-            (3, BLACK, line(0.0), None, None, None),
-            (3, BLACK, vec![], None, None, None),
-            (4, BLACK, vec![[f32::NAN, 0.0]], None, None, None),
+            (3, BLACK, line(0.0), None, None, None, None),
+            (3, BLACK, vec![], None, None, None, None),
+            (4, BLACK, vec![[f32::NAN, 0.0]], None, None, None, None),
         ]);
         // Loading keeps only usable strokes, with no history and nothing to save.
         assert_eq!(store.len(), 1);

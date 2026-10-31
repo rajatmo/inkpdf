@@ -92,6 +92,17 @@ impl State {
         self.window.request_redraw();
     }
 
+    /// Say that something went wrong (the first line is the heading, the rest the reason): in the system's message box where it has one, else in a
+    /// card of the program's own over the page.
+    fn problem(&mut self, text: &str) {
+        if self.platform.has_error_box() {
+            self.platform.error_box(&*self.window, text);
+        } else {
+            self.ed.show_error(text);
+            self.window.request_redraw();
+        }
+    }
+
     /// Open a PDF, after dealing with unsaved work.
     pub(super) fn open(&mut self, path: PathBuf) {
         self.open_id(DocId::Path(path));
@@ -107,7 +118,7 @@ impl State {
             Ok((doc, contents)) => self.install(doc, contents),
             Err(e) => {
                 eprintln!("could not open {id}: {e}");
-                self.platform.error_box(&*self.window, &format!("Could not open {}:\n{e}", id.name()));
+                self.problem(&format!("Could not open {}:\n{e}", id.name()));
             }
         }
     }
@@ -186,7 +197,7 @@ impl State {
             Err(e) => {
                 eprintln!("save failed: {e}");
                 self.session.save_then = None;
-                self.platform.error_box(&*self.window, &format!("Could not save:\n{e}"));
+                self.problem(&format!("Could not save:\n{e}"));
             }
         }
     }
@@ -216,7 +227,7 @@ impl State {
             }
             Err(e) => {
                 eprintln!("save failed: {e}");
-                self.platform.error_box(&*self.window, &format!("Could not save:\n{e}"));
+                self.problem(&format!("Could not save:\n{e}"));
                 false
             }
         }
@@ -313,7 +324,15 @@ impl State {
         let typing = self.ed.is_typing();
         if typing != self.keyboard_shown {
             self.keyboard_shown = typing;
+            self.keyboard_since = Some(std::time::Instant::now());
             self.platform.set_text_input(typing);
+        }
+        // (How much of the window it covers: the system does not say when, so it is looked at while one is up or on its way.)
+        if self.keyboard_shown || self.ed.keyboard_covered() > 0.0 {
+            let covered = self.platform.keyboard_covered();
+            if covered != self.ed.keyboard_covered() {
+                self.ed.set_keyboard_covered(covered);
+            }
         }
         if self.ed.take_redraw() {
             self.window.request_redraw();

@@ -40,7 +40,7 @@ jobs:
       - name: System packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libxkbcommon-x11-0 libxcb-xinput0 xvfb xdotool fonts-liberation
+          sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libxkbcommon-x11-0 libxcb-xinput0 libwayland-client0 xvfb xdotool fonts-liberation
       # (Formatting is checked once, by the Windows job above.)
       - name: Clippy
         run: cargo clippy -p inkpdf -p inkpdf-api -p inkpdf-ext --all-targets -- -D warnings

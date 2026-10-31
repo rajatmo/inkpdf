@@ -3,7 +3,7 @@
 //! the tools' own: see [`crate::tools`].)
 
 use crate::input::Device;
-use crate::toolbar::{ContextItem, Item, SearchItem, Slider};
+use crate::toolbar::{CardItem, ContextItem, Item, SearchItem, Slider};
 
 /// A button of one of the cards that float over the page.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -12,6 +12,10 @@ pub(crate) enum CardHit {
     Context(ContextItem),
     /// A part of the search card (see [`crate::toolbar::SearchLayout`]).
     Search(SearchItem),
+    /// A part of the card of an item (see [`crate::toolbar::ItemCardLayout`]).
+    Item(CardItem),
+    /// The close button of the card that says something went wrong.
+    ErrorClose,
     /// The round button under the theme button: whether the pages follow the look.
     Theme,
 }

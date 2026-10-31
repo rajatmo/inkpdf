@@ -15,10 +15,13 @@ subgraph cluster_plat { label="platform/  (adapter layer, picks one backend at c
   "p_android_mod" [label="platform/android/mod.rs", color="#8e44ad", penwidth=2];
   "p_android_reader" [label="platform/android/reader.rs", color="#8e44ad", penwidth=2];
   "p_dialog" [label="platform/dialog.rs", color="#2e86c1", penwidth=2];
-  "p_linux" [label="platform/linux.rs", color="#27ae60", penwidth=2];
+  "p_linux_clipboard" [label="platform/linux/clipboard.rs", color="#27ae60", penwidth=2];
+  "p_linux_mod" [label="platform/linux/mod.rs", color="#27ae60", penwidth=2];
+  "p_linux_tablet" [label="platform/linux/tablet.rs", color="#27ae60", penwidth=2];
   "p_motion_event" [label="platform/motion_event.rs", color="#d68910", penwidth=2];
   "p_saf" [label="platform/saf.rs", color="#16a085", penwidth=2];
   "p_stubs" [label="platform/stubs.rs", color="#7f8c8d", penwidth=2];
+  "p_tablet_frames" [label="platform/tablet_frames.rs", color="#d68910", penwidth=2];
   "p_unix_dirs" [label="platform/unix_dirs.rs", color="#7f8c8d", penwidth=2];
   "p_windows_counter" [label="platform/windows/counter.rs", color="#2e86c1", penwidth=2];
   "p_windows_folders" [label="platform/windows/folders.rs", color="#2e86c1", penwidth=2];
@@ -40,8 +43,9 @@ subgraph cluster_ext { label="outside crates"; style="rounded,filled"; fillcolor
 "platform_mod" -> "p_android_mod" [label="cfg(target_os = android)", color="#8e44ad", penwidth=2, fontcolor="#8e44ad"]
 "p_android_mod" -> "x_winit" [color="#8e44ad", style=dashed]
 "p_android_reader" -> "x_winit" [color="#8e44ad", style=dashed]
-"platform_mod" -> "p_linux" [label="cfg(unix, not android)", color="#27ae60", penwidth=2, fontcolor="#27ae60"]
-"p_linux" -> "x_winit" [color="#27ae60", style=dashed]
+"p_linux_clipboard" -> "x_winit" [color="#27ae60", style=dashed]
+"platform_mod" -> "p_linux_mod" [label="cfg(unix, not android)", color="#27ae60", penwidth=2, fontcolor="#27ae60"]
+"p_linux_tablet" -> "x_winit" [color="#27ae60", style=dashed]
 "platform_mod" -> "p_stubs" [label="cfg(not(windows))", color="#7f8c8d", penwidth=2, fontcolor="#7f8c8d"]
 "p_stubs" -> "x_winit" [color="#7f8c8d", style=dashed]
 "platform_mod" -> "p_unix_dirs" [label="cfg(not(windows))", color="#7f8c8d", penwidth=2, fontcolor="#7f8c8d"]
@@ -61,10 +65,13 @@ subgraph cluster_ext { label="outside crates"; style="rounded,filled"; fillcolor
 "p_windows_mod" -> "p_windows_folders" [color="#2e86c1"]
 "p_windows_mod" -> "p_windows_counter" [color="#2e86c1"]
 "p_android_mod" -> "p_android_reader" [color="#8e44ad"]
-"p_linux" -> "p_stubs" [label="re-exports", color="#27ae60"]
-"p_linux" -> "p_unix_dirs" [label="re-exports", color="#27ae60"]
+"p_linux_mod" -> "p_stubs" [label="re-exports", color="#27ae60"]
+"p_linux_mod" -> "p_unix_dirs" [label="re-exports", color="#27ae60"]
 "p_android_mod" -> "p_stubs" [label="re-exports", color="#8e44ad"]
 "p_android_mod" -> "p_unix_dirs" [label="re-exports", color="#8e44ad"]
 "p_android_reader" -> "p_motion_event" [label="decodes with", color="#8e44ad"]
-{rank=same; "p_windows_mod"; "p_linux"; "p_android_mod";}
+"p_linux_mod" -> "p_linux_tablet" [color="#27ae60"]
+"p_linux_mod" -> "p_linux_clipboard" [color="#27ae60"]
+"p_linux_tablet" -> "p_tablet_frames" [label="translates with", color="#27ae60"]
+{rank=same; "p_windows_mod"; "p_linux_mod"; "p_android_mod";}
 }

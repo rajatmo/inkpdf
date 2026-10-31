@@ -1147,7 +1147,7 @@ fn every_tool_together(seed: u64, rounds: usize) {
                 assert_eq!(strokes.len(), ed.ink.len(), "round {round}: every stroke and text box came back");
                 let want = text_boxes(ed.ink.strokes().iter().filter_map(|s| s.text.as_ref().map(|t| (s.page, t.text.clone(), t.size, s.pts[0]))));
                 let got =
-                    text_boxes(strokes.iter().filter_map(|(page, _, pts, _, t, _)| t.as_ref().map(|t| (*page, t.text.clone(), t.size, pts[0]))));
+                    text_boxes(strokes.iter().filter_map(|(page, _, pts, _, t, _, _)| t.as_ref().map(|t| (*page, t.text.clone(), t.size, pts[0]))));
                 assert_eq!(want, got, "round {round}: the text did not come back as it was");
                 "save and reopen"
             }

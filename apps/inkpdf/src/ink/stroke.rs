@@ -49,6 +49,14 @@ impl MarkupKind {
     }
 }
 
+/// What an extension's item holds (see `inkpdf_api::ItemKind`): the name of its kind, and the text only that kind reads. The stroke's points are then
+/// the box the item is in, as for a markup: two points, opposite corners.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Item {
+    pub kind: String,
+    pub data: String,
+}
+
 /// What to change about strokes that already exist: their colour, and their thickness (a text box's size).
 /// A part left `None` stays as it is on every stroke.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -71,11 +79,14 @@ pub struct Stroke {
     /// For a text markup, how it looks. Its `pts` are then the boxes it marks, two points (opposite corners) for each, and its style's
     /// colour (with its opacity) is the marker's.
     pub markup: Option<MarkupKind>,
+    /// For an extension's item, what it holds. Its `pts` are then its box (two points).
+    pub item: Option<Item>,
     /// `[x0, y0, x1, y1]` including half the width.
     bbox: [f32; 4],
 }
 
 impl Stroke {
+    #[allow(clippy::too_many_arguments, reason = "a stroke is made of these parts, and exactly one of the four optional ones says what kind it is")]
     pub(super) fn new(
         id: u64,
         page: u32,
@@ -84,8 +95,9 @@ impl Stroke {
         figure: Option<Figure>,
         text: Option<TextBlock>,
         markup: Option<MarkupKind>,
+        item: Option<Item>,
     ) -> Self {
-        let mut s = Self { id, page, style, pts, figure, text, markup, bbox: [0.0; 4] };
+        let mut s = Self { id, page, style, pts, figure, text, markup, item, bbox: [0.0; 4] };
         s.refresh_bbox();
         s
     }
@@ -99,9 +111,14 @@ impl Stroke {
         self.bbox = [b[0] - pad, b[1] - pad, b[2] + pad, b[3] + pad];
     }
 
-    /// The boxes a text markup marks (`[x0, y0, x1, y1]`, in document space); none for any other stroke.
+    /// Whether the stroke is boxes, not a line: a text markup or an extension's item.
+    pub fn boxy(&self) -> bool {
+        self.markup.is_some() || self.item.is_some()
+    }
+
+    /// The boxes a text markup marks, or the box an item is in (`[x0, y0, x1, y1]`, in document space); none for any other stroke.
     pub fn quads(&self) -> impl Iterator<Item = [f32; 4]> + '_ {
-        let marks = self.markup.is_some();
+        let marks = self.boxy();
         self.pts.as_chunks::<2>().0.iter().filter(move |_| marks).map(|&[a, b]| [a[0].min(b[0]), a[1].min(b[1]), a[0].max(b[0]), a[1].max(b[1])])
     }
 
@@ -140,7 +157,7 @@ impl Stroke {
         if self.text.is_some() {
             return true;
         }
-        if self.markup.is_some() {
+        if self.boxy() {
             return self.quads().any(|q| c[0] >= q[0] - radius && c[0] <= q[2] + radius && c[1] >= q[1] - radius && c[1] <= q[3] + radius);
         }
         match self.pts.as_slice() {
@@ -160,7 +177,7 @@ impl Stroke {
         if self.text.is_some() {
             return true;
         }
-        if self.markup.is_some() {
+        if self.boxy() {
             return self.quads().any(|q| segment_meets_box(a, b, [q[0] - radius, q[1] - radius, q[2] + radius, q[3] + radius]));
         }
         match self.pts.as_slice() {
@@ -175,7 +192,7 @@ impl Stroke {
         if self.pts.is_empty() || poly.len() < 3 {
             return 0.0;
         }
-        if self.markup.is_some() {
+        if self.boxy() {
             let centres: Vec<P> = self.quads().map(|q| [(q[0] + q[2]) / 2.0, (q[1] + q[3]) / 2.0]).collect();
             return centres.iter().filter(|&&p| point_in_polygon(p, poly)).count() as f32 / centres.len().max(1) as f32;
         }

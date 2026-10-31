@@ -10,7 +10,9 @@
 //! (see [`PanelView`]).
 
 mod context_bar;
+mod error_card;
 mod icons;
+mod item_card;
 mod look;
 mod overview;
 mod prompt;
@@ -37,7 +39,9 @@ pub fn icon_is_drawable(svg: &str) -> bool {
 }
 
 pub use context_bar::{ContextBar, ContextItem, ContextState};
+pub use error_card::{ErrorLayout, ErrorView, lines_at_most as error_lines, wrap as error_wrap};
 use icons::icons;
+pub use item_card::{ACTIONS as CARD_ACTIONS, CardItem, ItemCardLayout, ItemCardView, ROWS as CARD_ROWS};
 pub use look::Look;
 pub use overview::{
     Action as OverviewAction, Control as OverviewControl, DragView, Hover as OverviewHover, MenuItem as OverviewMenuItem, OverviewLayout,

@@ -15,16 +15,19 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::coords::PageGeom;
 use crate::figure::Figure;
 use crate::form::Form;
-use crate::ink::{InkStore, MarkupKind, P, PageStroke, Style, TextBlock};
+use crate::ink::{InkStore, Item, MarkupKind, P, PageStroke, Style, TextBlock};
 use crate::links::Link;
 use crate::outline::OutlineItem;
-use crate::pdf::{self, AnnotKind, NewAnnotation, NewShape, OrganizeError, PdfBackend, PdfDocument};
+use crate::pdf::{self, AnnotKind, NewAnnotation, NewShape, OrganizeError, PdfBackend, PdfDocument, Reply};
+use crate::tools::items;
 use crate::view::Layout;
 
 /// What marks an annotation as ours.
 const NAME_PREFIX: &str = "inkpdf-";
 /// Where, in an annotation's name, the shape it was made from begins.
 const FIGURE_MARK: char = '~';
+/// What an extension's item's name begins with after ours, then the name of its kind and a `:` (see `inkpdf_api::ItemKind`).
+const ITEM_MARK: &str = "inkpdf-item:";
 /// Strokes of one style written into one annotation.
 const STROKES_PER_ANNOTATION: usize = 32;
 
@@ -54,6 +57,16 @@ struct Found {
     text: Option<FoundText>,
     /// For a text markup: its kind and its boxes, in user space, as the file has them.
     markup: Option<(MarkupKind, Vec<[f64; 8]>)>,
+    /// For an extension's item: what it holds (see [`FoundItem`]).
+    item: Option<FoundItem>,
+}
+
+struct FoundItem {
+    kind: String,
+    /// What the kind made of the note the file holds.
+    data: String,
+    /// `[x0, y0, x1, y1]` with `y0 <= y1`, in user space.
+    rect: [f32; 4],
 }
 
 struct FoundText {
@@ -88,6 +101,7 @@ fn find_ours(doc: &dyn PdfDocument) -> Vec<Found> {
                         figure: None,
                         text: Some(FoundText { text, size, rect }),
                         markup: None,
+                        item: None,
                     })
                 }
                 AnnotKind::Markup(kind) => Some(Found {
@@ -98,7 +112,39 @@ fn find_ours(doc: &dyn PdfDocument) -> Vec<Found> {
                     figure: None,
                     text: None,
                     markup: Some((kind, a.quads)),
+                    item: None,
                 }),
+                AnnotKind::Note => {
+                    // Only a note this build has a kind for: any other is left in the file as it is, for the renderer to draw.
+                    let kind = a.name.strip_prefix(ITEM_MARK).and_then(|rest| rest.split_once(':')).map(|(kind, _)| kind)?;
+                    // (A reply that sets a status is not said: the latest one says whether the thread is done.)
+                    let closed = a.replies.iter().rev().find_map(|r| r.state.as_deref()) == Some("Completed");
+                    let note = inkpdf_api::Note {
+                        author: a.author.clone(),
+                        date: a.date.clone(),
+                        text: a.text.clone(),
+                        replies: a
+                            .replies
+                            .iter()
+                            .filter(|r| r.state.is_none())
+                            .map(|r| inkpdf_api::Message { author: r.author.clone(), date: r.date.clone(), text: r.text.clone() })
+                            .collect(),
+                        closed,
+                    };
+                    let data = items::kind(kind)?.read(&note)?;
+                    let r = a.rect;
+                    let rect = [r[0].min(r[2]) as f32, r[1].min(r[3]) as f32, r[0].max(r[2]) as f32, r[1].max(r[3]) as f32];
+                    Some(Found {
+                        page: a.page,
+                        index: a.index,
+                        style: Style { rgba, width: 1.0 },
+                        strokes: Vec::new(),
+                        figure: None,
+                        text: None,
+                        markup: None,
+                        item: Some(FoundItem { kind: kind.to_string(), data, rect }),
+                    })
+                }
                 AnnotKind::Ink => Some(Found {
                     page: a.page,
                     index: a.index,
@@ -107,6 +153,7 @@ fn find_ours(doc: &dyn PdfDocument) -> Vec<Found> {
                     figure: a.name.split_once(FIGURE_MARK).map(|(_, f)| f.to_string()),
                     text: None,
                     markup: None,
+                    item: None,
                 }),
             }
         })
@@ -143,7 +190,15 @@ pub fn load_with(engine: &dyn PdfBackend, bytes: &Arc<Vec<u8>>, geoms: &[PageGeo
             let corners = [[t.rect[0], t.rect[1]], [t.rect[2], t.rect[1]], [t.rect[2], t.rect[3]], [t.rect[0], t.rect[3]]].map(to_doc);
             let top_left = [corners.iter().map(|c| c[0]).fold(f32::MAX, f32::min), corners.iter().map(|c| c[1]).fold(f32::MAX, f32::min)];
             let block = TextBlock { text: t.text.clone(), size: t.size };
-            strokes.push((f.page as u32, f.style, crate::text::outline(top_left, &t.text, t.size), None, Some(block), None));
+            strokes.push((f.page as u32, f.style, crate::text::outline(top_left, &t.text, t.size), None, Some(block), None, None));
+            continue;
+        }
+        if let Some(it) = &f.item {
+            // The box the note is in, wherever the page's rotation put its corners.
+            let corners = [[it.rect[0], it.rect[1]], [it.rect[2], it.rect[1]], [it.rect[2], it.rect[3]], [it.rect[0], it.rect[3]]].map(to_doc);
+            let lo = corners.iter().fold([f32::MAX; 2], |m, c| [m[0].min(c[0]), m[1].min(c[1])]);
+            let hi = corners.iter().fold([f32::MIN; 2], |m, c| [m[0].max(c[0]), m[1].max(c[1])]);
+            strokes.push((f.page as u32, f.style, vec![lo, hi], None, None, None, Some(Item { kind: it.kind.clone(), data: it.data.clone() })));
             continue;
         }
         if let Some((kind, quads)) = &f.markup {
@@ -152,7 +207,7 @@ pub fn load_with(engine: &dyn PdfBackend, bytes: &Arc<Vec<u8>>, geoms: &[PageGeo
                 let corners = [[q[0], q[1]], [q[2], q[3]], [q[4], q[5]], [q[6], q[7]]].map(|c| to_doc([c[0] as f32, c[1] as f32]));
                 let lo = corners.iter().fold([f32::MAX; 2], |m, c| [m[0].min(c[0]), m[1].min(c[1])]);
                 let hi = corners.iter().fold([f32::MIN; 2], |m, c| [m[0].max(c[0]), m[1].max(c[1])]);
-                strokes.push((f.page as u32, f.style, vec![lo, hi], None, None, Some(*kind)));
+                strokes.push((f.page as u32, f.style, vec![lo, hi], None, None, Some(*kind), None));
             }
             continue;
         }
@@ -164,7 +219,7 @@ pub fn load_with(engine: &dyn PdfBackend, bytes: &Arc<Vec<u8>>, geoms: &[PageGeo
                 Some(figure) => (figure.points(), Some(figure)),
                 None => (doc_pts, None),
             };
-            strokes.push((f.page as u32, f.style, pts, figure, None, None));
+            strokes.push((f.page as u32, f.style, pts, figure, None, None, None));
         }
     }
     // The page renderer must not also draw them: delete from the highest index down so the
@@ -230,6 +285,7 @@ fn finish_markup(
         author: "InkPDF".into(),
         name: format!("{NAME_PREFIX}{stamp:x}-{}", serial.get()),
         date: now.to_string(),
+        replies: Vec::new(),
     })
 }
 
@@ -372,10 +428,49 @@ pub fn save_with(
                 author: "InkPDF".into(),
                 name: format!("{NAME_PREFIX}{stamp:x}-{}{tag}", serial.get()),
                 date: now.clone(),
+                replies: Vec::new(),
             };
             doc.add_annotation(&new)
         };
         for s in store.strokes().iter().filter(|s| s.page == page) {
+            if let Some(item) = &s.item {
+                flush(&mut *doc, &mut run, run_style, None, None)?;
+                run_style = None;
+                finish_markup(&mut *doc, &mut marks, page, &serial, stamp, &now)?;
+                // (An item of a kind this build does not have was never loaded, so it cannot be here, but one made by a test might be.)
+                let Some(kind) = items::kind(&item.kind) else { continue };
+                let note = kind.write(&item.data);
+                // The note's top-left corner, as it looks on the page, in the page's user space.
+                let corner = s.quads().next().map_or([0.0, 0.0], |q| [q[0], q[1]]);
+                let u = geom.view_to_user([corner[0] - rect.x, corner[1] - rect.y]);
+                serial.set(serial.get() + 1);
+                let c = s.style.rgba;
+                let said = |date: &str| if date.is_empty() { now.clone() } else { date.to_string() };
+                let author = if note.author.is_empty() { "InkPDF".to_string() } else { note.author.clone() };
+                doc.add_annotation(&NewAnnotation {
+                    page: page as usize,
+                    shape: NewShape::Note { at: [f64::from(u[0]), f64::from(u[1])] },
+                    colour: [f64::from(c[0]) / 255.0, f64::from(c[1]) / 255.0, f64::from(c[2]) / 255.0],
+                    opacity: f64::from(c[3]) / 255.0,
+                    width: 0.0,
+                    text: note.text,
+                    author: author.clone(),
+                    name: format!("{ITEM_MARK}{}:{stamp:x}-{}", item.kind, serial.get()),
+                    date: said(&note.date),
+                    replies: note
+                        .replies
+                        .into_iter()
+                        .map(|r| Reply { author: r.author, date: said(&r.date), text: r.text, state: None })
+                        .chain(note.closed.then(|| Reply {
+                            author: author.clone(),
+                            date: now.clone(),
+                            text: String::new(),
+                            state: Some("Completed".into()),
+                        }))
+                        .collect(),
+                })?;
+                continue;
+            }
             if let Some(kind) = s.markup {
                 flush(&mut *doc, &mut run, run_style, None, None)?;
                 run_style = None;
@@ -522,7 +617,7 @@ mod tests {
             );
             let loaded = load(&saved, &geoms, &layout).expect("load");
             assert_eq!(loaded.strokes.len(), 3, "a box is a stroke: two highlighted, one wavy");
-            for ((page, style, pts, _, _, kind), (want_kind, want_box, want_style)) in loaded.strokes.iter().zip([
+            for ((page, style, pts, _, _, kind, _), (want_kind, want_box, want_style)) in loaded.strokes.iter().zip([
                 (MarkupKind::Highlight, boxes[0], mark),
                 (MarkupKind::Highlight, boxes[1], mark),
                 (MarkupKind::Squiggly, boxes[0], Style { rgba: [32, 96, 224, 255], ..mark }),
@@ -542,6 +637,71 @@ mod tests {
             let twice = Arc::new(save(&saved, &again, &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save again"));
             assert_eq!(find_ours(&*pdf::native().open(&twice).expect("open")).len(), 2);
         }
+    }
+
+    #[test]
+    fn an_item_is_saved_as_a_note_with_its_replies_and_read_back_as_the_item_in_the_same_place_on_every_rotation() {
+        for rotation in [0, 90, 270] {
+            let (bytes, mut geoms, _) = setup();
+            geoms[0].rotation = rotation;
+            let layout = Layout::new(&[if rotation == 0 { [612.0, 792.0] } else { [792.0, 612.0] }]);
+            let o = page_origin(&layout);
+            let mut store = InkStore::new();
+            let bounds = [o[0] + 100.0, o[1] + 120.0, o[0] + 120.0, o[1] + 140.0];
+            store.add_item(0, Style { rgba: [255, 204, 0, 255], width: 1.0 }, "testbox", "first\nsecond\nthird".into(), bounds);
+            let saved = Arc::new(save(&bytes, &store, &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save"));
+            // In the file it is a note (text annotation) with two replies, which any reader shows.
+            let notes: Vec<_> = pdf::native().open(&saved).expect("open").annotations().into_iter().filter(|a| a.kind == AnnotKind::Note).collect();
+            assert_eq!(notes.len(), 1, "rotation {rotation}");
+            assert_eq!((notes[0].text.as_str(), notes[0].replies.len()), ("first", 2));
+            assert!(notes[0].name.starts_with("inkpdf-item:testbox:"), "{}", notes[0].name);
+            let loaded = load(&saved, &geoms, &layout).expect("load");
+            assert_eq!(loaded.strokes.len(), 1, "rotation {rotation}");
+            let (page, style, pts, _, _, _, item) = &loaded.strokes[0];
+            assert_eq!(*page, 0);
+            assert_eq!(style.rgba[..3], [255, 204, 0], "its colour comes back");
+            assert_eq!(item.as_ref().map(|i| (i.kind.as_str(), i.data.as_str())), Some(("testbox", "first\nsecond\nthird")));
+            // (A note's box in the file is its own size, so its corner is what has to be where it was: the top left, as the page shows it.)
+            assert_eq!(pts.len(), 2);
+            let top_left = [pts[0][0].min(pts[1][0]), pts[0][1].min(pts[1][1])];
+            let want = [bounds[0], bounds[1]];
+            assert!(rotation != 0 || ((top_left[0] - want[0]).abs() < 0.1 && (top_left[1] - want[1]).abs() < 0.1), "{top_left:?} vs {want:?}");
+            // The renderer does not draw it as well (the ink layer does), and saving again leaves one note, not two.
+            assert!(find_ours(&*pdf::native().open(&loaded.render_bytes).expect("open")).is_empty(), "rotation {rotation}");
+            let mut again = InkStore::new();
+            again.load(loaded.strokes);
+            let twice = Arc::new(save(&saved, &again, &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save again"));
+            let notes = pdf::native().open(&twice).expect("open").annotations().into_iter().filter(|a| a.kind == AnnotKind::Note).count();
+            assert_eq!(notes, 1, "rotation {rotation}");
+        }
+    }
+
+    #[test]
+    fn a_note_of_another_program_or_of_a_kind_this_build_has_not_is_left_in_the_file_and_not_loaded() {
+        let (bytes, geoms, layout) = setup();
+        let mut doc = pdf::native().open(&bytes).expect("open");
+        let note = |name: &str| NewAnnotation {
+            page: 0,
+            shape: NewShape::Note { at: [100.0, 700.0] },
+            colour: [1.0, 1.0, 0.0],
+            opacity: 1.0,
+            width: 0.0,
+            text: "from elsewhere".into(),
+            author: "someone".into(),
+            name: name.into(),
+            date: "D:20260101000000Z".into(),
+            replies: Vec::new(),
+        };
+        doc.add_annotation(&note("their-note")).expect("add");
+        doc.add_annotation(&note("inkpdf-item:no-such-kind:1-1")).expect("add");
+        let theirs = Arc::new(doc.save_incremental("D:20260101000000Z").expect("update"));
+        let loaded = load(&theirs, &geoms, &layout).expect("load");
+        assert!(loaded.strokes.is_empty(), "neither is ours to edit");
+        assert!(Arc::ptr_eq(&loaded.render_bytes, &theirs), "and the renderer keeps drawing both");
+        // Saving the page leaves them where they are.
+        let saved = Arc::new(save(&theirs, &InkStore::new(), &geoms, &layout, &[0].into(), &[Some(0)], &[]).expect("save"));
+        let kept = pdf::native().open(&saved).expect("open").annotations().into_iter().filter(|a| a.kind == AnnotKind::Note).count();
+        assert_eq!(kept, 2);
     }
 
     #[test]
@@ -619,7 +779,7 @@ mod tests {
     }
 
     fn loaded_texts(loaded: &Loaded) -> Vec<(String, f32, Vec<[f32; 2]>)> {
-        loaded.strokes.iter().filter_map(|(_, _, pts, _, t, _)| t.as_ref().map(|t| (t.text.clone(), t.size, pts.clone()))).collect()
+        loaded.strokes.iter().filter_map(|(_, _, pts, _, t, _, _)| t.as_ref().map(|t| (t.text.clone(), t.size, pts.clone()))).collect()
     }
 
     #[test]
@@ -856,6 +1016,7 @@ mod tests {
             author: "someone else".into(),
             name: "other-1".into(),
             date: "D:20260101000000Z".into(),
+            replies: Vec::new(),
         };
         doc.add_annotation(&new).expect("add");
         let with_foreign = Arc::new(doc.save_incremental("D:20260101000000Z").expect("write"));
@@ -892,7 +1053,7 @@ mod tests {
         let loaded = load(&saved, &geoms, &layout).expect("load");
         let kinds: Vec<bool> = loaded.strokes.iter().map(|s| s.3.is_some()).collect();
         assert_eq!(kinds, [false, true, true, true, true, true, true, false], "order and kind are kept");
-        for ((_, _, pts, figure, _, _), want) in loaded.strokes.iter().filter(|s| s.3.is_some()).zip(figures) {
+        for ((_, _, pts, figure, _, _, _), want) in loaded.strokes.iter().filter(|s| s.3.is_some()).zip(figures) {
             let figure = figure.as_ref().expect("shape");
             assert_eq!(std::mem::discriminant(figure), std::mem::discriminant(want), "{want:?} came back as {figure:?}");
             assert_eq!(figure.anchor_count(), want.anchor_count());

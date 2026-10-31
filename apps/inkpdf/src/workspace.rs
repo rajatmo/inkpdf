@@ -72,6 +72,17 @@ impl Default for Clipboards {
     }
 }
 
+/// The card of an item that is open (see `inkpdf_api::ItemKind::card`): which item, and what is being typed in its field.
+#[derive(Default)]
+pub struct ItemCard {
+    pub open: Option<u64>,
+    /// What is being written to send.
+    pub field: crate::field::Field,
+    /// The name written on what is sent (kept in the settings), and whether it has the keyboard instead of the field.
+    pub name: crate::field::Field,
+    pub typing_name: bool,
+}
+
 pub struct Workspace {
     pub layout: Layout,
     pub has_doc: bool,
@@ -91,6 +102,8 @@ pub struct Workspace {
     pub clip: Clipboards,
     pub styles: Styles,
     pub look: Look,
+    /// The card of the item that is open, if one is.
+    pub card: ItemCard,
     /// The text of the pages, as far as it has been read (see `doctext`).
     pub text: crate::doctext::DocText,
     /// What the shell is asked to do, and whether a frame is wanted.
@@ -114,6 +127,7 @@ impl Workspace {
             clip: Clipboards::default(),
             styles: Styles::default(),
             look: Look::default(),
+            card: ItemCard::default(),
             text: crate::doctext::DocText::default(),
             requests: Requests::default(),
             redraw: false,

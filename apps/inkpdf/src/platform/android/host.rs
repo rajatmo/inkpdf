@@ -126,6 +126,11 @@ impl Bridge for Host {
         Some(name)
     }
 
+    fn keyboard_height(&self) -> i32 {
+        let Ok(mut env) = self.env() else { return 0 };
+        self.call(&mut env, "keyboardHeight", "()I", &[]).ok().and_then(|v| v.i().ok()).unwrap_or(0)
+    }
+
     fn set_pointer_icon(&self, type_code: i32) {
         if let Ok(mut env) = self.env()
             && let Err(why) = self.call(&mut env, "setPointer", "(I)V", &[JValue::Int(type_code)])

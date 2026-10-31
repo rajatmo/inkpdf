@@ -645,7 +645,7 @@ mod tests {
         let (a, b) = (fs::read(&plain).expect("plain"), fs::read(&dark).expect("dark"));
         assert_eq!(a.len(), b.len(), "the look is display only: the saved files are the same size");
         let strokes = |path: &Path| {
-            Doc::open(path).expect("reopen").1.into_iter().map(|(page, style, pts, _, _, _)| (page, style.rgba, pts.len())).collect::<Vec<_>>()
+            Doc::open(path).expect("reopen").1.into_iter().map(|(page, style, pts, _, _, _, _)| (page, style.rgba, pts.len())).collect::<Vec<_>>()
         };
         assert_eq!(strokes(&plain), strokes(&dark), "with the same ink in them");
         assert_eq!(strokes(&dark).len(), 1);
@@ -762,7 +762,7 @@ mod tests {
         on.sort_unstable();
         assert_eq!(on, vec![0, 1, 2], "the deleted page's ink went with it, the rest stayed on its own page, once each");
         // The strokes are where they were on their pages (the pages moved, the ink moved with them).
-        for (page, _, pts, _, _, _) in &strokes {
+        for (page, _, pts, _, _, _, _) in &strokes {
             let r = reopened.layout().page(*page as usize).expect("page");
             assert!((pts[0][0] - r.x - 30.0).abs() < 0.5 && (pts[0][1] - r.y - 40.0).abs() < 0.5, "{pts:?} on page {page}");
         }

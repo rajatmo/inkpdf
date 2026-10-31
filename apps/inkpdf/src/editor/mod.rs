@@ -29,7 +29,10 @@ mod commands;
 mod context;
 mod cursor;
 mod dispatch;
+mod error_card;
 mod forms;
+mod item_card;
+mod keyboard;
 mod modal;
 mod motions;
 mod mouse;
@@ -88,6 +91,10 @@ pub struct Editor {
     /// The fields of the document's form (their boxes are among the links), and the one being typed into (see [`forms`]).
     pub form: crate::form::Form,
     form_typing: Option<forms::Typing>,
+    /// The on-screen keyboard, and the view moved to keep what is typed above it.
+    keyboard: keyboard::Keyboard,
+    /// What the card that says something went wrong says now: its heading and the reason.
+    error: Option<(String, String)>,
     /// The document's table of contents (see [`crate::outline`]); empty if it has none.
     pub outline: Vec<crate::outline::OutlineItem>,
     /// The pages the person flagged (the program's own outline entries: see [`crate::outline::FLAG`]), which follow the pages as they are edited.
@@ -159,6 +166,8 @@ impl Editor {
             links: Vec::new(),
             form: crate::form::Form::default(),
             form_typing: None,
+            keyboard: keyboard::Keyboard::default(),
+            error: None,
             outline: Vec::new(),
             flags: std::collections::BTreeSet::new(),
             pull: 0.0,
@@ -192,6 +201,7 @@ impl Editor {
         self.tools = ToolSet::with_extensions(&self.extensions);
         self.ws.erasing.clear();
         self.search.close();
+        self.close_item_card();
         self.chrome.clear_press_and_prompt();
         self.mouse_press = None;
         self.ws.requests.clear_answer();
@@ -284,6 +294,7 @@ impl Editor {
         self.ws.look.dark_pages = settings.dark_pages;
         self.search.case = settings.search_case;
         self.search.words = settings.search_words;
+        self.ws.card.name = crate::field::Field::new(settings.author.clone());
         self.sync_theme();
         self.ws.styles.palette = settings.palette;
         self.ws.tool = settings.tool;
@@ -304,6 +315,7 @@ impl Editor {
             dark_pages: self.ws.look.dark_pages,
             search_case: self.search.case,
             search_words: self.search.words,
+            author: crate::settings::clean_name(&self.ws.card.name.text),
             palette: self.ws.styles.palette,
             tool: self.ws.tool,
             pen: self.ws.styles.pen,
@@ -345,6 +357,7 @@ impl Editor {
         let overview = self.step_overview(dt);
         let interface = self.step_motions(dt);
         self.refresh_search();
+        self.keep_typing_clear();
         self.ws.look.theme = self.palette();
         self.ws.step_view(dt) || overview || interface
     }

@@ -16,6 +16,8 @@ fn drawn(ed: &Editor) -> Vec<(&'static str, String)> {
         ("bar", format!("{:?}", ed.context_view())),
         ("panel", format!("{:?}", ed.panel_view())),
         ("search", format!("{:?}", ed.search_view().map(|v| (v.query, v.caret, v.total)))),
+        ("item card", format!("{:?}", ed.item_card_view())),
+        ("error card", format!("{:?}", ed.error_view())),
         ("theme button", format!("{:?}", ed.theme_view())),
         ("overview", format!("{:?}", ed.overview_open())),
         ("prompt", format!("{:?}", ed.chrome.prompt.is_some())),

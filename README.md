@@ -8,7 +8,7 @@ library, no sync: just the page and your pen.
 ## Features
 
 - **Ink that keeps up with the pen.** The pen is read as late as possible; the stroke follows the tip (about 2.5 ms from pen sample to frame).
-- **Tools:** pen, shapes (lines, polylines, splines, rectangles, ellipses, axes), typed text, lasso, eraser, and a select tool for reading.
+- **Tools:** pen, shapes (lines, polylines, splines, rectangles, ellipses, axes), typed text, lasso, eraser, sticky notes with reply threads, and a select tool for reading.
 - **Real PDF annotations.** Ink and shapes are saved as standard Ink annotations, typed text as Free Text, marks as highlight, underline and
   strike-out. Any PDF reader shows them. Nothing is uploaded.
 - **Read the text.** Select, copy and mark a PDF's text; search with Ctrl+F (every place is lit and listed); follow links; fill in a PDF's form (text, check boxes, radio buttons, choices).
@@ -24,7 +24,7 @@ library, no sync: just the page and your pen.
 | Platform | Status | Package |
 |---|---|---|
 | **Windows 10/11** | the main platform, with full pen support (pressure, eraser end, barrel button) | `InkPDF-Setup-<version>.exe` or `InkPDF-Portable-<version>.zip` |
-| **Linux** (X11, Wayland) | works; the pen is read as mouse or touch for now | `InkPDF-Portable-<version>-linux-x86_64.tar.gz` or the AppImage |
+| **Linux** (X11, Wayland) | works; the pen is native on Wayland (X11 reads it as the mouse) | `InkPDF-Portable-<version>-linux-x86_64.tar.gz` or the AppImage |
 | **Android** (arm64, x86_64) | test build: stylus and finger work; files go through the system's picker | the APK |
 
 On Linux a Vulkan driver is needed (`mesa-vulkan-drivers`) and, on X11, `libxkbcommon-x11`. The Windows packages are unsigned, so SmartScreen

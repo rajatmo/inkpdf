@@ -1,6 +1,27 @@
 # Changelog
 
 ## 1.5.0
+- **Sticky notes, with replies.** A new tool (the note, after the laser): a click of the mouse or a tap of the stylus on the page puts a note there and
+  opens its thread, a click on a note opens it, a drag moves it. The thread is a card at the right: who said what and when, a field to reply in (Enter or
+  the arrow sends; Esc puts it away), a button to mark it done (or open again) and one to delete the note; your name is written on what you send
+  (it starts as the system's user name and is changed in the card). A note is saved as a PDF text annotation with the replies to it, so any reader shows
+  the thread, "done" is the review status Completed, and a note or reply made by another program is read the same way; notes of other programs that
+  are not ours stay as the file has them. Undo, the lasso, the eraser, copy and paste, the page edits and search all work on notes. It needs only the left
+  mouse button or the stylus tip.
+- **Linux: the pen on Wayland.** Pressure, the eraser end, the side button, hover and the points between frames are read from the compositor's tablet
+  protocol on the connection the window already has, so a pen on a Wayland tablet is a pen and not a mouse (X11, and a compositor with no tablet support,
+  still read it as the mouse). Tried here only against a compositor of our own that plays a scripted pen (and WSLg, which has no tablet protocol): not on a real tablet.
+- **Linux: the system clipboard,** an error card and the desktop's animation setting. Text copied in the program can be pasted in others and the other way
+  (Wayland's data-control or X11; where neither is reachable the program keeps its own as before); a file that could not be opened or saved is said in a card
+  over the page, on Linux and on Android, instead of on the terminal; and with "animations" off in the desktop's settings (GNOME's `enable-animations`) the
+  program moves no more than it must (`INKPDF_MOTION=on` or `off` still decides for a run).
+- **Android: the soft keyboard no longer hides what you type.** The keyboard covers the lowest part of the window without resizing it, so a text box
+  (or form field) low on the page was typed under it. The window now tells the program how much of it the keyboard covers; the page glides up just far
+  enough to bring what is typed above it (even at the end of the document), follows it as it grows, and goes back when the keyboard does, unless you
+  scrolled. The window is also never drawn under a camera cut-out any more, with the bars hidden or not.
+- **Extensions can make items (E3).** `inkpdf-api` has `ItemKind` (draw, write and read a PDF note, search text, a card) and the tool's `Context` can add,
+  find, open, move and remove items; the program keeps the item as a stroke with a payload, so every edit follows it. The PDF seam gains the note
+  annotation, its replies and a review status (`check_notes` in the conformance suite). The sticky notes are the first kind.
 - **Fill in forms.** A PDF's form fields are lit faintly on the page and can be filled: a text field takes typed text (Enter or Esc ends it; a
   field of several lines takes new lines), a check box turns on and off, a radio button is chosen, and a choice goes to its next option. A finger
   does it with every tool; the stylus's tip and the left mouse button with the Select tool (the click that follows a link). What is put in is saved
@@ -19,7 +40,7 @@
 - **Structure.** The ink store is made of the strokes, the undo history and the queries; an open document keeps no staged state (what a file holds comes
   out of opening it once, what a save adds goes in with the save) and its renderer is a part of its own; the window's cards share one press path; the
   workspace groups the styles, the look and the clipboards; opening and saving fail with a `DocError`.
-- **The same real-input checks on every platform.** The 70 checks that drove the Windows window (stylus, finger, mouse, keyboard, pages, reader, forms)
+- **The same real-input checks on every platform.** The 84 checks that drive the window (stylus, finger, mouse, keyboard, sticky notes, pages, reader, forms)
   are written once (`tools/e2e/scenarios.py`) and run on Windows, on Linux (a virtual display) and on the Android phone and tablet emulators, each
   with the devices the platform has: Windows' synthetic stylus and finger, X's mouse and keyboard with the stylus and finger handed to the new
   `--inject FILE` option, Android's input dispatcher through a small driver app (a pen and a pinch). A check a platform cannot do (the posture

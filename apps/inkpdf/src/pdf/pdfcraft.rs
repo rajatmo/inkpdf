@@ -4,7 +4,10 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use pdfcraft_annot::appearance::parse_da;
-use pdfcraft_annot::{Markup, Meta, NewAnnotation as AnnotNew, Shape, Style as AnnotStyle, add_annotation, delete_annotation, page_refs};
+use pdfcraft_annot::{
+    Markup, Meta, NewAnnotation as AnnotNew, NoteIcon, ReviewState, Shape, Style as AnnotStyle, add_annotation, add_reply, delete_annotation,
+    page_refs, set_review_state,
+};
 use pdfcraft_cos::{Dict, Document, ObjRef, Object, SaveOptions, pdf_date, write_full, write_incremental};
 use pdfcraft_forms as forms;
 use pdfcraft_organize::{
@@ -17,7 +20,7 @@ use pdfcraft_render::{
 
 use super::{
     AnnotKind, Annotation, NewAnnotation, NewShape, OrganizeError, PageLook, PdfBackend, PdfDocument, Pixels, RawField, RawFieldKind, RawLink,
-    RawOutlineItem, RawTarget, RawValue, RawWidget, RenderPool, RenderRequest, Rendered, TextSource,
+    RawOutlineItem, RawTarget, RawValue, RawWidget, RenderPool, RenderRequest, Rendered, Reply, TextSource,
 };
 use crate::coords::PageGeom;
 use crate::ink::MarkupKind;
@@ -32,6 +35,8 @@ const MAX_TREE_DEPTH: usize = 24;
 const MAX_ITEMS: usize = 20_000;
 /// Most form fields read from one file.
 const MAX_FIELDS: usize = 5_000;
+/// Most annotations of one page looked at for replies to notes, so a hostile file cannot make a page cost much.
+const MAX_REPLIES: usize = 50_000;
 /// The bit of a request's tag that pdfcraft reads as "a print preview" (it then ignores the reading colours). Ours must keep it clear.
 const PRINT_TAG: u64 = 1 << 60;
 
@@ -63,6 +68,15 @@ fn config_of(look: PageLook) -> RenderConfig {
             },
             ..RenderConfig::default()
         },
+    }
+}
+
+/// The text a dictionary holds under `key` (a string or a name), cleaned of the line ends other programs write; empty when it holds none.
+fn text_of(doc: &Document, d: &Dict, key: &[u8]) -> String {
+    match d.get(key).map(|o| doc.resolve(o)).as_deref() {
+        Some(Object::String(s)) => s.to_text().replace("\r\n", "\n").replace('\r', "\n").trim_matches('\0').to_string(),
+        Some(Object::Name(n)) => String::from_utf8_lossy(n).into_owned(),
+        _ => String::new(),
     }
 }
 
@@ -341,10 +355,29 @@ impl PdfDocument for PdfcraftDoc {
             let Some(page_dict) = page_obj.as_dict() else { continue };
             let Some(annots) = page_dict.get(b"Annots").map(|a| doc.resolve(a)) else { continue };
             let Some(list) = annots.as_array() else { continue };
+            // The replies of the page's notes, by the note they answer (a Text annotation with an `/IRT`), in the order the file lists them.
+            let mut replies: HashMap<ObjRef, Vec<Reply>> = HashMap::new();
+            for entry in list.iter().take(MAX_REPLIES) {
+                let obj = doc.resolve(entry);
+                let Some(d) = obj.as_dict().filter(|d| d.name(b"Subtype") == Some(b"Text")) else { continue };
+                let Some(parent) = d.reference(b"IRT") else { continue };
+                // (A private mark, which a reader keeps for itself, is no part of the thread.)
+                if text_of(doc, d, b"StateModel") == "Marked" {
+                    continue;
+                }
+                let state = Some(text_of(doc, d, b"State")).filter(|s| !s.is_empty());
+                replies.entry(parent).or_default().push(Reply {
+                    author: text_of(doc, d, b"T"),
+                    date: text_of(doc, d, b"M"),
+                    text: text_of(doc, d, b"Contents"),
+                    state,
+                });
+            }
             for (index, entry) in list.iter().enumerate() {
                 let obj = doc.resolve(entry);
                 let Some(d) = obj.as_dict() else { continue };
                 let kind = match d.name(b"Subtype") {
+                    Some(b"Text") if d.reference(b"IRT").is_none() => AnnotKind::Note,
                     Some(b"Ink") => AnnotKind::Ink,
                     Some(b"FreeText") => AnnotKind::Text,
                     Some(b"Highlight") => AnnotKind::Markup(MarkupKind::Highlight),
@@ -358,6 +391,31 @@ impl PdfDocument for PdfcraftDoc {
                     _ => continue,
                 };
                 let opacity = d.get(b"CA").map(|o| doc.resolve(o)).and_then(|o| o.as_f64()).unwrap_or(1.0);
+                if kind == AnnotKind::Note {
+                    let rect = numbers(doc, d, b"Rect");
+                    if rect.len() != 4 {
+                        continue;
+                    }
+                    let c = numbers(doc, d, b"C");
+                    out.push(Annotation {
+                        page,
+                        index,
+                        kind,
+                        name,
+                        colour: if c.len() == 3 { [c[0], c[1], c[2]] } else { [1.0, 0.86, 0.0] },
+                        opacity,
+                        width: 0.0,
+                        strokes: Vec::new(),
+                        text: text_of(doc, d, b"Contents"),
+                        font_size: 0.0,
+                        rect: [rect[0], rect[1], rect[2], rect[3]],
+                        quads: Vec::new(),
+                        author: text_of(doc, d, b"T"),
+                        date: text_of(doc, d, b"M"),
+                        replies: entry.as_ref().and_then(|r| replies.remove(&r)).unwrap_or_default(),
+                    });
+                    continue;
+                }
                 if kind == AnnotKind::Text {
                     let Some(contents) = d.get(b"Contents").map(|o| doc.resolve(o)) else { continue };
                     let Object::String(s) = &*contents else { continue };
@@ -379,6 +437,9 @@ impl PdfDocument for PdfcraftDoc {
                         font_size: size,
                         rect: [rect[0], rect[1], rect[2], rect[3]],
                         quads: Vec::new(),
+                        author: String::new(),
+                        date: String::new(),
+                        replies: Vec::new(),
                     });
                     continue;
                 }
@@ -399,6 +460,9 @@ impl PdfDocument for PdfcraftDoc {
                         font_size: 0.0,
                         rect: [0.0; 4],
                         quads,
+                        author: String::new(),
+                        date: String::new(),
+                        replies: Vec::new(),
                     });
                     continue;
                 }
@@ -433,6 +497,9 @@ impl PdfDocument for PdfcraftDoc {
                     font_size: 0.0,
                     rect: [0.0; 4],
                     quads: Vec::new(),
+                    author: String::new(),
+                    date: String::new(),
+                    replies: Vec::new(),
                 });
             }
         }
@@ -448,6 +515,7 @@ impl PdfDocument for PdfcraftDoc {
             NewShape::Ink { strokes } => Shape::Ink { strokes: strokes.clone() },
             NewShape::Text { rect, font_size } => Shape::Typewriter { rect: *rect, font_size: *font_size },
             NewShape::Markup { kind, quads } => Shape::TextMarkup { kind: markup_of(*kind), quads: quads.clone() },
+            NewShape::Note { at } => Shape::Note { at: *at, icon: NoteIcon::Note },
         };
         let annot = AnnotNew {
             page: new.page,
@@ -456,7 +524,17 @@ impl PdfDocument for PdfcraftDoc {
             contents: new.text.clone(),
             author: new.author.clone(),
         };
-        add_annotation(&mut self.doc, &annot, &Meta { date: Some(new.date.clone()), id: new.name.clone() }).map(drop).map_err(|e| e.to_string())
+        let at = add_annotation(&mut self.doc, &annot, &Meta { date: Some(new.date.clone()), id: new.name.clone() }).map_err(|e| e.to_string())?;
+        // (Each reply is its own annotation, named after the note so that no two share a name.)
+        for (n, reply) in new.replies.iter().enumerate() {
+            let meta = Meta { date: Some(reply.date.clone()), id: format!("{}-r{}", new.name, n + 1) };
+            match reply.state.as_deref().and_then(ReviewState::from_name) {
+                Some(state) => set_review_state(&mut self.doc, new.page, at, state, &reply.author, &meta),
+                None => add_reply(&mut self.doc, new.page, at, &reply.text, &reply.author, &meta),
+            }
+            .map_err(|e| e.to_string())?;
+        }
+        Ok(())
     }
 
     fn delete_pages(&mut self, pages: &[usize]) -> Result<(), OrganizeError> {

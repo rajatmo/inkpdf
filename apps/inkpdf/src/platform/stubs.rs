@@ -3,6 +3,7 @@
 
 use winit::raw_window_handle::HasWindowHandle;
 
+#[cfg(target_os = "android")]
 use crate::clipboard::TextClipboard;
 
 /// Show or hide an on-screen keyboard: nothing on a desktop (the keyboard is there). (Android has its own.)
@@ -28,6 +29,7 @@ pub fn report_fatal(text: &str) {
 
 /// What the user has asked of motion: `INKPDF_MOTION` (`off` or `on`) says it for this run. (Reading the desktop's
 /// own "reduce animations" setting is a per-desktop job; until then motion is on.)
+#[cfg(target_os = "android")]
 pub fn motion_prefs() -> crate::motion::Prefs {
     match std::env::var("INKPDF_MOTION").ok().as_deref() {
         Some("off") => crate::motion::Prefs::REDUCED,
@@ -46,17 +48,20 @@ pub fn error_box(_window: &dyn HasWindowHandle, text: &str) {
     eprintln!("{text}");
 }
 
+#[cfg(target_os = "android")]
 /// The system clipboard for the text of text boxes. There is none yet on these platforms (it needs the display
 /// server's own protocol, which differs between Wayland, X11 and Android), so this can never be made and the text
 /// boxes keep their text in memory, as they do in tests.
 pub enum SystemClipboard {}
 
+#[cfg(target_os = "android")]
 impl SystemClipboard {
     pub fn new(_window: &dyn HasWindowHandle) -> Option<Self> {
         None
     }
 }
 
+#[cfg(target_os = "android")]
 impl TextClipboard for SystemClipboard {
     fn get(&mut self) -> Option<String> {
         match *self {}

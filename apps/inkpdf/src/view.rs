@@ -122,6 +122,9 @@ pub struct View {
     lift_held: bool,
     /// The time constant the scroll glides with now.
     scroll_tau: f32,
+    /// Room below the end of the document that the scroll may use, in pixels: what an on-screen keyboard covers, so that the last lines of a
+    /// document can be brought above it.
+    bottom_room: f32,
 }
 
 impl View {
@@ -137,6 +140,7 @@ impl View {
             lift_ring: 0.0,
             lift_held: false,
             scroll_tau: SCROLL_TAU,
+            bottom_room: 0.0,
         }
     }
 
@@ -223,9 +227,51 @@ impl View {
                 0.0
             }
         };
-        let (dw, dh) = (layout.width(), layout.height());
+        let (dw, dh) = (layout.width(), layout.height() + self.bottom_room / self.zoom);
         self.scroll = [fit(self.scroll[0], dw, vw), fit(self.scroll[1], dh, vh)];
         self.scroll_target = [fit(self.scroll_target[0], dw, vw), fit(self.scroll_target[1], dh, vh)];
+    }
+
+    /// Let the scroll go `px` pixels past the end of the document (what a keyboard covers), or take that back (0): the view is then put back
+    /// within the document if it was in the room.
+    pub fn set_bottom_room(&mut self, layout: &Layout, px: f32) {
+        self.bottom_room = if px.is_finite() { px.max(0.0) } else { 0.0 };
+        self.clamp(layout);
+    }
+
+    /// Where the glide is heading, as a document y (what is scrolled to when it ends).
+    pub fn scroll_target_y(&self) -> f32 {
+        self.scroll_target[1]
+    }
+
+    /// Glide to the document y `y` at the top of the window.
+    pub fn glide_to_y(&mut self, layout: &Layout, y: f32) {
+        if y.is_finite() {
+            self.scroll_target[1] = y;
+            self.clamp(layout);
+        }
+    }
+
+    /// Glide so that `rect` (document space) is above the lowest `covered_px` pixels of the viewport (what an on-screen keyboard covers) with a
+    /// little to spare, and not under the top `bars_px` pixels (the toolbars); a rect too tall for the room between has its top kept in view. Nothing
+    /// moves if it is there already.
+    pub fn scroll_to_clear(&mut self, layout: &Layout, rect: [f32; 4], covered_px: f32, bars_px: f32) {
+        if !rect.iter().all(|v| v.is_finite()) || !covered_px.is_finite() || !bars_px.is_finite() {
+            return;
+        }
+        let zoom = self.zoom;
+        let room = ((self.viewport[1] - covered_px.max(0.0)) / zoom).max(1.0);
+        let (pad, bars) = (12.0 / zoom, bars_px.max(0.0) / zoom);
+        let top = self.scroll_target[1];
+        let mut want = top;
+        if rect[3] + pad > top + room {
+            want = rect[3] + pad - room;
+        }
+        if rect[1] - bars < want {
+            want = rect[1] - bars;
+        }
+        self.scroll_target[1] = want;
+        self.clamp(layout);
     }
 
     /// Set the zoom immediately, keeping the document point under `anchor` (screen pixels) fixed.
@@ -612,5 +658,59 @@ mod tests {
             quick.step(&l, 1.0 / 60.0);
         }
         assert_eq!(v.scroll, quick.scroll, "after it arrived the glide is as quick as ever");
+    }
+
+    #[test]
+    fn a_rect_under_the_keyboard_is_brought_above_it_and_one_already_clear_is_left_alone() {
+        let layout = Layout::new(&[[612.0, 792.0], [612.0, 792.0]]);
+        let mut view = View::new([600.0, 900.0]);
+        view.zoom = 1.0;
+        view.clamp(&layout);
+        // A box low in the window (its bottom at 800 of 900), the keyboard covering the lowest 400 pixels.
+        let rect = [100.0, 740.0, 300.0, 800.0];
+        let before = view.scroll_target_y();
+        view.scroll_to_clear(&layout, rect, 400.0, 100.0);
+        let moved = view.scroll_target_y() - before;
+        assert!(moved > 0.0, "scrolled down by {moved}");
+        assert!(rect[3] + 12.0 <= view.scroll_target_y() + (900.0 - 400.0) + 0.01, "its bottom is above the keyboard");
+        assert!(rect[1] - 100.0 >= view.scroll_target_y() - 0.01, "and its top is not under the bars");
+        // Asked again, it is where it should be: nothing moves.
+        let at = view.scroll_target_y();
+        view.scroll_to_clear(&layout, rect, 400.0, 100.0);
+        assert_eq!(view.scroll_target_y(), at);
+        // A box that is clear already stays where it is.
+        let mut still = View::new([600.0, 900.0]);
+        still.clamp(&layout);
+        still.scroll_to_clear(&layout, [100.0, 200.0, 300.0, 260.0], 400.0, 100.0);
+        assert_eq!(still.scroll_target_y(), 0.0);
+        // A box taller than the room has its top kept in view, under the bars.
+        let mut tall = View::new([600.0, 900.0]);
+        tall.clamp(&layout);
+        tall.scroll_to_clear(&layout, [100.0, 300.0, 300.0, 1000.0], 400.0, 100.0);
+        assert!((tall.scroll_target_y() - 200.0).abs() < 0.01, "{}", tall.scroll_target_y());
+    }
+
+    #[test]
+    fn the_end_of_the_document_can_be_scrolled_up_by_the_room_a_keyboard_takes_and_comes_back_when_it_goes() {
+        let layout = Layout::new(&[[612.0, 792.0]]);
+        let mut view = View::new([600.0, 700.0]);
+        view.clamp(&layout);
+        view.glide_to_y(&layout, 1.0e6);
+        let end = view.scroll_target_y();
+        assert!((end - 116.0).abs() < 0.01, "the end of the document: {end}");
+        // The last lines of the page are at the bottom: with no room they cannot go higher.
+        view.scroll_to_clear(&layout, [100.0, 700.0, 300.0, 790.0], 400.0, 100.0);
+        assert!(view.scroll_target_y() <= end + 0.01, "no room past the end");
+        view.set_bottom_room(&layout, 400.0);
+        view.scroll_to_clear(&layout, [100.0, 700.0, 300.0, 790.0], 400.0, 100.0);
+        assert!(view.scroll_target_y() > end, "with the keyboard's room it goes up: {} > {end}", view.scroll_target_y());
+        view.set_bottom_room(&layout, 0.0);
+        assert!(view.scroll_target_y() <= end + 0.01, "the room is taken back with the keyboard");
+        for bad in [f32::NAN, f32::INFINITY, -5.0] {
+            view.set_bottom_room(&layout, bad);
+            view.scroll_to_clear(&layout, [f32::NAN, 0.0, 1.0, 1.0], bad, bad);
+            view.glide_to_y(&layout, bad);
+            assert!(view.scroll_target_y().is_finite());
+        }
     }
 }

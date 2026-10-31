@@ -68,7 +68,9 @@ impl Editor {
         match self.modal() {
             Some(Modal::Prompt) => false,
             Some(Modal::Overview) => false,
-            None => self.search.open || self.form_typing.is_some() || (self.ws.tool == Tool::Text && self.tools.text.is_typing()),
+            None => {
+                self.search.open || self.item_card_open() || self.form_typing.is_some() || (self.ws.tool == Tool::Text && self.tools.text.is_typing())
+            }
         }
     }
 
@@ -121,7 +123,15 @@ impl Editor {
             self.fold_pill();
             return true;
         }
-        // The card of the search has the keyboard while it is open.
+        // Esc puts away the card that says something went wrong.
+        if self.error.is_some() && key == Key::Escape {
+            self.close_error();
+            return true;
+        }
+        // The card of an item has the keyboard while it is open, and then the card of the search.
+        if self.item_card_open() && self.item_card_key(key) {
+            return true;
+        }
         if self.search.open && self.search_key(key) {
             return true;
         }
@@ -282,6 +292,8 @@ impl Editor {
         bar.contains(p)
             || self.context_bar().is_some_and(|c| c.contains(p))
             || self.search_layout().is_some_and(|c| c.contains(p))
+            || self.item_card_layout().is_some_and(|c| c.contains(p))
+            || self.error_layout().is_some_and(|c| c.contains(p))
             || self.theme_layout().is_some_and(|c| c.contains(p))
             || self.drawer().is_some_and(|d| crate::ink::rect_contains(d, p))
             || self

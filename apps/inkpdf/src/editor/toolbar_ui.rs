@@ -48,6 +48,12 @@ impl Editor {
             if let (Some(card), Some(view)) = (self.search_layout(), self.search_view()) {
                 card.draw(&view, ui);
             }
+            if let (Some(card), Some(view)) = (self.item_card_layout(), self.item_card_view()) {
+                card.draw(&view, ui);
+            }
+            if let Some((card, view)) = self.error_parts() {
+                card.draw(&view, ui);
+            }
         }
         if let Some((view, amount)) = self.prompt_look() {
             PromptLayout::new(self.ws.view.viewport, self.ws.dpr).draw_with(view, amount, ui);

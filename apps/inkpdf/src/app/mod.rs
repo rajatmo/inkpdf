@@ -173,6 +173,8 @@ pub struct State {
     platform: Box<dyn Platform>,
     /// Whether the on-screen keyboard was last asked for (see `platform::set_text_input`).
     keyboard_shown: bool,
+    /// When the on-screen keyboard was last asked for or put away: for a moment after, how much it covers is looked at again and again.
+    keyboard_since: Option<Instant>,
     /// The mode was chosen on the command line, so a change of posture does not change it.
     mode_forced: bool,
     /// Which of Ctrl, Shift, … are held (for the desktop mode's shortcuts).
@@ -263,6 +265,7 @@ impl State {
             pointer,
             platform,
             keyboard_shown: false,
+            keyboard_since: None,
             mode_forced: opts.mode.is_some(),
             modifiers: ModifiersState::empty(),
             cursor: crate::input::CursorKind::Arrow,
@@ -281,7 +284,10 @@ impl State {
         let (size, dpr) = ([size.width.max(1) as f32, size.height.max(1) as f32], window_scale);
         state.feed(InputEvent::Resized(size));
         state.feed(InputEvent::ScaleChanged(dpr));
-        state.ed.apply_settings(&config::load(state.platform.config_dir()));
+        if let Some(pointer) = &mut state.pointer {
+            pointer.set_scale(dpr);
+        }
+        state.ed.apply_settings(&config::load_for_start(state.platform.config_dir()));
         state.refresh_system_scheme();
         state.sync_window_theme();
         // Text copied from a box can be pasted anywhere, and text copied anywhere into a box.
@@ -374,7 +380,12 @@ impl State {
                     self.feed(InputEvent::Shift(self.modifiers.shift_key()));
                 }
             }
-            WindowEvent::ScaleFactorChanged { scale_factor, .. } => self.feed(InputEvent::ScaleChanged(scale_factor as f32)),
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                if let Some(pointer) = &mut self.pointer {
+                    pointer.set_scale(scale_factor as f32);
+                }
+                self.feed(InputEvent::ScaleChanged(scale_factor as f32))
+            }
             WindowEvent::RedrawRequested => self.redraw(),
             WindowEvent::DroppedFile(path) => self.open(path),
             WindowEvent::CursorMoved { position, .. } => {
@@ -526,6 +537,11 @@ impl State {
             return;
         }
         let mut wake = self.timing.exit_at;
+        // A keyboard that is on its way up (or down) says nothing when it arrives: a frame is asked for soon, which looks again.
+        let settling = self.keyboard_since.is_some_and(|t| t.elapsed() < Duration::from_millis(1500));
+        if settling && self.keyboard_shown != (self.ed.keyboard_covered() > 0.0) && self.timing.wake_at.is_none() {
+            self.timing.wake_at = Some(Instant::now() + Duration::from_millis(60));
+        }
         if self.injector.is_some() {
             let soon = Instant::now() + Duration::from_millis(8);
             wake = Some(wake.map_or(soon, |w| w.min(soon)));

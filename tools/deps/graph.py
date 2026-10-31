@@ -126,7 +126,7 @@ files=[]
 for root,_,fs in os.walk(f'{SRC}/platform'):
     for f in fs:
         if f.endswith('.rs'): files.append(os.path.relpath(os.path.join(root,f),f'{SRC}/platform'))
-files = [f for f in sorted(files) if f not in ('contract.rs', 'fake.rs')]  # (test-only: no backend of the program)
+files = [f for f in sorted(files) if f not in ('contract.rs', 'fake.rs', 'linux/tablet/fake_compositor.rs')]  # (test-only: no backend of the program)
 # the cfg labels below are written by hand: fail if platform/mod.rs does not declare the modules they name
 mod_rs=open(f'{SRC}/platform/mod.rs').read()
 for name in ('android','stubs','unix_dirs','linux','windows'):
@@ -139,8 +139,8 @@ for f in files:
     info[f]={'ext':sorted({c for c in EXT if re.search(r'\b'+c+r'::',body)}),
              'crate':sorted({m for m in re.findall(r'crate::([a-z_]+)',body) if m in mods and m!='platform'})}
 nid=lambda f: 'p_'+f.replace('/','_').replace('.rs','')
-cfg={'windows/mod.rs':'cfg(windows)','linux.rs':'cfg(unix, not android)','android/mod.rs':'cfg(target_os = android)','stubs.rs':'cfg(not(windows))','unix_dirs.rs':'cfg(not(windows))'}
-colr={'windows':'#2e86c1','linux':'#27ae60','android':'#8e44ad','stubs':'#7f8c8d','unix_dirs':'#7f8c8d','motion_event':'#d68910','saf':'#16a085','dialog':'#2e86c1'}
+cfg={'windows/mod.rs':'cfg(windows)','linux/mod.rs':'cfg(unix, not android)','android/mod.rs':'cfg(target_os = android)','stubs.rs':'cfg(not(windows))','unix_dirs.rs':'cfg(not(windows))'}
+colr={'windows':'#2e86c1','linux':'#27ae60','android':'#8e44ad','stubs':'#7f8c8d','unix_dirs':'#7f8c8d','motion_event':'#d68910','tablet_frames':'#d68910','saf':'#16a085','dialog':'#2e86c1'}
 def grp(f): return f.split('/')[0].replace('.rs','')
 D=['digraph P {','rankdir=LR; newrank=true; splines=true; nodesep=0.3; ranksep=1.1; pad=0.4;',
    'label=<<b>Platform routing (compile-time): who is built where, and what each side talks to</b>>; labelloc=t; fontsize=22; fontname="Helvetica";',
@@ -171,9 +171,11 @@ D.append('"platform_mod" -> "x_winit" [style=dashed, color="#c0392b"]')
 # windows internals
 D+=[f'"{nid("windows/mod.rs")}" -> "{nid(x)}" [color="{colr["windows"]}"]' for x in ['windows/pointer.rs','windows/native.rs','windows/posture.rs','windows/folders.rs','windows/counter.rs']]
 D+=[f'"{nid("android/mod.rs")}" -> "{nid("android/reader.rs")}" [color="{colr["android"]}"]']
-D+=[f'"{nid(os_file)}" -> "{nid(shared)}" [label="re-exports", color="{colr[g]}"]' for os_file,g in (('linux.rs','linux'),('android/mod.rs','android')) for shared in ('stubs.rs','unix_dirs.rs')]
+D+=[f'"{nid(os_file)}" -> "{nid(shared)}" [label="re-exports", color="{colr[g]}"]' for os_file,g in (('linux/mod.rs','linux'),('android/mod.rs','android')) for shared in ('stubs.rs','unix_dirs.rs')]
 D+=[f'"{nid("android/reader.rs")}" -> "{nid("motion_event.rs")}" [label="decodes with", color="{colr["android"]}"]']
-D.append('{rank=same; "p_windows_mod"; "p_linux"; "p_android_mod";}')
+D+=[f'"{nid("linux/mod.rs")}" -> "{nid(x)}" [color="{colr["linux"]}"]' for x in ['linux/tablet.rs','linux/clipboard.rs']]
+D+=[f'"{nid("linux/tablet.rs")}" -> "{nid("tablet_frames.rs")}" [label="translates with", color="{colr["linux"]}"]']
+D.append('{rank=same; "p_windows_mod"; "p_linux_mod"; "p_android_mod";}')
 D.append('}')
 plat='\n'.join(D)
 

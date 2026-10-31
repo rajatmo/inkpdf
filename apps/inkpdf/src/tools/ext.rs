@@ -42,6 +42,13 @@ macro_rules! context_reading {
         fn theme(&self) -> api::Theme {
             theme_of(self.0)
         }
+        fn item_at(&self, at: api::P, radius: f32) -> Option<(api::ItemId, String)> {
+            let item = |s: &&crate::ink::Stroke| s.item.is_some() && s.touches_circle(at, radius);
+            self.0.ink.strokes().iter().rev().find(item).and_then(|s| s.item.as_ref().map(|i| (s.id, i.kind.clone())))
+        }
+        fn page_at(&self, at: api::P) -> Option<[f32; 4]> {
+            self.0.page_hit(at).and_then(|page| self.0.page_rect(page))
+        }
     };
 }
 
@@ -49,6 +56,40 @@ impl api::Context for Cx<'_> {
     context_reading!(Cx);
     fn request_redraw(&mut self) {
         self.0.redraw = true;
+    }
+    fn add_item(&mut self, kind: &str, bounds: [f32; 4], data: String) -> Option<api::ItemId> {
+        let k = super::items::kind(kind)?;
+        let page = self.0.page_hit([(bounds[0] + bounds[2]) / 2.0, (bounds[1] + bounds[3]) / 2.0])?;
+        let id = self.0.ink.add_item(page, crate::ink::Style { rgba: k.colour(), width: 1.0 }, kind, data, bounds)?;
+        self.0.redraw = true;
+        Some(id)
+    }
+    fn open_item(&mut self, id: api::ItemId) {
+        if self.0.ink.get(id).is_some_and(|s| s.item.is_some()) {
+            self.0.card.open = Some(id);
+            self.0.card.field = crate::field::Field::default();
+            self.0.redraw = true;
+        }
+    }
+    fn move_item(&mut self, id: api::ItemId, dx: f32, dy: f32) -> bool {
+        let Some(q) = self.0.ink.get(id).filter(|s| s.item.is_some()).and_then(|s| s.quads().next()) else { return false };
+        // (It may end on another page: the one its middle is over; off every page it stays on its own.)
+        let to_page = self.0.page_hit([(q[0] + q[2]) / 2.0 + dx, (q[1] + q[3]) / 2.0 + dy]);
+        let moved = self.0.ink.move_by(&[id], dx, dy, to_page) > 0;
+        self.0.redraw |= moved;
+        moved
+    }
+    fn remove_item(&mut self, id: api::ItemId) -> bool {
+        if self.0.ink.get(id).is_none_or(|s| s.item.is_none()) {
+            return false;
+        }
+        let removed = self.0.ink.remove(&[id]) > 0;
+        self.0.prune_selection();
+        if self.0.card.open == Some(id) {
+            self.0.card.open = None;
+        }
+        self.0.redraw = true;
+        removed
     }
 }
 

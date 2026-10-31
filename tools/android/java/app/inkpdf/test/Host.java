@@ -37,11 +37,46 @@ public class Host extends NativeActivity {
     private int pendingKind;
     /** Whether the system bars are hidden (the full-screen button): applied again when the window regains focus, as the system shows them after a dialog. */
     private volatile boolean barsHidden;
+    /** How many pixels from the bottom of the window the on-screen keyboard covers (0 when it is not up). The keyboard does not resize the window: the program looks at this and lifts what is typed above it. */
+    private volatile int keyboard;
 
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         takeFrom(getIntent());
+        watchKeyboard();
+    }
+
+    /**
+     * Keep `keyboard` up to date: the window is told its insets as the keyboard comes and goes. (The window itself is never drawn into a cut-out
+     * of the screen, and stays inside the system bars, so those need nothing from the program; the keyboard is the one thing that covers it.)
+     */
+    private void watchKeyboard() {
+        final View decor = getWindow().getDecorView();
+        decor.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+            @Override
+            public WindowInsets onApplyWindowInsets(View v, WindowInsets insets) {
+                int covered;
+                if (Build.VERSION.SDK_INT >= 30) {
+                    // (The keyboard's height is from the bottom of the screen; the window may end above it.)
+                    int ime = insets.getInsets(WindowInsets.Type.ime()).bottom;
+                    int[] at = new int[2];
+                    v.getLocationOnScreen(at);
+                    int screen = getWindowManager().getCurrentWindowMetrics().getBounds().height();
+                    covered = Math.max(0, ime - Math.max(0, screen - (at[1] + v.getHeight())));
+                } else {
+                    covered = Math.max(0, insets.getSystemWindowInsetBottom() - insets.getStableInsetBottom());
+                }
+                keyboard = covered;
+                return v.onApplyWindowInsets(insets);
+            }
+        });
+        decor.requestApplyInsets();
+    }
+
+    /** How many pixels from the bottom of the window the on-screen keyboard covers now. */
+    public int keyboardHeight() {
+        return keyboard;
     }
 
     @Override
@@ -79,12 +114,7 @@ public class Host extends NativeActivity {
     void doBars() {
         boolean hidden = barsHidden;
         Window window = getWindow();
-        if (hidden && Build.VERSION.SDK_INT >= 28) {
-            // (Under a camera cut-out too: the whole screen.)
-            WindowManager.LayoutParams params = window.getAttributes();
-            params.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
-            window.setAttributes(params);
-        }
+        // (Never under a camera cut-out, even with the bars away: the toolbars would sit under it. The system keeps the window out of it.)
         if (Build.VERSION.SDK_INT >= 30) {
             WindowInsetsController controller = window.getInsetsController();
             if (controller != null) {

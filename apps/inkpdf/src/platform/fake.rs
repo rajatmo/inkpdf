@@ -138,7 +138,7 @@ impl super::Platform for FakePlatform {
         None
     }
 
-    fn install_pointer(&self, _window: &dyn winit::raw_window_handle::HasWindowHandle, wake: super::Waker) -> Result<Box<dyn PointerSource>, String> {
+    fn install_pointer(&self, _window: &dyn super::WindowHandles, wake: super::Waker) -> Result<Box<dyn PointerSource>, String> {
         wake();
         self.source.borrow_mut().take().map(|s| Box::new(s) as Box<dyn PointerSource>).ok_or_else(|| "already installed".to_string())
     }
@@ -149,7 +149,9 @@ mod tests {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle, WebWindowHandle, WindowHandle};
+    use winit::raw_window_handle::{
+        DisplayHandle, HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle, WebDisplayHandle, WebWindowHandle, WindowHandle,
+    };
 
     use super::*;
     use crate::platform::Platform;
@@ -161,6 +163,13 @@ mod tests {
         fn window_handle(&self) -> Result<WindowHandle<'_>, winit::raw_window_handle::HandleError> {
             // SAFETY: a web handle is only an id; nothing dereferences it.
             Ok(unsafe { WindowHandle::borrow_raw(RawWindowHandle::Web(WebWindowHandle::new(1))) })
+        }
+    }
+
+    impl HasDisplayHandle for NoWindow {
+        fn display_handle(&self) -> Result<DisplayHandle<'_>, winit::raw_window_handle::HandleError> {
+            // SAFETY: as above, nothing dereferences it.
+            Ok(unsafe { DisplayHandle::borrow_raw(RawDisplayHandle::Web(WebDisplayHandle::new())) })
         }
     }
 

@@ -88,7 +88,7 @@ fn stress_shapes_drawn_by_the_pen_stay_on_their_page_undo_redo_exactly_and_survi
     // (The file keeps the ink page by page, each page's strokes in the order they were drawn.)
     let mut by_page: Vec<_> = ed.ink.strokes().iter().collect();
     by_page.sort_by_key(|s| s.page);
-    for (stroke, (page, style, pts, figure, _, _)) in by_page.into_iter().zip(&back) {
+    for (stroke, (page, style, pts, figure, _, _, _)) in by_page.into_iter().zip(&back) {
         assert_eq!((stroke.page, stroke.style.width.round()), (*page, style.width.round()));
         assert_eq!(stroke.pts.len(), pts.len(), "a shape keeps all its points");
         // And its anchors: it can still be edited after reopening.

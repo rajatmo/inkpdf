@@ -75,6 +75,8 @@ pub struct Settings {
     /// How the search card matches: with the case, and as whole words.
     pub search_case: bool,
     pub search_words: bool,
+    /// The name written on the notes and replies the person adds (empty until one is chosen: the shell offers the system's user name).
+    pub author: String,
     pub palette: [[u8; 4]; 5],
     pub tool: Tool,
     pub pen: ToolStyle,
@@ -91,6 +93,7 @@ impl Default for Settings {
             dark_pages: false,
             search_case: false,
             search_words: false,
+            author: String::new(),
             palette: PALETTE,
             tool: Tool::Select,
             pen: ToolStyle::PEN,
@@ -107,6 +110,11 @@ impl Settings {
     pub fn parse(text: &str) -> Settings {
         let mut out = Settings::default();
         for line in text.lines() {
+            // (A name has spaces in it: it is the rest of the line.)
+            if let Some(name) = line.strip_prefix("author ") {
+                out.author = clean_name(name);
+                continue;
+            }
             let words: Vec<&str> = line.split_whitespace().collect();
             match words[..] {
                 ["color", slot, value] => {
@@ -152,8 +160,17 @@ impl Settings {
         let on = |b: bool| if b { "on" } else { "off" };
         text.push_str(&format!("appearance {}\ndark-pages {}\n", self.appearance.name(), on(self.dark_pages)));
         text.push_str(&format!("search-case {}\nsearch-words {}\n", on(self.search_case), on(self.search_words)));
+        let author = clean_name(&self.author);
+        if !author.is_empty() {
+            text.push_str(&format!("author {author}\n"));
+        }
         text
     }
+}
+
+/// A name as the file keeps it: one line of at most 60 characters, no control characters, trimmed.
+pub fn clean_name(name: &str) -> String {
+    name.chars().filter(|c| !c.is_control()).take(60).collect::<String>().trim().to_string()
 }
 
 fn parse_finite(text: &str) -> Option<f32> {
@@ -194,7 +211,14 @@ mod tests {
     use crate::tool::DEFAULT_WIDTH;
 
     fn everything_changed() -> Settings {
-        let mut s = Settings { appearance: Appearance::Dark, dark_pages: true, search_case: true, search_words: true, ..Settings::default() };
+        let mut s = Settings {
+            appearance: Appearance::Dark,
+            dark_pages: true,
+            search_case: true,
+            search_words: true,
+            author: "Ada Lovelace".into(),
+            ..Settings::default()
+        };
         s.palette[2] = [12, 34, 255, 255];
         s.palette[4] = [0, 0, 0, 255];
         s.tool = Tool::Geometry;

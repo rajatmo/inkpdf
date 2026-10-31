@@ -102,6 +102,10 @@ pub(super) struct UiStamp {
     pal: Palette,
     /// The search card, if it is open, and the card under the theme button.
     search: Option<crate::toolbar::SearchView>,
+    /// The card of an item, if one is open.
+    item_card: Option<crate::toolbar::ItemCardView>,
+    /// The card that says something went wrong, if it is up.
+    error: Option<crate::toolbar::ErrorView>,
     theme_menu: Option<crate::toolbar::ThemeView>,
 }
 
@@ -209,6 +213,8 @@ impl UiLayers {
             bar_in: ed.motions.bar_amount().to_bits(),
             pal: ed.palette(),
             search: ed.search_view(),
+            item_card: ed.item_card_view(),
+            error: ed.error_view(),
             theme_menu: ed.theme_view(),
         };
         if self.ui_built.as_ref() == Some(&stamp) {
@@ -383,12 +389,33 @@ fn stroke_capsules(s: &Stroke, offset: [f32; 2], colour: [u8; 4], out: &mut Vec<
         }
         return;
     }
+    if let Some(item) = &s.item {
+        // An extension's item draws itself, in the box it is in (an item of a kind this build does not have draws nothing).
+        if let (Some(kind), Some(q)) = (crate::tools::items::kind_of(s), s.quads().next()) {
+            let bounds = [q[0] + offset[0], q[1] + offset[1], q[2] + offset[0], q[3] + offset[1]];
+            kind.paint(&inkpdf_api::ItemView { data: &item.data, bounds, colour, selected: false }, &mut CapsuleOut(out));
+        }
+        return;
+    }
     let at = |p: &P| [p[0] + offset[0], p[1] + offset[1]];
     let curve = if s.figure.is_some() { s.pts.clone() } else { curve_through(&s.pts, CURVE_STEP) };
     match curve.as_slice() {
         [] => {}
         [p] => out.push(Capsule::new(at(p), at(p), s.style.width, colour)),
         pts => out.extend(pts.windows(2).map(|w| Capsule::new(at(&w[0]), at(&w[1]), s.style.width, colour))),
+    }
+}
+
+/// An extension's painter over a list of capsules: what an item draws in the document, as lines (it has no screen to draw on here).
+struct CapsuleOut<'a>(&'a mut Vec<Capsule>);
+
+impl inkpdf_api::Painter for CapsuleOut<'_> {
+    fn doc_line(&mut self, a: inkpdf_api::P, b: inkpdf_api::P, width: f32, rgba: inkpdf_api::Rgba) {
+        self.0.push(Capsule::new(a, b, width, rgba));
+    }
+    fn screen_line(&mut self, _a: inkpdf_api::P, _b: inkpdf_api::P, _width: f32, _rgba: inkpdf_api::Rgba) {}
+    fn now_ms(&self) -> f64 {
+        0.0
     }
 }
 

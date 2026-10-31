@@ -17,7 +17,7 @@ with_android=no
 
 echo "== apt packages (sudo)"
 sudo apt-get update
-packages=(build-essential pkg-config curl ca-certificates git zip unzip python3 mesa-vulkan-drivers libxkbcommon-x11-0 libxcb-xinput0
+packages=(build-essential pkg-config curl ca-certificates git zip unzip python3 mesa-vulkan-drivers libxkbcommon-x11-0 libxcb-xinput0 libwayland-client0
     xvfb xdotool imagemagick fonts-liberation)
 [ "$with_android" = yes ] && packages+=(openjdk-17-jdk-headless)
 sudo apt-get install -y --no-install-recommends "${packages[@]}"

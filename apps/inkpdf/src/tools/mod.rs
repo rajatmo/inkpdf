@@ -8,6 +8,7 @@
 
 mod ext;
 pub mod gestures;
+pub mod items;
 pub mod paint;
 mod pen;
 mod picker;

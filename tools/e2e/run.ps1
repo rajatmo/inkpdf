@@ -4,7 +4,7 @@
 # on a virtual display in WSL; on Android they run on the emulators (and install the APK from inkpdf-dist first).
 #   .\tools\e2e\run.ps1                              Windows, Linux (WSL) and both Android emulators
 #   .\tools\e2e\run.ps1 -Platform windows            one platform (windows, linux, android)
-#   .\tools\e2e\run.ps1 -Only pages                  one scenario (devices, pages, reader, forms)
+#   .\tools\e2e\run.ps1 -Only pages                  one scenario (devices, notes, pages, reader, forms)
 #   .\tools\e2e\run.ps1 -Platform android -Avd Medium_Tablet_API_37.0
 # Build first: `cargo build --release -p inkpdf --bins` (Windows; the Linux build is made here, in WSL), and
 # `.\tools\android\build-apk.ps1 -Abis arm64-v8a,x86_64` (Android).

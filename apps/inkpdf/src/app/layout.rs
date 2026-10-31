@@ -4,6 +4,7 @@
 //! ```text
 //! {"client":[w,h],"dpr":1.5,"buttons":{"undo":[x,y],"pen":[x,y],…},"bar":{"delete":[x,y],"swatch2":[x,y],…},
 //!  "state":{"page":1,"pages":3,"dirty":false,"mode":"desktop"},"fields":{"name":[x,y],"size#1":[x,y],…},
+//!  "card":{"close":[x,y],"send":[x,y],"action0":[x,y],…},"error":{"close":[x,y]},
 //!  "overview":{"controls":{"edit":[x,y],…},"actions":{"duplicate":[x,y],…},"pages":{"1":[x,y,w,h],…},"toc":{"Chapter 2":[x,y],…}}}
 //! ```
 //!
@@ -129,6 +130,14 @@ fn describe(ed: &Editor) -> String {
         let name = ed.form.fields.get(field)?.name.clone();
         (x >= 0.0 && y >= 0.0 && x <= w && y <= h).then(|| (if widget == 0 { name } else { format!("{name}#{widget}") }, [x, y]))
     });
+    // The card of an item that is open, and the card that says something went wrong.
+    let card = ed.item_card_layout().map(|l| points(l.named_parts().into_iter().map(|(name, r)| (name, middle(r))))).unwrap_or_default();
+    if !card.is_empty() {
+        let _ = write!(out, ",\"card\":{{{card}}}");
+    }
+    if let Some(l) = ed.error_layout() {
+        let _ = write!(out, ",\"error\":{{\"close\":[{:.0},{:.0}]}}", l.close_middle()[0], l.close_middle()[1]);
+    }
     let fields = points(boxes);
     if !fields.is_empty() {
         let _ = write!(out, ",\"fields\":{{{fields}}}");

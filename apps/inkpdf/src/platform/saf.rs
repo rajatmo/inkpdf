@@ -27,6 +27,10 @@ pub trait Bridge: Send + Sync {
     fn set_bars_hidden(&self, hidden: bool);
     /// Show the system pointer icon of this PointerIcon type over the window (what a mouse or a hovering stylus shows).
     fn set_pointer_icon(&self, type_code: i32);
+    /// How many pixels, from the bottom of the window, the on-screen keyboard covers now (0 when it is not up).
+    fn keyboard_height(&self) -> i32 {
+        0
+    }
     /// Ask the system's picker for a file to open, or for a place and name to save under (the answer comes by [`Bridge::take_picked`]).
     fn pick(&self, kind: Pick, name: &str);
     /// What the picker answered, if it has, as the Java side words it: the kind (`0` open, `1` save), a tab, and the address (none if the

@@ -56,7 +56,7 @@ pub struct SearchView {
 }
 
 /// `text` cut short, with an ellipsis, so that it is no wider than `room` at `size`.
-fn elide(text: &str, size: f32, room: f32) -> String {
+pub(super) fn elide(text: &str, size: f32, room: f32) -> String {
     if text::measure(text, size)[0] <= room {
         return text.to_string();
     }

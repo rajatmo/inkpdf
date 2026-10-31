@@ -116,6 +116,52 @@ def devices(s):
     s.check(s.healthy(), "no crash, nothing printed to stderr")
     s.stop()
 
+def notes(s):
+    """Sticky notes, with the devices each mode guarantees: a click puts a note and opens its thread, the keyboard writes in it, a drag moves it; with the
+    tip alone a tap puts one, the thread's own buttons close and delete it, and a finger makes none."""
+    s.launch("tool notes\n", "", DESKTOP)
+    w, h = s.d.size
+
+    def amber(fx, fy):
+        # (A note's own colour, closely, in a square that begins at a place of the page: it is 20 points across, whatever the window.)
+        return s.count(255, 204, 0, fx * w - 10, fy * h - 10, fx * w + 150, fy * h + 150, tol=20)
+
+    def thread_open():
+        s.wait(300)  # (The file is written when the picture changes, and an adb read is kept for a moment.)
+        return bool((s.d.layout() or {}).get("card"))
+
+    s.click(0.3, 0.3)
+    s.check(amber(0.3, 0.3) > 60 and s.dirty(), f"the notes tool: a mouse click puts a note on the page ({amber(0.3, 0.3)} px), and the document is marked changed")
+    s.check(thread_open(), "and its thread opens, to write in")
+    s.type_text("Check this")
+    s.keys("enter")
+    s.keys("esc")
+    s.check(not thread_open() and s.healthy(), "a line typed on the keyboard is sent with Enter, and Escape puts the thread away")
+    s.mouse_px(0.3 * w + 8, 0.3 * h + 8, 0.55 * w + 8, 0.55 * h + 8)
+    s.check(amber(0.55, 0.55) > 60 and amber(0.3, 0.3) < 10, "a drag with the left button moves the note")
+    s.check(not thread_open(), "and does not open it")
+    s.press("undo")
+    s.check(amber(0.3, 0.3) > 60 and amber(0.55, 0.55) < 10, "undo, pressed, puts it back")
+
+    s.press("mode")
+    # (The upper part of the page: opening a thread raises a soft keyboard, which covers the lower half of a phone.)
+    s.pen_tap(0.3, 0.5)
+    s.check(amber(0.3, 0.5) > 60 and thread_open(), "tablet mode: a tap of the stylus's tip puts a note and opens its thread")
+    s.tap_spot(s.spot("card", "close"))
+    s.check(not thread_open(), "the thread's close button, tapped with the tip, puts it away")
+    s.pen_line(0.3 + 8 / w, 0.5 + 8 / h, 0.5 + 8 / w, 0.4 + 8 / h, 20)
+    s.check(amber(0.5, 0.4) > 60 and amber(0.3, 0.5) < 10, "a drag of the tip moves the note")
+    s.pen_tap(0.5 + 8 / w, 0.4 + 8 / h)
+    s.check(thread_open(), "a tap on a note opens its thread")
+    s.tap_spot(s.spot("card", "delete"))
+    s.check(amber(0.5, 0.4) < 10 and not thread_open(), "its delete button, tapped, takes the note away")
+    s.press("undo")
+    s.check(amber(0.5, 0.4) > 60, "and undo brings it back")
+    seen = amber(0.7, 0.3)
+    s.d.finger([[(0.7, 0.3), (0.7, 0.3)]])
+    s.check(amber(0.7, 0.3) == seen, "a finger makes no note: it pans and zooms")
+    s.check(s.healthy(), "no crash, nothing printed to stderr")
+    s.stop()
 
 def pages(s):
     def red_in(n):
@@ -349,4 +395,4 @@ def forms(s):
     s.stop()
 
 
-ALL = {"devices": devices, "pages": pages, "reader": reader, "forms": forms}
+ALL = {"devices": devices, "notes": notes, "pages": pages, "reader": reader, "forms": forms}

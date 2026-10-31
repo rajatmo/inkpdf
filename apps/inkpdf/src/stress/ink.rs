@@ -10,7 +10,7 @@ fn stress_the_ink_store_undoes_and_redoes_exactly_whatever_was_done() {
         let initial: Vec<PageStroke> = (0..rng.below(30))
             .map(|_| {
                 let (page, style, pts) = random_stroke(&mut rng, 3);
-                (page, style, pts, None, None, None)
+                (page, style, pts, None, None, None, None)
             })
             .collect();
         store.load(initial);

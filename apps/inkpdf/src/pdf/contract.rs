@@ -297,6 +297,7 @@ pub(super) fn check_annotations(b: &dyn PdfBackend) {
         author: "InkPDF".into(),
         name: "inkpdf-test-1".into(),
         date: b.date(0),
+        replies: Vec::new(),
     };
     let text = NewAnnotation {
         shape: NewShape::Text { rect: [100.0, 300.0, 260.0, 340.0], font_size: 18.0 },
@@ -353,6 +354,7 @@ pub(super) fn check_annotations(b: &dyn PdfBackend) {
             author: "InkPDF".into(),
             name: format!("inkpdf-mark-{n}"),
             date: b.date(0),
+            replies: Vec::new(),
         })
         .expect("add markup");
     }
@@ -365,6 +367,58 @@ pub(super) fn check_annotations(b: &dyn PdfBackend) {
         assert!(a.quads[0].iter().zip([72.0, y + 12.0, 200.0, y + 12.0, 72.0, y, 200.0, y]).all(|(p, q)| (p - q).abs() < 1e-3), "{:?}", a.quads[0]);
         assert!((a.opacity - 0.4).abs() < 1e-3 && (a.colour[1] - 0.9).abs() < 1e-3);
     }
+}
+
+/// A note with its replies: written as a text annotation with replies to it, read back as one note that has them in order (the replies are not
+/// notes of their own), and taken away with them. A note made by another program is read the same way.
+pub(super) fn check_notes(b: &dyn PdfBackend) {
+    let base = trio();
+    let (said, later) = (b.date(0), b.date(86_400));
+    let replies = vec![
+        Reply { author: "Bob".into(), date: said.clone(), text: "Agreed".into(), state: None },
+        Reply { author: "Ada".into(), date: later.clone(), text: "Done\nand dusted".into(), state: None },
+        Reply { author: "Ann".into(), date: later.clone(), text: String::new(), state: Some("Completed".into()) },
+    ];
+    let mut doc = b.open(&base).expect("open");
+    let note = |name: &str, at: [f64; 2], replies: Vec<Reply>| NewAnnotation {
+        page: 1,
+        shape: NewShape::Note { at },
+        colour: [1.0, 0.8, 0.0],
+        opacity: 1.0,
+        width: 0.0,
+        text: "Check this".into(),
+        author: "Ann".into(),
+        name: name.into(),
+        date: said.clone(),
+        replies,
+    };
+    doc.add_annotation(&note("inkpdf-item:testbox:1-1", [100.0, 300.0], replies)).expect("a note with replies");
+    doc.add_annotation(&note("other-note", [150.0, 200.0], Vec::new())).expect("a note with none");
+    let saved = arc(doc.save_incremental(&said).expect("update"));
+    let back = b.open(&saved).expect("open").annotations();
+    let notes: Vec<&Annotation> = back.iter().filter(|a| a.kind == AnnotKind::Note).collect();
+    assert_eq!(notes.len(), 2, "the replies are not notes of their own: {:?}", back.iter().map(|a| (&a.name, a.kind)).collect::<Vec<_>>());
+    let first = notes.iter().find(|n| n.name == "inkpdf-item:testbox:1-1").expect("the note");
+    assert_eq!((first.page, first.text.as_str(), first.author.as_str(), first.date.as_str()), (1, "Check this", "Ann", said.as_str()));
+    assert_eq!(
+        first.replies.iter().filter(|r| r.state.is_none()).map(|r| (r.author.as_str(), r.text.as_str(), r.date.as_str())).collect::<Vec<_>>(),
+        [("Bob", "Agreed", said.as_str()), ("Ada", "Done\nand dusted", later.as_str())],
+        "the replies, oldest first, with who and when"
+    );
+    assert_eq!(first.replies.last().and_then(|r| r.state.as_deref()), Some("Completed"), "the thread was marked done, as a reader shows it");
+    assert!(
+        first.rect[0] <= 100.5 && first.rect[2] > 100.5 && first.rect[3] >= 299.5 && first.rect[1] < 299.5,
+        "the note is at its corner: {:?}",
+        first.rect
+    );
+    assert!(((first.colour[1] - 0.8).abs() < 1e-3), "its colour comes back");
+    assert!(notes.iter().find(|n| n.name == "other-note").is_some_and(|n| n.replies.is_empty()));
+    // Taken away, a note goes with its replies (and the other stays).
+    let mut doc = b.open(&saved).expect("open");
+    doc.delete_annotation(first.page, first.index).expect("delete");
+    let whole = arc(doc.save_full().expect("whole file"));
+    let left = b.open(&whole).expect("reopen").annotations();
+    assert_eq!(left.iter().map(|a| a.name.as_str()).collect::<Vec<_>>(), ["other-note"]);
 }
 
 pub(super) fn check_organize(b: &dyn PdfBackend) {
@@ -523,6 +577,7 @@ pub(super) fn backend_contract(b: &dyn PdfBackend) {
     check_flags(b);
     check_form(b);
     check_annotations(b);
+    check_notes(b);
     check_organize(b);
     check_render(b);
     check_pool(b);
@@ -566,6 +621,11 @@ fn pdfcraft_reads_and_fills_form_fields() {
 #[test]
 fn pdfcraft_writes_annotations_and_reads_them_back() {
     check_annotations(native());
+}
+
+#[test]
+fn pdfcraft_writes_notes_with_replies_and_reads_them_back() {
+    check_notes(native());
 }
 
 #[test]

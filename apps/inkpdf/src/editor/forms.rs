@@ -114,7 +114,7 @@ impl Editor {
     }
 
     /// The box the field being typed into is pressed on, in document space.
-    fn typing_rect(&self) -> Option<[f32; 4]> {
+    pub(super) fn typing_rect(&self) -> Option<[f32; 4]> {
         let t = self.form_typing.as_ref()?;
         self.field_places().find(|&(f, w, _)| f == t.field && w == t.widget).map(|(_, _, r)| r)
     }

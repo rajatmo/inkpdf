@@ -177,6 +177,20 @@ pub enum AnnotKind {
     Text,
     /// A text markup (highlight, underline, strike-out, squiggly): its boxes are in `Annotation::quads`.
     Markup(MarkupKind),
+    /// A note (a Text annotation that is not a reply): its contents, author, date and replies, and its box in `Annotation::rect`.
+    Note,
+}
+
+/// One reply to a note, as the file has it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Reply {
+    pub author: String,
+    /// A date in the file's own form (see [`PdfBackend::date`]).
+    pub date: String,
+    pub text: String,
+    /// For a reply that sets a review status rather than saying something: the status ("Completed", "Accepted", ...); a plain reply has none.
+    /// Written, its text is the file's own ("Completed set by ..."), not `text`.
+    pub state: Option<String>,
 }
 
 /// An annotation the file has that carries a name (the program marks its own by it), as read.
@@ -201,6 +215,10 @@ pub struct Annotation {
     /// A markup's boxes in the page's user space, each as the file writes them: the corners top-left, top-right, bottom-left, bottom-right
     /// (`x, y` for each).
     pub quads: Vec<[f64; 8]>,
+    /// A note's author and date (the file's form), and the replies to it, oldest first (the note's own text is `text`).
+    pub author: String,
+    pub date: String,
+    pub replies: Vec<Reply>,
 }
 
 /// What to add to a page.
@@ -218,6 +236,10 @@ pub enum NewShape {
         kind: MarkupKind,
         quads: Vec<[f64; 8]>,
     },
+    /// A note with its top-left corner at `at` in the page's user space; its replies are `NewAnnotation::replies`.
+    Note {
+        at: [f64; 2],
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -232,6 +254,8 @@ pub struct NewAnnotation {
     /// The name that marks it, and the date it was made (the file's own format, see [`PdfBackend::date`]).
     pub name: String,
     pub date: String,
+    /// A note's replies, oldest first, each written as a reply to the note (nothing for any other shape).
+    pub replies: Vec<Reply>,
 }
 
 /// Why pages could not be organized.

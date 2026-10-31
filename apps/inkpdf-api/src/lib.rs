@@ -175,8 +175,153 @@ pub struct Theme {
     pub white: Rgba,
 }
 
+/// The name of an item in the drawing, for as long as the document is open.
+pub type ItemId = u64;
+
+/// One message of a thread: who said it, when (a date in the file's own form, as [`Who::date`] gives it), and what.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Message {
+    /// Who wrote it.
+    pub author: String,
+    /// When, as the file writes a date.
+    pub date: String,
+    /// What was written.
+    pub text: String,
+}
+
+/// An item as a PDF has it: a note, which is a text annotation (its contents, who wrote it and when) with replies to it. Every reader shows one.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Note {
+    /// Who made it.
+    pub author: String,
+    /// When, as the file writes a date.
+    pub date: String,
+    /// Its contents.
+    pub text: String,
+    /// The replies, oldest first.
+    pub replies: Vec<Message>,
+    /// Whether a person has marked the thread done (a reader shows it as "Completed").
+    pub closed: bool,
+}
+
+/// What an [`ItemKind`] is asked to draw: one item of its kind.
+#[derive(Clone, Copy, Debug)]
+pub struct ItemView<'a> {
+    /// What the item holds (see [`ItemKind`]).
+    pub data: &'a str,
+    /// Where it is, `[x0, y0, x1, y1]` in document space.
+    pub bounds: [f32; 4],
+    /// Its colour, which a person can change like any item's.
+    pub colour: Rgba,
+    /// Whether it is selected now.
+    pub selected: bool,
+}
+
+/// Who is acting, and when: given to an item kind when a person writes in its card.
+#[derive(Clone, Copy, Debug)]
+pub struct Who<'a> {
+    /// The name written on what they add.
+    pub author: &'a str,
+    /// Now, as the file writes a date.
+    pub date: &'a str,
+}
+
+/// One row of a [`Card`]: a line of small print over some text.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CardRow {
+    /// The small line (who and when).
+    pub head: String,
+    /// The text.
+    pub body: String,
+}
+
+/// A button of a [`Card`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CardAction {
+    /// What [`ItemKind::act`] is told when it is pressed.
+    pub id: &'static str,
+    /// What it says.
+    pub label: String,
+}
+
+/// What the program shows when a person opens an item: rows of text, a field to write in, and buttons. The program draws it the same way for
+/// every kind, and it works with the left mouse button and the keyboard, or with the stylus tip alone.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Card {
+    /// Its title.
+    pub title: String,
+    /// The text it shows, oldest first.
+    pub rows: Vec<CardRow>,
+    /// A field to write in, with what it says while empty; `None`: no field.
+    pub field: Option<String>,
+    /// Its buttons, besides the program's own (delete).
+    pub actions: Vec<CardAction>,
+}
+
+/// A kind of item that an extension makes: something on a page that is kept with the document, so that **undo, moving, copying, pasting,
+/// erasing and the page edits follow it without the extension doing anything**. It is a box on a page that holds `data`, a text the kind alone
+/// reads and writes (a thread, a name); the program keeps and moves it. The kind says how it is drawn, how it is written into a PDF (as a
+/// [`Note`]) and read back, what text in it a search finds, and what its card shows.
+pub trait ItemKind: Send + Sync {
+    /// Its name: lower case letters, digits and `-`, unique among the kinds. It is written into the file, so it never changes.
+    fn id(&self) -> &'static str;
+
+    /// The colour a new item has (a person can change it like any item's).
+    fn colour(&self) -> Rgba {
+        [255, 204, 0, 255]
+    }
+
+    /// Draw one item over its page, in document space.
+    fn paint(&self, item: &ItemView<'_>, out: &mut dyn Painter);
+
+    /// What the item looks like in a PDF.
+    fn write(&self, data: &str) -> Note;
+
+    /// The data of an item of this kind that a file holds as `note`; `None` if it is not one this kind can use.
+    fn read(&self, note: &Note) -> Option<String>;
+
+    /// The text of the item that a search can find.
+    fn text(&self, _data: &str) -> Option<String> {
+        None
+    }
+
+    /// What its card shows; `None`: the kind has no card.
+    fn card(&self, _data: &str) -> Option<Card> {
+        None
+    }
+
+    /// A person pressed `action` of the card, or sent `input` from its field (`action` is then empty). The new data, or `None` if nothing changes.
+    /// The change is one undo step.
+    fn act(&self, _data: &str, _action: &str, _input: &str, _who: &Who<'_>) -> Option<String> {
+        None
+    }
+}
+
 /// What a tool may ask of the document and the window, on every call it is made.
 pub trait Context {
+    /// Add an item of the kind named `kind` (one of this extension's: see [`Tool::item_kinds`]) holding `data`, in the box `bounds` (document
+    /// space), as one undo step. The box is put on the page it is mostly on. `None` if it cannot be (no such kind, no page there).
+    fn add_item(&mut self, _kind: &str, _bounds: [f32; 4], _data: String) -> Option<ItemId> {
+        None
+    }
+    /// The topmost item within `radius` document points of `at`, and its kind's name.
+    fn item_at(&self, _at: P, _radius: f32) -> Option<(ItemId, String)> {
+        None
+    }
+    /// Show the card of an item (see [`ItemKind::card`]).
+    fn open_item(&mut self, _id: ItemId) {}
+    /// Move an item by `(dx, dy)` document points, as one undo step; it may end on another page.
+    fn move_item(&mut self, _id: ItemId, _dx: f32, _dy: f32) -> bool {
+        false
+    }
+    /// Take an item away, as one undo step.
+    fn remove_item(&mut self, _id: ItemId) -> bool {
+        false
+    }
+    /// The page under a document point, as `[x0, y0, x1, y1]` in document space.
+    fn page_at(&self, _at: P) -> Option<[f32; 4]> {
+        None
+    }
     /// A point of the screen (pixels) as a point of the document.
     fn to_doc(&self, screen: P) -> P;
     /// A point of the document as a point of the screen.
@@ -234,6 +379,12 @@ pub trait Tool {
 
     /// What the tool shows over the page: its drafts, trails, handles.
     fn paint(&self, _cx: &dyn Context, _out: &mut dyn Painter) {}
+
+    /// The kinds of item the extension makes, if it makes any (asked once, when the program starts: the program keeps them, and a file that holds
+    /// one is read through it, whichever tool is in use).
+    fn item_kinds(&self) -> Vec<Box<dyn ItemKind>> {
+        Vec::new()
+    }
 }
 
 /// What an extension is: the name the program knows it by, what its toolbar button shows, and how to make it.

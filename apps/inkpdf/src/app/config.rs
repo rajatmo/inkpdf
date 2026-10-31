@@ -28,6 +28,16 @@ pub fn load(config_dir: Option<PathBuf>) -> Settings {
     path(config_dir).and_then(|p| fs::read_to_string(p).ok()).map_or_else(Settings::default, |t| Settings::parse(&t))
 }
 
+/// The settings as the program starts with them: the saved ones, and, until a name has been chosen for what the person writes (a note's author),
+/// the name the system gives the person who is signed in (`USERNAME` on Windows, `USER` elsewhere; none on Android, where the card asks).
+pub fn load_for_start(config_dir: Option<PathBuf>) -> Settings {
+    let mut settings = load(config_dir);
+    if settings.author.is_empty() {
+        settings.author = crate::settings::clean_name(&std::env::var("USERNAME").or_else(|_| std::env::var("USER")).unwrap_or_default());
+    }
+    settings
+}
+
 /// Remember the settings. A failure is reported, not fatal: losing a colour must never stop work.
 pub fn save(config_dir: Option<PathBuf>, settings: &Settings) -> Result<(), String> {
     let path = path(config_dir).ok_or("no application-data folder")?;

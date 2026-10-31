@@ -108,13 +108,17 @@ Everything that differs by operating system is behind `platform/mod.rs`, chosen 
 `Box<dyn Platform>` (built by `platform::native()`): where documents go (`documents_dir`, `config_dir`, `file_store`), the
 system font if its widths are the ones PDF readers use (`system_font`: Arial on Windows, nothing elsewhere, where the built-in
 Liberation Sans is used), what the user asked of motion and the machine's posture (`motion_prefs`, `detect_mode`), side effects
-(`open_url`, `error_box`, `set_text_input`, `clipboard`) and the pen reader (`install_pointer`). The window crosses the seam as a
+(`open_url`, `error_box` where the system has one, else a card of the program's own over the page: `has_error_box`; `set_text_input`, and on a phone `keyboard_covered`,
+how much of the window the soft keyboard covers; `clipboard`) and the pen reader (`install_pointer`). The window crosses the seam as a
 `raw-window-handle` plus a `Waker`, so no windowing toolkit type is in the API. `platform::fake::FakePlatform` runs the shell's calls
 with no OS. Process-level calls before there is a window (`attach_parent_console`, `report_fatal`) stay free functions.
 
 * `windows/`: Win32 pointer messages with the history Windows batches (`pointer.rs`), message boxes, clipboard and fonts (`native.rs`),
   posture, the known folders, and the performance counter converted to the app's clock (`counter.rs`).
-* `linux.rs`: winit's basic input for now (a native pen reader over Wayland's tablet protocol is step L2 in `docs/PORTING.md`).
+* `linux/`: `tablet.rs` is the pen on Wayland (a second event queue on winit's own connection, `zwp_tablet_v2`, read in `pump`; winit's touches are handed
+  through `late_touch`), over `tablet_frames.rs`, a pure state machine from the protocol's frames to `PointerEvent`s that is tested on every OS, and
+  `tablet/fake_compositor.rs`, a compositor of our own that tests the binding over a socket pair; `clipboard.rs` is arboard's; `mod.rs` the desktop's
+  settings (`gsettings`: the look, the animations). X11 reads the pen as the mouse (`install_pointer` says why not).
 * `android/`: `reader.rs` reads the activity's input queue *before* winit (which flattens every `MotionEvent` into a plain touch) and
   hands the fields to `motion_event.rs`, a pure decoder tested on every OS: tool type, pressure, the stylus's buttons, hover, the points
   between events, cancels. Pointers are told by device *and* id (a pen digitiser and a touch screen both count from 0).
@@ -122,7 +126,7 @@ with no OS. Process-level calls before there is a window (`attach_parent_console
 
 The pen reader is a `PointerSource`: `pump` (take what the OS has queued, right after the display wait), `pending`, `drain_into`
 (append `PointerEvent`s with the OS's batched `samples` to a buffer the shell keeps, so nothing is allocated per frame),
-`take_posture_change`, `uninstall`. A new OS adds one such source and changes nothing above `platform`; the session may not name it
+`take_posture_change`, `set_scale` (the window's scale, for a source that reads logical pixels), `uninstall`. A new OS adds one such source and changes nothing above `platform`; the session may not name it
 (tested), and a contract suite (`platform/contract.rs`) holds every source to the same rules. The layering test also says nothing below the
 adapters touches a file, the environment, an OS, a PDF crate, `wgpu` or `winit`: what they need (a font, the settings folder, the
 clock's source) is handed to them.
@@ -233,6 +237,23 @@ number, the PDF's table of contents on the left when there is one, and an edit m
   holds the program's own tools as fields and an extension's as a list (`ExtTool`), and the frame loop asks them `tick` so that an idle window
   still draws nothing. Every contract test (hostile events against every tool) runs on `Tool::all()`, so a new extension is tested by existing
   tests, and the toolbar's and interface's tests use a reference set of tools so that a new extension changes none of them.
+* **Item kinds (E3).** A tool's `item_kinds()` gives the kinds of item the extension makes (`inkpdf_api::ItemKind`). The program keeps an item as a
+  stroke with a payload, `Stroke::item` (`ink::Item`: the kind's name and a text only the kind reads), whose points are its box (two corners), so
+  **undo, moving, copying, pasting, the lasso, the eraser, the page edits and the copies of pages follow it with no code of the extension's**: it is
+  hit like a markup (`Stroke::boxy`). `tools/items.rs` is the registry of kinds (asked once, from `inkpdf_ext::all()`), `InkStore::add_item` and
+  `edit_item` (one undo step each) make and change one, and `Context::{add_item, item_at, open_item, move_item, remove_item}` are how a tool
+  does it. The kind draws it (`paint`, into capsules, in `app/ink_layer.rs`), says what a search finds (`text`) and writes and reads it as a PDF note
+  (`write`, `read`): the seam has `AnnotKind::Note`, `NewShape::Note` and `Reply` (a note with the replies to it, and a review status for "done"),
+  written by `ink_io` with the name `inkpdf-item:<kind>:<stamp>`; a note of another program, or of a kind this build has not, stays in the file as
+  it is and is drawn by the renderer. The conformance suite has `check_notes`.
+* **The card of an item.** An item's kind may have a card (`ItemKind::card`, `act`): rows of text, a field to write in, buttons of the kind's own and
+  the program's delete. It is the same card for every kind (`toolbar/item_card.rs` lays it out and draws it, `editor/item_card.rs` holds its state in
+  `Workspace::card`, takes its keys and presses): at the right under the bars (and under the search card), not modal, the keyboard its own while it is
+  open, every part a button for a stylus tip or the left mouse button, Enter to send, Esc to put it away, Delete in an empty field to delete the item.
+  The name written on what is sent is a setting (`author`; the shell offers the system's user name until one is chosen).
+* **The sticky notes** (`inkpdf-ext/src/notes/`) are the first kind: a click or a tap puts a note, a click on it opens its thread, a drag moves it. In a
+  PDF a note is a text annotation with replies, so every reader shows the thread; "done" is the review status Completed. The row of
+  `editor/tests/notes.rs` is the notes' place in the capability matrix.
 * How to write one: `docs/EXTENSIONS.md`; to make one: `tools/new-extension.sh`.
 
 ## Text: read behind the frame, kept by file page, selected and searched

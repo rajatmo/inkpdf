@@ -20,6 +20,7 @@
 //! * `drag FX0 FY0 FX1 FY1 STEPS` — one finger dragging
 //! * `pinch FCX FCY FR0 FR1 STEPS` — two fingers moving apart (or together)
 //! * `path FX FY FX FY ...` — a pen stroke through the given points (the rest of the arguments)
+//! * `ppath FX FY P FX FY P ...` — the same with a pressure (0 to 1024) at each point (the rest of the arguments)
 //! * `touchpath ID FX FY ...` — one finger through the given points
 //! * `touchpaths N STEPS X Y ...` — N fingers moving together, each step giving every finger's point
 
@@ -152,6 +153,12 @@ impl Bot {
 
     /// Hover, touch down, follow `path` at about 250 Hz, lift.
     fn pen_path(&self, path: &[POINT]) {
+        let pressures: Vec<u32> = (0..path.len() as u32).map(|i| 300 + (i.saturating_sub(1) * 7) % 500).collect();
+        self.pen_path_pressed(path, &pressures);
+    }
+
+    /// `pen_path` with the pressure of each point given.
+    fn pen_path_pressed(&self, path: &[POINT], pressures: &[u32]) {
         let shaken: Vec<POINT> = path.iter().map(|&p| self.shaken(p)).collect();
         let Some((&first, rest)) = shaken.split_first() else { return };
         self.pen_hover(first);
@@ -159,7 +166,7 @@ impl Bot {
         self.pen_down(first);
         for (i, &p) in rest.iter().enumerate() {
             sleep(Duration::from_millis(4));
-            self.pen_move(p, 300 + (i as u32 * 7) % 500);
+            self.pen_move(p, pressures.get(i + 1).copied().unwrap_or(400));
         }
         sleep(Duration::from_millis(4));
         let last = shaken.last().copied().unwrap_or(first);
@@ -326,6 +333,13 @@ pub fn main() {
             // The shapes the other platforms' checks send, so that every platform moves along the same points.
             "path" => {
                 bot.pen_path(&bot.points(&ops[i + 1..]));
+                i = ops.len();
+            }
+            "ppath" => {
+                let triples = ops[i + 1..].as_chunks::<3>().0;
+                let path: Vec<POINT> = triples.iter().map(|[x, y, _]| bot.px(x.parse().unwrap_or(0.0), y.parse().unwrap_or(0.0))).collect();
+                let pressures: Vec<u32> = triples.iter().map(|[_, _, p]| p.parse().unwrap_or(400)).collect();
+                bot.pen_path_pressed(&path, &pressures);
                 i = ops.len();
             }
             "touchpath" => {

@@ -22,6 +22,8 @@
 - **Android opens full screen** (the status and navigation bars hide, and come back with a swipe from the edge), and **the two settings icons differ**: the cog is
   the bar's settings button, and the look's folded pill has a new icon of its own (an eye).
 - **Clean-up.** Mentions of other programs are out of the code and the documents; an empty stray file is gone.
+- **A new tour in the README** (`docs/demo.gif`, `docs/demo.mp4`): the real app filmed as it is used, made again by `tools/demo/tour.py` and
+  `tools/demo/compose.py` (which replace `tools/demo/record.ps1`). The test bot has a `ppath` op, a stylus path with a pressure at each point.
 
 ## 1.6.0
 - **A finger can be the stylus.** A new button on the right pill (a hand with one finger out, between the mode button and full screen) lets one finger on the

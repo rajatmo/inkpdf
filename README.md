@@ -3,7 +3,9 @@
 A fast, pen-first PDF annotator for Windows, Linux and Android. Open a PDF, write on it with a stylus, save it back. No account, no
 library, no sync: just the page and your pen.
 
-![InkPDF: ink and shapes, text, the lasso and eraser, selecting and marking text, search, light and dark looks, the pages overview, filling in a form, and the toolbar folding on a phone](docs/demo.gif)
+![InkPDF: writing with a stylus, erasing and undoing, shapes and typed text, the lasso, highlighting and searching with the mouse and keyboard, the pages overview with its contents, light and dark looks, filling in a form, presenting slides, and the toolbar folding on a phone](docs/demo.gif)
+
+The same tour as a video: [docs/demo.mp4](docs/demo.mp4).
 
 ## Features
 

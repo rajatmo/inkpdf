@@ -503,6 +503,21 @@ Order: A4 and E0 first, together; E1; E2; E3; E4. Quality fixes from the owner's
   the address, a warning for tricks, Open, Copy. A real web view needs an engine on every platform (WebView2 is not FOSS, WebKitGTK is X11 only,
   Android needs Java glue): the owner chose the card first and the engine later.
 
+### Open, for the owner to do (2026-11-01)
+
+**Q4. The stylus places text in the desktop mode too.** Today the Text tool is the only tool the stylus does nothing with in the desktop
+mode: a tap on the page opens no box (found while recording the README tour, which places its text with the mouse). It is a rule, not a
+slip: `TextTool::policy` (`tools/text.rs`) has `stylus: false` for `Mode::Desktop`, `decide` (`input/rules.rs`) returns nothing for a pen
+with Text at a desk, a test asserts it ("the stylus does not type at a desk"), and `docs/INPUT.md` says so. It dates from 0.1.11, before
+the modes existed ("the text tool is keyboard and mouse only"); 0.3.0 gave the stylus text in the tablet mode and left the desk as it was.
+Nothing technical is known to need it, and a desk has a keyboard to type with, while a pen laptop with its keyboard on (desktop mode) can
+choose the Text tool with the stylus and then not use it.
+The change: `stylus: true` in the desktop policy (the mouse stays itself there), drop the exception in `decide`, turn that test round and add
+one that a stylus tap opens a box at a desk; `docs/INPUT.md` (the devices table and the Text row), `ARCHITECTURE.md` (the modes table),
+the comments in `tools/text.rs` and `input/rules.rs`. Optionally the tour (`tools/demo/tour.py`) then places its text with the stylus.
+Done when a stylus tap with the Text tool opens a box in both modes, the mouse still does in the desktop mode, and the goldens, storms
+and e2e pass.
+
 ### Beside the milestones: the platform backlog (`docs/PORTING.md` has the detail)
 
 Not a release of its own; ship each step inside the next release. In this order of value:

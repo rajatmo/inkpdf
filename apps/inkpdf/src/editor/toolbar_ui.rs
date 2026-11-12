@@ -59,6 +59,9 @@ impl Editor {
             if let (Some(pill), Some(view)) = (self.trail_layout(), self.trail_view()) {
                 pill.draw(&view, ui);
             }
+            if let (Some(card), Some(view)) = (self.recent_layout(), self.recent_view()) {
+                card.draw(&view, ui);
+            }
             if let Some((card, view)) = self.link_parts() {
                 card.draw(&view, ui);
             }
@@ -227,6 +230,9 @@ impl Editor {
         if item != Item::Theme {
             self.close_theme_menu();
         }
+        if item != Item::Recent {
+            self.close_recent();
+        }
         if let Item::Fold(pill) = item {
             // (A round button only unfolds or folds its pill: the panel and what is being typed are left as they are.)
             self.toggle_pill(pill);
@@ -264,6 +270,7 @@ impl Editor {
                 Item::Pages => self.open_overview(),
                 Item::Search => self.toggle_search(),
                 Item::Open => self.ws.requests.push(Request::Open),
+                Item::Recent => self.toggle_recent(),
                 // The last page there is stays (a document has at least one: the edit is refused).
                 Item::DeletePage => {
                     self.delete_current_page();

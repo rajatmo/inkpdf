@@ -3,7 +3,7 @@
 //! (see [`icons`]).
 //!
 //! There are three pills along the top: the document's buttons on the left (close,
-//! undo, redo, save), the tools in the middle (pen, laser) and full screen on the right. In a window too
+//! undo, redo, the PDFs opened last, save), the tools in the middle (pen, laser) and full screen on the right. In a window too
 //! narrow for all three, the pills fold into round buttons (the left one first, then the right, then the
 //! middle one), each of which unfolds its pill over the others when it is pressed (see [`Pill`]). The pen's
 //! colour, thickness and smoothing are in a panel that unfolds from the bar under the tools
@@ -17,6 +17,7 @@ mod look;
 mod overview;
 mod presentation;
 mod prompt;
+mod recent_card;
 mod search_card;
 mod theme;
 mod theme_card;
@@ -51,6 +52,7 @@ pub use overview::{
 };
 pub use presentation::{PresentationLayout, PresentationView};
 pub use prompt::{PromptLayout, PromptView};
+pub use recent_card::{RecentLayout, RecentRow, RecentView};
 pub use search_card::{ROWS as SEARCH_ROWS, SearchItem, SearchLayout, SearchRow, SearchView};
 pub use theme::{Align, Image, Label, Ui};
 pub use theme_card::{ThemeLayout, ThemeView};
@@ -95,8 +97,10 @@ pub enum Item {
     AddPage,
     /// Open the pages overview.
     Pages,
-    /// Ask the system's picker for a PDF to open (there only where the system has one); it sits just left of Save.
+    /// Ask the system's picker for a PDF to open (there only where the system has one); it sits just left of the PDFs opened last.
     Open,
+    /// Show the PDFs opened last (a card under the pill), to open one of them again; it sits just left of Save.
+    Recent,
     /// Open or close the search card.
     Search,
     Tool(Tool),
@@ -167,6 +171,9 @@ pub struct State {
     pub theme_menu: bool,
     /// The search card is open.
     pub search: bool,
+    /// The card of the PDFs opened last is open, and there are some to show (the button is dim with none).
+    pub recent: bool,
+    pub has_recent: bool,
     pub tool: Tool,
     /// The colours the pen and the shape tool write in, shown on their buttons.
     pub pen_colour: [u8; 4],
@@ -193,6 +200,8 @@ impl Default for State {
             dark_pages: false,
             theme_menu: false,
             search: false,
+            recent: false,
+            has_recent: false,
             tool: Tool::Pen,
             pen_colour: PALETTE[0],
             shape_colour: PALETTE[1],
@@ -204,11 +213,12 @@ impl Default for State {
 }
 
 /// What goes in each pill, left to right; `None` is a gap with a hairline in it.
-const LEFT: [Option<Item>; 10] = [
+const LEFT: [Option<Item>; 11] = [
     Some(Item::Close),
     None,
     Some(Item::Undo),
     Some(Item::Redo),
+    Some(Item::Recent),
     Some(Item::Save),
     None,
     Some(Item::DeletePage),
@@ -219,7 +229,7 @@ const LEFT: [Option<Item>; 10] = [
 const RIGHT: [Option<Item>; 5] = [Some(Item::Theme), Some(Item::ModeSwitch), Some(Item::Finger), Some(Item::Present), Some(Item::Fullscreen)];
 
 /// Buttons at most: the left pill's, the right pill's and as many tools as a toolbar can hold. (A toolbar has the buttons of the tools there are.)
-pub const BUTTONS: usize = 9 + 6 + crate::tool::MAX_TOOLS;
+pub const BUTTONS: usize = 10 + 6 + crate::tool::MAX_TOOLS;
 
 /// How big a button is when all three pills fit (in points), the least it shrinks to before pills fold, and the least there is
 /// (past which the window is too small to use).
@@ -305,7 +315,7 @@ impl Toolbar {
         let mut left = [None; LEFT.len() + 1];
         let mut left_len = 0;
         for slot in LEFT {
-            if slot == Some(Item::Save) && registry.has_open_button() {
+            if slot == Some(Item::Recent) && registry.has_open_button() {
                 left[left_len] = Some(Item::Open);
                 left_len += 1;
             }
@@ -514,6 +524,11 @@ impl Toolbar {
                 Item::AddPage => icons.plus.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink),
                 Item::Pages => icons.pages.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink),
                 Item::Open => icons.open.draw(&mut ui.lines, cx, cy, half, line, ui.pal.ink),
+                // (The accent while its card is shown; dim with nothing to show.)
+                Item::Recent => {
+                    let colour = if state.recent { ui.pal.accent } else { ink(look.enabled[slot]) };
+                    icons.recent.draw(&mut ui.lines, cx, cy, half, line, colour);
+                }
                 Item::Search => icons.search.draw(&mut ui.lines, cx, cy, half, line, if state.search { ui.pal.accent } else { ui.pal.ink }),
                 // The mode in use, drawn as the machine it is for; the tablet in the accent colour, as the one you chose
                 // to leave the desk for.

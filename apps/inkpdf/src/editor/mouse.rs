@@ -124,6 +124,7 @@ impl Editor {
         }
         self.tools.end_all(&mut self.ws);
         self.dismiss_theme_menu(self.cursor);
+        self.dismiss_recent(self.cursor);
         self.dismiss_pill(self.cursor);
         self.dismiss_bar(self.cursor);
         let bar = self.toolbar();

@@ -667,11 +667,26 @@ fn check_kind(figure: &crate::figure::Figure, pts: &[P], what: &str) {
         }
         Figure::Axes { origin, ends } => {
             // Every axis is a straight line through the crossing; with two they meet at a right angle.
-            let dirs: Vec<P> = ends.iter().map(|e| [e[1][0] - e[0][0], e[1][1] - e[0][1]]).collect();
+            // (The way an axis runs is read from the longest of the vectors between its two ends and the crossing, as the figure reads it: an axis
+            // dragged down to a speck away from the crossing has no direction in its own two ends that rounding has not spoilt, and the line through
+            // them would seem to miss a crossing it goes through.)
+            let dirs: Vec<P> = ends
+                .iter()
+                .map(|e| {
+                    let between = [
+                        [e[1][0] - e[0][0], e[1][1] - e[0][1]],
+                        [e[1][0] - origin[0], e[1][1] - origin[1]],
+                        [origin[0] - e[0][0], origin[1] - e[0][1]],
+                    ];
+                    between.into_iter().max_by(|a, b| a[0].hypot(a[1]).total_cmp(&b[0].hypot(b[1]))).unwrap_or([0.0; 2])
+                })
+                .collect();
             for (e, d) in ends.iter().zip(&dirs) {
                 let len = d[0].hypot(d[1]);
-                let off = (e[0][0] - origin[0]) * d[1] / len.max(1e-6) - (e[0][1] - origin[1]) * d[0] / len.max(1e-6);
-                assert!(len < 1e-3 || off.abs() <= 1e-2 * (1.0 + len), "{what}: an axis that misses the crossing by {off}: {figure:?}");
+                for end in e {
+                    let off = (end[0] - origin[0]) * d[1] / len.max(1e-6) - (end[1] - origin[1]) * d[0] / len.max(1e-6);
+                    assert!(len < 1e-3 || off.abs() <= 1e-2 * (1.0 + len), "{what}: an axis that misses the crossing by {off}: {figure:?}");
+                }
             }
             if let [x, y] = &dirs[..] {
                 let (lx, ly) = (x[0].hypot(x[1]), y[0].hypot(y[1]));
@@ -1159,6 +1174,10 @@ fn every_tool_together(seed: u64, rounds: usize) {
                 "save and reopen"
             }
         };
+        // (Whatever was done: a drag that begins where a selection is can begin under the toolbar, on the button that deletes the page or the one
+        // that adds one. The document follows before anything else is done, a save above all, as the shell makes it: it carries out what the
+        // editor asked in the order it was asked.)
+        follow_pages(&mut ed, &mut doc);
         check_view(&ed, &format!("round {round}"), event);
         if round % 25 == 0 {
             check_editor(&ed, &format!("round {round} after {event}"));

@@ -7,7 +7,7 @@
 //!   session   editor            routes input to the tool in use; owns the chrome
 //!   tools     tools             what a press on the page does; one file each
 //!   ui        toolbar           where the buttons are, how they look
-//!   domain    tool, input, field, requests, workspace, selection, settings
+//!   domain    tool, input, field, requests, workspace, selection, settings, store, recent
 //!   model     figure, form, ink, laser, links, outline, pages
 //!   base      plane, motion, scene, clock, geometry, colour, coords, view, text, smooth, clipboard
 //! ```
@@ -147,7 +147,7 @@ enum Layer {
 }
 
 /// Every top-level module of the program, and its layer. A new module is placed here or the test fails.
-const LAYERS: [(&str, Layer); 45] = [
+const LAYERS: [(&str, Layer); 46] = [
     ("plane", Layer::Base),
     ("motion", Layer::Base),
     ("scene", Layer::Base),
@@ -178,6 +178,7 @@ const LAYERS: [(&str, Layer); 45] = [
     ("selection", Layer::Domain),
     ("settings", Layer::Domain),
     ("store", Layer::Domain),
+    ("recent", Layer::Domain),
     ("toolbar", Layer::Ui),
     ("tools", Layer::Tools),
     ("editor", Layer::Session),

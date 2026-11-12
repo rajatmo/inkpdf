@@ -97,6 +97,9 @@ impl Editor {
         if self.theme_layout().is_some_and(|c| c.contains(pos)) {
             return Some(Some(CardHit::Theme));
         }
+        if let Some(card) = self.recent_layout().filter(|c| c.contains(pos)) {
+            return Some(card.hit(pos).map(CardHit::Recent));
+        }
         if let Some(pill) = self.trail_layout().filter(|c| c.contains(pos)) {
             return Some(pill.hit(pos).map(CardHit::Trail));
         }
@@ -139,6 +142,7 @@ impl Editor {
             CardHit::Item(item) => self.press_card_item(item),
             CardHit::ErrorClose => self.close_error(),
             CardHit::Trail(item) => self.press_trail(item),
+            CardHit::Recent(row) => self.press_recent_row(row),
             CardHit::Link(item) => self.press_link_item(item),
             CardHit::Context(item) => self.activate_context(item),
         }

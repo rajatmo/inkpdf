@@ -90,6 +90,8 @@ icons! {
     whole_word = "whole-word",
     /// A folder: open a PDF.
     open = "open",
+    /// A clock: the PDFs opened last.
+    recent = "recent",
     /// A page with its corner folded: the document's pill, folded into its round button.
     document = "document",
     /// Choosing every page of the overview, and none: a box with a tick, a box with a dash.

@@ -119,9 +119,10 @@ impl Editor {
         if self.search.open {
             return;
         }
-        // (One card at the right at a time: the one opened last.)
+        // (One card at the right at a time: the one opened last. And the card of the PDFs opened last, which a narrow window has no room beside.)
         self.close_item_card();
         self.close_link_card();
+        self.close_recent();
         // (What was being typed is made part of the document first: the keyboard is the card's from now on.)
         self.settle();
         self.chrome.panel = None;

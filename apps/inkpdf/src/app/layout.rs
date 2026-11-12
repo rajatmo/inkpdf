@@ -4,7 +4,7 @@
 //! ```text
 //! {"client":[w,h],"dpr":1.5,"buttons":{"undo":[x,y],"pen":[x,y],…},"bar":{"delete":[x,y],"swatch2":[x,y],…},
 //!  "state":{"page":1,"pages":3,"dirty":false,"mode":"desktop"},"fields":{"name":[x,y],"size#1":[x,y],…},
-//!  "card":{"close":[x,y],"send":[x,y],"action0":[x,y],…},"error":{"close":[x,y]},
+//!  "card":{"close":[x,y],"send":[x,y],"action0":[x,y],…},"error":{"close":[x,y]},"recent":{"row0":[x,y],…},
 //!  "overview":{"controls":{"edit":[x,y],…},"actions":{"duplicate":[x,y],…},"pages":{"1":[x,y,w,h],…},"toc":{"Chapter 2":[x,y],…}}}
 //! ```
 //!
@@ -50,6 +50,7 @@ fn item_name(item: Item) -> String {
         Item::Redo => "redo".into(),
         Item::Save => "save".into(),
         Item::Open => "open".into(),
+        Item::Recent => "recent".into(),
         Item::DeletePage => "del".into(),
         Item::AddPage => "plus".into(),
         Item::Pages => "pages".into(),
@@ -169,6 +170,11 @@ fn describe(ed: &Editor) -> String {
         let (back, forward) = (l.centre_of(TrailItem::Back), l.centre_of(TrailItem::Forward));
         let _ = write!(out, ",\"trail\":{{\"back\":[{:.0},{:.0}],\"forward\":[{:.0},{:.0}]}}", back[0], back[1], forward[0], forward[1]);
     }
+    // The card of the PDFs opened last: the middle of each row, newest first.
+    if let Some(l) = ed.recent_layout() {
+        let rows = points((0..l.row_count()).map(|i| (format!("row{i}"), l.centre_of(i))));
+        let _ = write!(out, ",\"recent\":{{{rows}}}");
+    }
     // The slides: which page is shown, and where the button to leave is while it is showing.
     if let Some(view) = ed.presentation_view() {
         let exit = ed.presentation_layout().filter(|_| view.hint).map(|l| l.exit_centre());
@@ -253,6 +259,16 @@ mod tests {
         assert!(text.starts_with("{\"client\":[1600,1000]") && text.ends_with('}'));
         assert!(text.contains("\"state\":{\"page\":1,\"pages\":3,\"dirty\":false,\"mode\":\""), "{text}");
         assert!(!text.contains("\"overview\""), "no overview while it is put away");
+        assert!(text.contains("\"recent\":[") && !text.contains("\"recent\":{"), "the button, and no card until it is shown: {text}");
+        ed.set_recent(vec![crate::toolbar::RecentRow { name: "a.pdf".into(), ..Default::default() }, crate::toolbar::RecentRow::default()]);
+        ed.handle(crate::input::InputEvent::MouseMoved(ed.toolbar().centre_of(Item::Recent)));
+        for state in [crate::input::ButtonState::Pressed, crate::input::ButtonState::Released] {
+            ed.handle(crate::input::InputEvent::MouseButton { state, button: crate::input::MouseButton::Left });
+        }
+        let shown = describe(&ed);
+        assert!(shown.contains("\"recent\":{\"row0\":[") && shown.contains("\"row1\":[") && !shown.contains("\"row2\""), "{shown}");
+        ed.handle(crate::input::InputEvent::Key(crate::input::KeyInput::Escape));
+        assert!(!describe(&ed).contains("\"recent\":{"));
         ed.open_overview();
         assert!(!describe(&ed).contains("\"duplicate\":["), "the bar of actions only in edit mode");
         ed.chrome.overview.as_mut().expect("open").edit = true;

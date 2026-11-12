@@ -328,6 +328,23 @@ impl View {
         self.clamp(layout);
     }
 
+    /// Be at `zoom` with the document point `scroll` at the top-left corner, at once (no glide): a document shown as it was left. Kept
+    /// within the document as any view is; a number that is not one changes nothing.
+    pub fn jump_to(&mut self, layout: &Layout, zoom: f32, scroll: [f32; 2]) {
+        if self.free || !zoom.is_finite() || !scroll.iter().all(|v| v.is_finite()) {
+            return;
+        }
+        self.zoom = zoom.clamp(MIN_ZOOM, MAX_ZOOM);
+        self.zoom_target = self.zoom;
+        self.scroll = scroll;
+        self.scroll_target = scroll;
+        self.scroll_tau = SCROLL_TAU;
+        self.lift = 0.0;
+        self.lift_ring = 0.0;
+        self.lift_held = false;
+        self.clamp(layout);
+    }
+
     /// Direct manipulation (drag, touch, precision touchpad): moves at once and cancels any glide.
     pub fn pan_px(&mut self, layout: &Layout, dx: f32, dy: f32) {
         if self.free {
@@ -466,6 +483,29 @@ mod tests {
 
     fn three_pages() -> Layout {
         Layout::new(&[[600.0, 800.0], [600.0, 800.0], [400.0, 500.0]])
+    }
+
+    #[test]
+    fn a_jump_is_there_at_once_inside_the_document_and_a_number_that_is_not_one_changes_nothing() {
+        let l = three_pages();
+        let mut v = View::new([600.0, 400.0]);
+        v.jump_to(&l, 2.0, [50.0, 900.0]);
+        assert_eq!((v.zoom, v.scroll, v.scroll_target_y()), (2.0, [50.0, 900.0], 900.0));
+        assert!(!v.animating(), "nothing is left to glide");
+        v.jump_to(&l, 1000.0, [-500.0, 1.0e9]);
+        assert_eq!(v.zoom, MAX_ZOOM);
+        let (vw, vh) = (600.0 / v.zoom, 400.0 / v.zoom);
+        assert_eq!(v.scroll, [0.0, l.height() - vh], "kept within the document");
+        assert!(vw < l.width());
+        let before = (v.zoom, v.scroll);
+        v.jump_to(&l, f32::NAN, [0.0, 0.0]);
+        v.jump_to(&l, 1.0, [0.0, f32::INFINITY]);
+        assert_eq!((v.zoom, v.scroll), before);
+        // (A slide is not left by it.)
+        v.show_whole(l.page(1).expect("a page"));
+        let slide = (v.zoom, v.scroll);
+        v.jump_to(&l, 1.0, [0.0, 0.0]);
+        assert_eq!((v.zoom, v.scroll), slide);
     }
 
     #[test]

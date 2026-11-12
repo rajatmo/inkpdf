@@ -39,6 +39,7 @@ impl Editor {
         if now.is_some() && now != self.seen_card {
             self.close_search();
             self.close_link_card();
+            self.close_recent();
         }
         self.seen_card = now;
     }

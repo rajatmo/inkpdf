@@ -41,6 +41,7 @@ mod pdf_read;
 mod permissions;
 mod plane;
 mod platform;
+mod recent;
 mod renderer;
 mod requests;
 mod scene;

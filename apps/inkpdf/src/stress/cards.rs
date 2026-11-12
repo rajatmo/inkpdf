@@ -31,6 +31,7 @@ fn floats(ed: &Editor) -> Vec<(&'static str, [f32; 4])> {
     all.extend(ed.item_card_layout().map(|c| ("item card", c.card)));
     all.extend(ed.link_layout().map(|c| ("link card", c.card)));
     all.extend(ed.trail_layout().map(|c| ("trail", c.card)));
+    all.extend(ed.recent_layout().map(|c| ("recent", c.card)));
     all.extend(ed.error_layout().map(|c| ("error", c.card)));
     all.extend(ed.theme_layout().map(|c| ("theme", c.rect)));
     all
@@ -45,6 +46,10 @@ fn check_floats(ed: &Editor, what: &str) {
     }
     let rights = [ed.search_layout().is_some(), ed.item_card_layout().is_some(), ed.link_layout().is_some()].iter().filter(|b| **b).count();
     assert!(rights <= 1, "{what}: {rights} cards at the right at once");
+    assert!(rights == 0 || ed.recent_layout().is_none(), "{what}: the card of the PDFs opened last is up with a card at the right");
+    if let Some(card) = ed.recent_layout() {
+        assert!(card.row_count() <= ed.recent_view().map_or(0, |v| v.rows.len()), "{what}: more rows than documents");
+    }
 }
 
 /// A press of the stylus's tip, or of the left button, at `at`.
@@ -210,6 +215,26 @@ fn stress_the_cards_pills_and_keys_that_browse_and_annotate_in_any_order_in_any_
                     }
                     "slides"
                 }
+                22 | 23 => {
+                    // The card of the PDFs opened last: its button (in its pill, or in the pill unfolded from its round button), or one of its rows.
+                    if let Some(card) = ed.recent_layout().filter(|_| rng.chance(0.6)) {
+                        let at = card.centre_of(rng.below(10));
+                        tap(&mut ed, &mut rng, at);
+                    } else {
+                        let bar = ed.toolbar();
+                        let item = if bar.slot(Item::Recent).is_some() { Item::Recent } else { Item::Fold(crate::toolbar::Pill::Document) };
+                        tap(&mut ed, &mut rng, bar.centre_of(item));
+                    }
+                    "recent"
+                }
+                24 => {
+                    // The shell's list changes (a document was opened, or there are none).
+                    let n = rng.below(11);
+                    ed.set_recent(
+                        (0..n).map(|i| crate::toolbar::RecentRow { name: format!("{i}.pdf"), folder: "/docs".into(), current: i == 0 }).collect(),
+                    );
+                    "recent list"
+                }
                 27 => {
                     let key = rng.pick(&[
                         Key::Page(true),
@@ -246,9 +271,22 @@ fn stress_the_cards_pills_and_keys_that_browse_and_annotate_in_any_order_in_any_
             }
         }
     }
-    for needed in
-        ["link", "trail button", "trail key", "link card", "item card", "note tool", "search", "error", "keyboard", "resize", "slides", "slide keys"]
-    {
+    for needed in [
+        "link",
+        "trail button",
+        "trail key",
+        "link card",
+        "item card",
+        "note tool",
+        "search",
+        "error",
+        "keyboard",
+        "resize",
+        "slides",
+        "slide keys",
+        "recent",
+        "recent list",
+    ] {
         assert!(seen.get(needed).copied().unwrap_or(0) > 100, "the storm did {needed} only {:?} times: {seen:?}", seen.get(needed));
     }
 }

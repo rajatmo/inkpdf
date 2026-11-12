@@ -19,7 +19,7 @@
 //!
 //! The rest is shared: `dispatch` (who owns the interaction under way), `select` (moving ink and
 //! finishing what the pen was doing), `toolbar_ui` (buttons and the tool panel), `pills` (the pills
-//! that fold into round buttons in a narrow window), `context` (the bar under the tools: draw /
+//! that fold into round buttons in a narrow window), `recent` (the card of the PDFs opened last, and where the document is being looked at), `context` (the bar under the tools: draw /
 //! select / erase and what is done to the selection), `commands` (undo and redo).
 
 mod act;
@@ -46,6 +46,7 @@ mod pills;
 mod presentation;
 mod prompt;
 mod reader;
+mod recent;
 mod routing;
 mod search;
 mod select;
@@ -101,6 +102,8 @@ pub struct Editor {
     error: Option<(String, String)>,
     /// The places a link, a contents entry or a search result has taken the reader from.
     trail: trail::Trail,
+    /// The PDFs opened last, as the card lists them (the shell keeps the list: see [`recent`]).
+    recent: Vec<toolbar::RecentRow>,
     /// What the extensions do with links that go out to the web, and the card for one that is up.
     link_handlers: Vec<Box<dyn inkpdf_api::LinkHandler>>,
     link: Option<link_card::LinkOpen>,
@@ -185,6 +188,7 @@ impl Editor {
             keyboard: keyboard::Keyboard::default(),
             error: None,
             trail: trail::Trail::default(),
+            recent: Vec::new(),
             link_handlers: extensions.iter().flat_map(|e| (e.create)().link_handlers()).collect(),
             link: None,
             seen_card: None,
@@ -273,6 +277,8 @@ impl Editor {
             theme_menu: self.chrome.theme_menu,
             dark: self.scheme() == crate::palette::Scheme::Dark,
             search: self.search.open,
+            recent: self.chrome.recent,
+            has_recent: !self.recent.is_empty(),
             tool: self.ws.tool,
             pen_colour: self.colour_of(self.ws.styles.pen),
             shape_colour: self.colour_of(self.ws.styles.shape_style),

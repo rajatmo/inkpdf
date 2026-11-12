@@ -1,7 +1,8 @@
 InkPDF - a fast, pen-first PDF annotator for Windows
 
 InkPDF opens maximized on a blank page the size of your display: just start writing. To work on a
-PDF instead, drag it onto the window or use "Open with". Press the disk button to save: a new
+PDF instead, drag it onto the window or use "Open with". A PDF opens at the page and zoom you left
+it at, and InkPDF started with no file opens the PDF you had open when you closed it. Press the disk button to save: a new
 page asks where to put the file, and a PDF you opened is updated in place. Your ink and shapes are
 saved inside the PDF as standard Ink annotations, and your text as standard Free Text annotations,
 so any PDF reader shows them; nothing else is kept.
@@ -78,7 +79,8 @@ Ctrl+D duplicates, Delete deletes, Esc lets go, the arrows nudge (with Shift, fu
 Backspace takes away the point you touched last. The barrel button, the eraser end and the mouse's right
 and middle buttons are shortcuts for select and erase; nothing needs them.
 The buttons: X closes the document and starts a blank page (it asks first if there is unsaved
-work); undo, redo, save; the bin deletes the page you are looking at, at once, with no question
+work); undo, redo, a folder (open a PDF), a clock (the last ten PDFs you opened, newest first: press
+one to open it where you left it; press anywhere else or Esc to put the list away), save; the bin deletes the page you are looking at, at once, with no question
 asked (the last page there is stays; undo brings it back, with its ink, until you save); + adds a
 page after the one you are looking at; the four small pages open the pages overview (below); then the pen, shape, text and pointer tools
 (a tool's button only chooses it; its settings are in the bar under the tools); a monitor or a tablet, which shows the
@@ -128,7 +130,8 @@ options Aa (match the case) and W (whole words only), and a list of the places w
 searches the text of the pages as they are read (the card says how many are done) and the text boxes you typed.
 
 Your tools, their settings and the look are kept in %APPDATA%\InkPDF\settings.txt. (INKPDF_THEME=light or dark
-chooses the look for one run.)
+chooses the look for one run.) The PDFs you opened last, and where you left each, are in recent.txt beside
+it: delete that file to forget them.
 
 When InkPDF is your default PDF app (Settings > Apps > Default apps), Explorer shows the first
 page of each PDF as its icon.

@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.8.0
+- **A PDF opens where you left it.** The page, how far down it, and the zoom are remembered for each PDF when another is opened, when it is saved and when
+  the program is closed (on Android also when the app goes to the background), and the PDF is shown so again the next time it is opened, however it is
+  opened: the picker, the list below, a file dropped on the window, "Open with" or the command line. A zoom that followed the width of the window follows the
+  width the window has then; a file that has lost pages since is shown at its last page. And started with no file, the program opens the PDF that was open
+  when it was last closed, as it was left (a blank page if none was, or if the file is gone).
+- **The PDFs opened last.** A new button in the document's pill, a clock just left of Save (right of the Open folder), shows a card under the pill with the
+  last ten PDFs, the newest first and the one that is open lit, each with the folder it is in where there is room; a press on one opens it, as it was left.
+  The button is dim while there are none; a press anywhere else, Esc or the button again puts the card away. It needs only the left mouse button, or the
+  stylus's tip, or a finger, and it folds with its pill in a narrow window (the card then hangs from the round button). With one more button in it, the
+  document's pill folds a little sooner than it did: in a window narrower than about 970 points, where it was about 910.
+- The list is a small text file, `recent.txt`, beside `settings.txt` (deleting it forgets the list; a portable copy keeps its own). A run that is a check or a
+  measurement (`--layout`, `--inject`, `--record`, `--replay`, `--bench`, `--exit-after`, `--select-all`) neither reads nor writes it, so the real-input checks
+  begin as they always did.
+- **Releases are made by a tag.** Pushing the tag of a version (`v1.8.0`) builds the Windows installer and portable zip, the Linux tarball and AppImage
+  and the Android APK with the scripts a PC uses, and publishes them as a GitHub release with this file's section as its notes
+  (`.github/workflows/release.yml`; run by hand it only builds them, as a rehearsal).
+
 ## 1.7.0
 - **Presentation mode.** A new button on the right pill (a slide with a play triangle on a stand, left of full screen) and Ctrl+L show the document as slides: one page at a time, whole,
   as big as the window lets it be, over black, with nothing of the program's own on it. The window is made full screen for it and put back as it was. A click

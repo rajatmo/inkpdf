@@ -25,6 +25,8 @@ pub enum Request {
     SaveAs,
     /// Ask the system's picker for a PDF to open.
     Open,
+    /// Open again the document at this place in the list of those opened last (see [`crate::recent`]).
+    OpenRecent(usize),
     /// Switch between windowed and full screen.
     Fullscreen,
     /// Close this document and start a blank one.

@@ -40,6 +40,7 @@ fn every_item_is_hit_at_its_centre_and_there_are_no_others() {
             Item::Close,
             Item::Undo,
             Item::Redo,
+            Item::Recent,
             Item::Save,
             Item::DeletePage,
             Item::AddPage,
@@ -290,15 +291,16 @@ fn the_mode_button_shows_which_mode_it_is_by_its_icon_and_the_tablet_in_the_acce
 fn with_a_picker_the_left_pill_has_a_button_to_open_a_pdf_and_everything_still_fits() {
     let reg = crate::tool::reference_registry().with_open_button(true);
     // (Narrower than that the left pill folds into its round button, and has the button inside it when it is open: see the sweep below.)
-    for (w, dpr) in [(1650.0, 1.5), (1100.0, 1.0), (900.0, 1.0)] {
+    for (w, dpr) in [(1650.0, 1.5), (1100.0, 1.0), (960.0, 1.0)] {
         let tb = Toolbar::layout_for(&reg, [w, 900.0], dpr, None);
         let open = tb.button(Item::Open).expect("an open button");
         assert!(rect_contains(tb.pills[0], [(open[0] + open[2]) / 2.0, (open[1] + open[3]) / 2.0]), "in the left pill at {w}");
         assert!(tb.pills[0][2] < tb.pills[1][0] && tb.pills[1][2] < tb.pills[2][0], "three separate pills at {w}: {:?}", tb.pills);
         assert_eq!(tb.hit([(open[0] + open[2]) / 2.0, (open[1] + open[3]) / 2.0]), Some(Item::Open));
-        // It is right beside the save button, on its left.
-        let (redo, save) = (tb.button(Item::Redo).expect("redo"), tb.button(Item::Save).expect("save"));
-        assert!(redo[2] <= open[0] + 0.5 && (open[2] - save[0]).abs() < 0.5, "{w}");
+        // It is right beside the button of the PDFs opened last, on its left, and that one right beside the save button.
+        let (redo, recent, save) =
+            (tb.button(Item::Redo).expect("redo"), tb.button(Item::Recent).expect("recent"), tb.button(Item::Save).expect("save"));
+        assert!(redo[2] <= open[0] + 0.5 && (open[2] - recent[0]).abs() < 0.5 && (recent[2] - save[0]).abs() < 0.5, "{w}");
     }
     assert!(Toolbar::layout([1100.0, 900.0], 1.0).button(Item::Open).is_none(), "and without one there is none");
 }

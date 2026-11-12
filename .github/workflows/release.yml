@@ -1,0 +1,132 @@
+name: Release
+
+# A release is made by pushing a tag: `v` and the version of apps/inkpdf/Cargo.toml (v1.8.0). The packages are built by the same scripts as on
+# a PC (the Windows installer and portable zip, the Linux tarball and AppImage, the Android APK) and published as a GitHub release whose
+# notes are that version's section of CHANGELOG.md. Run by hand (workflow_dispatch) it builds the packages and keeps them as artifacts,
+# and publishes nothing: a rehearsal.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  version:
+    # The tag has to be the version the packages will say they are, before an hour of building.
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: read
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"/\1/p' apps/inkpdf/Cargo.toml | head -1)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::the tag is $GITHUB_REF_NAME, and apps/inkpdf/Cargo.toml says $version: the tag of this version is v$version"
+            exit 1
+          fi
+          if ! grep -q "^## $version\$" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no section '## $version'"
+            exit 1
+          fi
+
+  windows:
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ }
+          if (-not $iscc) { choco install innosetup --no-progress -y }
+      - name: Build the installer and the portable package
+        shell: pwsh
+        env:
+          INKPDF_DIST: ${{ github.workspace }}\dist
+          CARGO_TARGET_DIR: ${{ github.workspace }}\target-ci
+        run: |
+          ./apps/inkpdf/installer/build.ps1
+          ./apps/inkpdf/installer/build-portable.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          if-no-files-found: error
+          path: |
+            dist/InkPDF-Setup-*.exe
+            dist/InkPDF-Portable-*.zip
+
+  linux:
+    # (The program links the system's libc, so it runs on a distribution about as new as the one that builds it: the older runner.)
+    needs: version
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build the tarball and the AppImage
+        run: |
+          tools/linux/build-portable.sh "$PWD/dist"
+          tools/linux/build-appimage.sh "$PWD/dist"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-linux
+          if-no-files-found: error
+          path: |
+            dist/InkPDF-Portable-*.tar.gz
+            dist/InkPDF-*.AppImage
+
+  android:
+    # Phones and tablets (arm64) and emulators (x86_64) in one APK, signed with the debug key in tools/android: a test build.
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - name: Build the APK
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+          export ANDROID_BUILD_TOOLS="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          export ANDROID_JAR="$(ls -d "$ANDROID_HOME"/platforms/android-3* | sort -V | tail -1)/android.jar"
+          mkdir -p dist
+          ABIS="arm64-v8a x86_64" tools/android/build-apk.sh release "$PWD/dist/InkPDF-${{ needs.version.outputs.version }}-android.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-android
+          if-no-files-found: error
+          path: dist/InkPDF-*-android.apk
+
+  publish:
+    # Only for a tag, and only when every package was built: a release has all of them or is not made.
+    if: github.ref_type == 'tag'
+    needs: [version, windows, linux, android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: dist
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          # The notes: this version's section of the changelog, without its heading.
+          awk -v v="## $VERSION" '$0 == v { on = 1; next } /^## / { on = 0 } on' CHANGELOG.md > notes.md
+          ls -l dist
+          gh release create "$GITHUB_REF_NAME" dist/* --title "InkPDF $VERSION" --notes-file notes.md --verify-tag

@@ -32,6 +32,7 @@ mod permissions;
 mod presentation;
 mod prompt;
 mod reader;
+mod recent;
 mod replay;
 mod search;
 mod select_text;

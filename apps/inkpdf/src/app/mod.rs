@@ -193,6 +193,24 @@ pub struct State {
     injector: Option<replay::Injector>,
     /// Where the buttons are, kept in a file for the real-input checks (`--layout`).
     layout: Option<layout::Reporter>,
+    /// The PDFs opened last and where each was left (see `recent`), and whether they are kept at all (see [`Options::remembers`]).
+    recent: crate::recent::Recent,
+    remember: bool,
+}
+
+impl Options {
+    /// Whether the PDFs opened last, and where each was left, are read and kept. Not in a run that is a measurement or a check (a benchmark, a
+    /// recording made or played, input handed in, the buttons' places asked for, a limit on how long it runs, a screenshot's selection): those begin
+    /// from the same state every time, and leave no trace in the person's own list.
+    fn remembers(&self) -> bool {
+        !(self.bench
+            || self.select_all
+            || self.exit_after.is_some()
+            || self.record.is_some()
+            || self.replay.is_some()
+            || self.inject.is_some()
+            || self.layout.is_some())
+    }
 }
 
 impl State {
@@ -231,6 +249,7 @@ impl State {
         let size = window.inner_size();
         let window_scale = window.scale_factor() as f32;
         let now = Instant::now();
+        let remember = opts.remembers();
         let mut state = State {
             ed: Editor::new([size.width.max(1) as f32, size.height.max(1) as f32], window_scale, platform.motion_prefs()),
             window,
@@ -281,6 +300,8 @@ impl State {
             player: opts.replay.as_deref().map(replay::Player::load).transpose()?,
             injector: opts.inject.map(replay::Injector::new),
             layout: opts.layout.map(layout::Reporter::new),
+            recent: crate::recent::Recent::default(),
+            remember,
         };
         // (A recording starts from the window as it is, so that it replays from the same.)
         let (size, dpr) = ([size.width.max(1) as f32, size.height.max(1) as f32], window_scale);
@@ -297,6 +318,10 @@ impl State {
             state.ed.set_text_clipboard(clipboard);
         }
         state.ed.set_can_open(state.platform.has_picker());
+        if remember {
+            state.recent = config::load_recent(state.platform.config_dir());
+            state.show_recent();
+        }
         state.set_mode(opts.mode.unwrap_or_else(|| state.platform.detect_mode()));
         if let Some(smoothing) = opts.smoothing {
             state.ed.set_smoothing(smoothing);
@@ -311,7 +336,8 @@ impl State {
             if opts.select_all {
                 state.ed.select_all_on_page();
             }
-        } else {
+        } else if !state.reopen_last() {
+            // (No file was asked for, and none was open the last time, or it is gone.)
             state.open_blank();
         }
         // After the surface exists: asking for full screen while the window is being created
@@ -332,6 +358,9 @@ impl State {
 
     /// The window was taken away (the app went to the background): no drawing until [`Self::resumed`].
     pub fn suspended(&mut self) {
+        // (The system may end the app while it is in the background without a word: where the document is being looked at is written now.)
+        self.remember_place();
+        self.save_recent();
         self.timing.suspended = true;
         self.gpu.pause();
     }
@@ -539,6 +568,9 @@ impl State {
             self.timing.exit = true;
         }
         if self.timing.exit {
+            // Where the document is being looked at is where it is found the next time.
+            self.remember_place();
+            self.save_recent();
             if std::mem::take(&mut self.timing.print_stats) {
                 self.report_latency();
             }

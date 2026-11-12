@@ -25,6 +25,7 @@ impl Editor {
             Some((handler, card)) => {
                 self.close_item_card();
                 self.close_search();
+                self.close_recent();
                 self.link = Some(LinkOpen { url, handler, card });
                 self.ws.redraw = true;
             }

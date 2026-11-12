@@ -10,6 +10,7 @@ pub fn enabled(item: Item, state: &State) -> bool {
         Item::Undo => state.can_undo,
         Item::Redo => state.can_redo,
         Item::DeletePage => state.can_delete,
+        Item::Recent => state.has_recent,
         _ => true,
     }
 }

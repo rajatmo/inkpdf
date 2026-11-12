@@ -1,8 +1,10 @@
-//! Where the settings live on disk, and reading and writing them. (What they are is `settings`, which does no I/O.)
+//! Where the settings live on disk, and reading and writing them. (What they are is `settings`, which does no I/O.) The list of the PDFs opened
+//! last (`recent`, which does none either) is a file beside them.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::recent::Recent;
 use crate::settings::Settings;
 
 /// The file whose presence beside the exe makes the app portable: its settings are kept there too.
@@ -14,6 +16,11 @@ const PORTABLE_MARKER: &str = "portable.txt";
 fn path(config_dir: Option<PathBuf>) -> Option<PathBuf> {
     let exe_dir = std::env::current_exe().ok().and_then(|exe| exe.parent().map(PathBuf::from));
     settings_path(exe_dir.as_deref(), config_dir)
+}
+
+/// Where the list of the PDFs opened last lives: `recent.txt`, beside the settings (so a portable copy keeps its own, on its stick).
+fn recent_path(config_dir: Option<PathBuf>) -> Option<PathBuf> {
+    path(config_dir).map(|settings| settings.with_file_name("recent.txt"))
 }
 
 fn settings_path(exe_dir: Option<&Path>, config_dir: Option<PathBuf>) -> Option<PathBuf> {
@@ -40,13 +47,28 @@ pub fn load_for_start(config_dir: Option<PathBuf>) -> Settings {
 
 /// Remember the settings. A failure is reported, not fatal: losing a colour must never stop work.
 pub fn save(config_dir: Option<PathBuf>, settings: &Settings) -> Result<(), String> {
-    let path = path(config_dir).ok_or("no application-data folder")?;
+    write_whole(path(config_dir), &settings.to_text())
+}
+
+/// The PDFs opened last, or none when there is no list (or it cannot be read).
+pub fn load_recent(config_dir: Option<PathBuf>) -> Recent {
+    recent_path(config_dir).and_then(|p| fs::read_to_string(p).ok()).map_or_else(Recent::default, |t| Recent::parse(&t))
+}
+
+/// Remember the PDFs opened last. A failure is reported, not fatal, as with the settings.
+pub fn save_recent(config_dir: Option<PathBuf>, recent: &Recent) -> Result<(), String> {
+    write_whole(recent_path(config_dir), &recent.to_text())
+}
+
+/// Replace the file at `path` with `text`, making its folder if it is not there.
+fn write_whole(path: Option<PathBuf>, text: &str) -> Result<(), String> {
+    let path = path.ok_or("no application-data folder")?;
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir).map_err(|e| format!("could not create {}: {e}", dir.display()))?;
     }
-    // Written beside the file and renamed over it, so a crash half-way leaves the old settings.
+    // Written beside the file and renamed over it, so a crash half-way leaves the old one.
     let temp = path.with_extension("tmp");
-    fs::write(&temp, settings.to_text()).map_err(|e| format!("could not write {}: {e}", temp.display()))?;
+    fs::write(&temp, text).map_err(|e| format!("could not write {}: {e}", temp.display()))?;
     fs::rename(&temp, &path).map_err(|e| format!("could not replace {}: {e}", path.display()))
 }
 
@@ -74,6 +96,24 @@ mod tests {
         save(Some(dir.clone()), &s).expect("saved");
         // (A portable.txt beside the test binary would send it elsewhere; there is none.)
         assert_eq!(load(Some(dir.clone())), s);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn the_pdfs_opened_last_are_kept_in_a_file_of_their_own_beside_the_settings() {
+        let dir = std::env::temp_dir().join(format!("inkpdf-recent-{}", std::process::id()));
+        assert_eq!(load_recent(Some(dir.clone())), Recent::default(), "no file, no list");
+        let mut list = Recent::default();
+        let id = crate::store::DocId::Path(dir.join("some notes.pdf"));
+        list.opened(id.clone(), "some notes.pdf");
+        list.left(&id, crate::recent::Place { page: 2, dy: 40.0, x: 0.0, zoom: 1.5, fit: false });
+        save_recent(Some(dir.clone()), &list).expect("saved");
+        assert_eq!(load_recent(Some(dir.clone())), list);
+        assert!(dir.join("InkPDF").join("recent.txt").is_file(), "beside settings.txt");
+        // (The settings are their own file: writing one leaves the other.)
+        save(Some(dir.clone()), &Settings::default()).expect("saved");
+        assert_eq!(load_recent(Some(dir.clone())), list);
+        assert_eq!(recent_path(None).is_some(), path(None).is_some());
         std::fs::remove_dir_all(&dir).ok();
     }
 }

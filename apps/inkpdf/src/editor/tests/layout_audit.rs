@@ -102,6 +102,9 @@ fn floating(ed: &Editor) -> Vec<(String, [f32; 4])> {
     if let Some(c) = ed.trail_layout() {
         all.push(("the back and forward pill".into(), c.card));
     }
+    if let Some(c) = ed.recent_layout() {
+        all.push(("the card of the PDFs opened last".into(), c.card));
+    }
     if let Some(c) = ed.error_layout() {
         all.push(("the card that says something went wrong".into(), c.card));
     }
@@ -135,6 +138,59 @@ fn every_card_and_pill_is_inside_the_window_and_none_lies_over_another_in_any_si
                     // (The bar under the tools and the panel unfolded from it are one card; the error card sits over whatever is at the bottom.)
                     if overlap(*ra, *rb) && !(a.starts_with("the card that says") || b.starts_with("the card that says")) {
                         bad.push(format!("{w}x{h}@{dpr} (card {last}): {a} {ra:?} lies over {b} {rb:?}"));
+                    }
+                }
+            }
+        }
+    }
+    assert!(bad.is_empty(), "{} problems:\n{}", bad.len(), bad.join("\n"));
+}
+
+#[test]
+fn the_card_of_the_pdfs_opened_last_is_inside_the_window_over_nothing_with_a_row_for_each_in_any_size_of_window() {
+    let mut bad: Vec<String> = Vec::new();
+    for (w, h, dpr) in WINDOWS {
+        for (tool, jumped) in [(crate::tool::Tool::Pen, true), (crate::tool::Tool::Pen, false), (crate::tool::Tool::Select, true), (LASER, false)] {
+            let mut ed = Editor::reference([w, h], dpr, crate::motion::Prefs::REDUCED);
+            ed.load(crate::view::Layout::new(&[[612.0, 792.0], [612.0, 792.0]]), vec![]);
+            ed.set_mode(Mode::Tablet);
+            ed.set_tool(tool);
+            if jumped {
+                ed.jumping(|e| e.ws.scroll_to_page(1));
+            }
+            let long = "a paper with a very long name that goes on and on and on, second draft (final) v3.pdf";
+            ed.set_recent(
+                (0..10)
+                    .map(|i| crate::toolbar::RecentRow {
+                        name: format!("{i} {long}"),
+                        folder: "/home/somebody/Documents/papers".into(),
+                        current: i == 0,
+                    })
+                    .collect(),
+            );
+            ed.activate(Item::Recent);
+            let card = ed.recent_layout().expect("the card");
+            // (All ten where the window is tall enough for ten rows a stylus can press; a phone on its side has fewer.)
+            let rows = card.row_count();
+            if rows < 4 || (rows < 10 && h / dpr >= 480.0) {
+                bad.push(format!("{w}x{h}@{dpr} {tool:?}: only {rows} rows in {:?}", card.card));
+            }
+            for i in 0..rows {
+                if ed.recent_layout().and_then(|c| c.hit(c.centre_of(i))) != Some(i) || !ed.over_interface(card.centre_of(i)) {
+                    bad.push(format!("{w}x{h}@{dpr} {tool:?}: row {i} cannot be pressed"));
+                }
+            }
+            let things = floating(&ed);
+            assert_eq!(things.iter().filter(|(n, _)| n.contains("opened last")).count(), 1);
+            for (name, r) in &things {
+                if r[0] < -0.5 || r[1] < -0.5 || r[2] > w + 0.5 || r[3] > h + 0.5 {
+                    bad.push(format!("{w}x{h}@{dpr} {tool:?}: {name} {r:?} is not inside the window"));
+                }
+            }
+            for (i, (a, ra)) in things.iter().enumerate() {
+                for (b, rb) in &things[i + 1..] {
+                    if overlap(*ra, *rb) {
+                        bad.push(format!("{w}x{h}@{dpr} {tool:?} (jumped: {jumped}): {a} {ra:?} lies over {b} {rb:?}"));
                     }
                 }
             }

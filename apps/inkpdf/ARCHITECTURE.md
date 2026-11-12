@@ -58,7 +58,7 @@ ones below; no two modules may reach each other, directly or through others.
 | session | `editor` |
 | tools | `tools` |
 | ui | `toolbar` |
-| domain | `tool`, `input`, `field`, `requests`, `workspace`, `selection`, `settings`, `store` |
+| domain | `tool`, `input`, `field`, `requests`, `workspace`, `selection`, `settings`, `store`, `recent` |
 | model | `figure`, `form`, `ink`, `laser`, `links`, `outline`, `pages`, `page_table`, `pagetext` |
 | base | `plane`, `motion`, `scene`, `clock`, `geometry`, `colour`, `coords`, `view`, `text`, `smooth`, `clipboard`, `palette` |
 

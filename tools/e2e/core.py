@@ -225,23 +225,27 @@ class Session:
 
     def spot(self, group, name=None):
         """The place of a control, in window pixels: `spot("buttons", "undo")`, `spot("overview/pages", "3")`, `spot("fields", "name")`.
-        On a narrow window the toolbar is a row of tools and round buttons that open a pill of buttons in its place, one at a time: a
-        pill is opened, and put away by a touch on the page, as a person would, until the button shows."""
+        On a narrow window the toolbar is a row of tools and round buttons that open a pill of buttons in its place, one at a time: the
+        pill the button is in is opened first, as a person who knows where it is would; and a pill that is open over the round buttons (the
+        document's is as wide as a phone) is put away with Esc, which touches nothing else: a touch on the page would do it too, but it
+        draws a dot when a finger draws, and the checks that follow would see it."""
         found = self._poll(group, name, 1.0)
         if found is not None or group != "buttons" or not self.narrow:
             if found is None:
                 raise KeyError(f"the app's layout has no '{name}' in {group}")
             return found
+        own = "fold-view" if name in ("theme", "mode", "finger", "present", "full") else "fold-doc"
+        order = [own] + [f for f in ("fold-doc", "fold-tools", "fold-view") if f != own]
         tried = set()
-        for _ in range(6):
+        for _ in range(8):
             buttons = self.d.layout().get("buttons", {})
-            folds = [f for f in ("fold-doc", "fold-tools", "fold-view") if f in buttons and f not in tried]
+            folds = [f for f in order if f in buttons and f not in tried]
             if folds:
                 tried.add(folds[0])
                 self.d.activate(buttons[folds[0]])
             else:
-                w, h = self.d.size
-                self.d.activate((w * 0.5, h * 0.6))
+                self.d.keys("esc")
+                tried.clear()
             found = self._poll(group, name, 1.0)
             if found is not None:
                 return found

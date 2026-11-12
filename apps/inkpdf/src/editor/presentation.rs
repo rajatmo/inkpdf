@@ -72,6 +72,7 @@ impl Editor {
         self.chrome.panel = None;
         self.chrome.pill = None;
         self.chrome.theme_menu = false;
+        self.chrome.recent = false;
         self.chrome.bar_open = false;
         self.search.close();
         self.close_item_card();
@@ -100,6 +101,11 @@ impl Editor {
             self.ws.requests.push(Request::Fullscreen);
         }
         self.ws.redraw = true;
+    }
+
+    /// The page that is shown as a slide, and whether the zoom followed the window's width before the slides began (what the view goes back to).
+    pub(super) fn slide_place(&self) -> Option<(usize, bool)> {
+        self.presentation.as_ref().map(|shown| (shown.page, shown.fit_mode))
     }
 
     /// Show page `page` (0-based, kept within the document).

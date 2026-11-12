@@ -108,6 +108,8 @@ pub(super) struct UiStamp {
     error: Option<crate::toolbar::ErrorView>,
     /// The pill that goes back and forward through the places the reader has been, if it is up.
     trail: Option<crate::toolbar::TrailView>,
+    /// The card of the PDFs opened last, if it is up.
+    recent: Option<crate::toolbar::RecentView>,
     /// The card for a link that goes out to the web, if it is up.
     link: Option<crate::toolbar::ItemCardView>,
     theme_menu: Option<crate::toolbar::ThemeView>,
@@ -222,6 +224,7 @@ impl UiLayers {
             item_card: ed.item_card_view(),
             error: ed.error_view(),
             trail: ed.trail_view(),
+            recent: ed.recent_view(),
             link: ed.link_view(),
             theme_menu: ed.theme_view(),
             presentation: ed.presentation_view(),

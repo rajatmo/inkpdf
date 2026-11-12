@@ -119,6 +119,11 @@ impl Editor {
             self.close_theme_menu();
             return true;
         }
+        // And the card of the PDFs opened last.
+        if self.chrome.recent && key == Key::Escape {
+            self.close_recent();
+            return true;
+        }
         // And folds an open pill.
         if self.chrome.pill.is_some() && key == Key::Escape {
             self.fold_pill();
@@ -344,6 +349,7 @@ impl Editor {
             || self.item_card_layout().is_some_and(|c| c.contains(p))
             || self.error_layout().is_some_and(|c| c.contains(p))
             || self.trail_layout().is_some_and(|c| c.contains(p))
+            || self.recent_layout().is_some_and(|c| c.contains(p))
             || self.link_layout().is_some_and(|c| c.contains(p))
             || self.theme_layout().is_some_and(|c| c.contains(p))
             || self.drawer().is_some_and(|d| crate::ink::rect_contains(d, p))

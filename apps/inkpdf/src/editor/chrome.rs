@@ -38,6 +38,8 @@ pub struct Chrome {
     pub overview: Option<super::overview::OverviewState>,
     /// The round button under the theme button is shown (see [`super::theme_menu`]).
     pub theme_menu: bool,
+    /// The card of the PDFs opened last is shown (see [`super::recent`]).
+    pub recent: bool,
     /// The pill unfolded from its round button, in a window too narrow for all three whole (see [`super::pills`]).
     pub pill: Option<Pill>,
     /// The bar under the tools is unfolded from its round button (see [`super::context`]).
@@ -53,6 +55,7 @@ impl Chrome {
         self.pill = None;
         self.bar_open = false;
         self.theme_menu = false;
+        self.recent = false;
         self.overview = None;
         self.prompt = None;
         self.prompt_grab = None;
@@ -64,6 +67,7 @@ impl Chrome {
         self.overview = None;
         self.panel = None;
         self.pill = None;
+        self.recent = false;
         self.hover = None;
         self.prompt = Some(PromptView::default());
         self.prompt_grab = None;

@@ -55,7 +55,12 @@ impl State {
 
     fn run(&mut self, then: Then) {
         match then {
-            Then::Exit => self.timing.exit = true,
+            Then::Exit => {
+                // (Written here as well as when the loop ends: not every platform comes round to the loop's end once it has been told to stop.)
+                self.remember_place();
+                self.save_recent();
+                self.timing.exit = true;
+            }
             Then::Open(id) => self.open_now(id),
             Then::Blank => self.open_blank(),
         }
@@ -73,8 +78,10 @@ impl State {
             self.run(then);
         }
     }
-    /// Make `doc` the document being edited, with the ink it came with.
+    /// Make `doc` the document being edited, with the ink it came with. Where the one before it was being looked at is remembered first, and a
+    /// document that was left somewhere is shown there again.
     fn install(&mut self, doc: Doc, contents: Contents) {
+        self.remember_place();
         eprintln!("opened {} — {} pages, {} ink strokes, {} ms", doc.name, doc.page_count(), contents.strokes.len(), doc.open_millis);
         self.gpu.clear_textures();
         self.session.failed.clear();
@@ -88,9 +95,78 @@ impl State {
         self.session.doc = Some(doc);
         self.session.save_then = None;
         self.layers.ink_built = InkStamp::NEVER;
+        self.listed_as_open(true);
         self.timing.last_zoom = self.ed.view.zoom;
         self.title.clear();
         self.window.request_redraw();
+    }
+
+    /// Where the document is being looked at now is where it was left, should it be opened again (kept in the list; written with it).
+    pub(super) fn remember_place(&mut self) {
+        if let Some(id) = self.session.doc.as_ref().and_then(|d| d.id.as_ref()).filter(|_| self.remember) {
+            self.recent.left(id, self.ed.place());
+        }
+    }
+
+    /// The document that is open now is the first of the PDFs opened last (or, a new one with no file yet, none of them), and the list is written.
+    /// `fresh` says it has just been opened: it is then shown as it was left the last time, if it was.
+    fn listed_as_open(&mut self, fresh: bool) {
+        if !self.remember {
+            return;
+        }
+        match self.session.doc.as_ref().and_then(|d| Some((d.id.clone()?, d.name.clone()))) {
+            Some((id, name)) => {
+                if let Some(place) = self.recent.place_of(&id).filter(|_| fresh) {
+                    self.ed.show_place(place);
+                }
+                self.recent.opened(id, &name);
+            }
+            None => self.recent.closed(),
+        }
+        self.show_recent();
+        self.save_recent();
+    }
+
+    /// Tell the editor the documents its card lists.
+    pub(super) fn show_recent(&mut self) {
+        let open = self.recent.is_open();
+        let rows = self.recent.entries().iter().enumerate();
+        let rows = rows.map(|(i, e)| crate::toolbar::RecentRow { name: e.name.clone(), folder: e.folder(), current: open && i == 0 }).collect();
+        self.ed.set_recent(rows);
+    }
+
+    pub(super) fn save_recent(&self) {
+        if !self.remember {
+            return;
+        }
+        if let Err(e) = config::save_recent(self.platform.config_dir(), &self.recent) {
+            eprintln!("could not save the list of recent documents: {e}");
+        }
+    }
+
+    /// Open again the document at `row` of the PDFs opened last. (The one that is open already stays as it is.)
+    fn open_recent(&mut self, row: usize) {
+        let Some(id) = self.recent.entries().get(row).map(|e| e.id.clone()) else { return };
+        let current = self.session.doc.as_ref().and_then(|d| d.id.as_ref());
+        if !current.is_some_and(|now| crate::recent::same(now, &id)) {
+            self.open_id(id);
+        }
+    }
+
+    /// At the start, with no file asked for: the document that was open when the program was last closed, as it was left. `false` if there was
+    /// none, or it cannot be opened any more (it is gone, or its drive is): nothing is said, and the program starts on a blank page.
+    pub(super) fn reopen_last(&mut self) -> bool {
+        let Some(id) = self.recent.last_open().cloned() else { return false };
+        match Doc::open_from(&*self.session.files, &id) {
+            Ok((doc, contents)) => {
+                self.install(doc, contents);
+                true
+            }
+            Err(e) => {
+                eprintln!("could not open {id} again: {e}");
+                false
+            }
+        }
     }
 
     /// Say that something went wrong (the first line is the heading, the rest the reason): in the system's message box where it has one, else in a
@@ -105,9 +181,10 @@ impl State {
         }
     }
 
-    /// Open a PDF, after dealing with unsaved work.
+    /// Open a PDF, after dealing with unsaved work. (The whole path is what names it, so that it is the same file wherever the program is started
+    /// from the next time.)
     pub(super) fn open(&mut self, path: PathBuf) {
-        self.open_id(DocId::Path(path));
+        self.open_id(DocId::Path(std::path::absolute(&path).unwrap_or(path)));
     }
 
     /// Open a document by its id (a path, or an address the system's picker handed out), after dealing with unsaved work.
@@ -190,6 +267,8 @@ impl State {
         match result {
             Ok(()) => {
                 self.ed.document_saved();
+                // (The document is that file now: it is the first of the PDFs opened last.)
+                self.listed_as_open(false);
                 self.title.clear();
                 self.window.request_redraw();
                 if let Some(then) = self.session.save_then.take() {
@@ -223,6 +302,8 @@ impl State {
         match doc.save_to(&*self.session.files, &self.ed.ink, &Extras { flags: Some(&flags), fields: &fields }) {
             Ok(()) => {
                 self.ed.document_saved();
+                self.remember_place();
+                self.save_recent();
                 self.title.clear();
                 self.window.request_redraw();
                 true
@@ -306,6 +387,7 @@ impl State {
                     let dir = self.picker_dir();
                     self.platform.pick(&*self.window, Pick::Open, "", &dir);
                 }
+                Request::OpenRecent(row) => self.open_recent(row),
                 Request::Fullscreen => self.toggle_fullscreen(),
                 Request::Close => self.close_document(),
                 Request::PagesEdited(edit) => self.pages_edited(&edit),

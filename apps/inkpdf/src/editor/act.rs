@@ -22,6 +22,8 @@ pub(crate) enum CardHit {
     Link(CardItem),
     /// The round button under the theme button: whether the pages follow the look.
     Theme,
+    /// A row of the card of the PDFs opened last.
+    Recent(usize),
 }
 
 #[derive(Clone, Debug, Default)]

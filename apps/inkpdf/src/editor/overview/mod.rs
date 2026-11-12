@@ -149,6 +149,7 @@ impl Editor {
         self.end_pull();
         self.chrome.act = super::Act::Idle;
         self.chrome.panel = None;
+        self.chrome.recent = false;
         self.chrome.hover = None;
         let prefs = self.motions.prefs();
         let mut state = OverviewState::default();

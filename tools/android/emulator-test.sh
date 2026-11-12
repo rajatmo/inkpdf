@@ -25,9 +25,6 @@ adb shell am force-stop app.inkpdf.test
 adb logcat -c
 data=/sdcard/Android/data/app.inkpdf.test/files
 adb shell "mkdir -p $data; rm -f $data/layout.json; touch $data/layout.on" >/dev/null 2>&1
-# The program starts on the selection of text, with which a stylus draws nothing: the check of ink is made with the pen. (With layout.on the
-# settings are read from this folder.)
-adb shell "mkdir -p $data/InkPDF; echo 'tool pen' > $data/InkPDF/settings.txt" >/dev/null 2>&1
 # The app starts with the system's bars hidden, and the first time any app does that on a device the system puts a card over it ("Viewing full
 # screen", with a button to press): a new emulator would show it, over the buttons these checks press. It is told the card has been seen.
 adb shell settings put secure immersive_mode_confirmations confirmed >/dev/null 2>&1
@@ -71,6 +68,8 @@ adb shell input keyevent KEYCODE_BACK; sleep 2; shot 3-back
 check "back put it away again" "cmp -s '$out/1-start.png' '$out/3-back.png' || ! cmp -s '$out/2-overview.png' '$out/3-back.png'"
 
 # A finger swipe over the page pans it and leaves no ink; a stylus swipe draws.
+# (The program starts on the selection of text, with which a stylus draws nothing: the pen is chosen, by its button, as a person would.)
+press pen; sleep 2
 cx=$((w / 2)); cy=$((h / 2))
 adb shell input touchscreen swipe "$cx" "$((cy + 300))" "$cx" "$((cy - 100))" 300; sleep 2; shot 4-finger
 adb shell input stylus swipe "$((cx - 250))" "$cy" "$((cx + 250))" "$((cy + 60))" 500; sleep 2; shot 5-stylus
@@ -89,7 +88,7 @@ check "nothing panicked" "! grep -q 'panicked' '$out/logcat-inkpdf.txt'"
 if [ $fail != 0 ]; then
     echo "---- the app's log:"; tail -40 "$out/logcat-inkpdf.txt"
     echo "---- the window that has the screen:"; adb shell dumpsys window 2>/dev/null | grep -E "mCurrentFocus|mFocusedApp" | head -4
-    echo "---- the layout:"; adb shell "ls -l $data; head -c 300 $data/layout.json" 2>&1 | tr -d ''
+    echo "---- the layout:"; adb shell "ls -l $data; head -c 300 $data/layout.json" 2>&1 | tr -d '\r'
     echo "---- crashes and dialogs:"; grep -E "FATAL EXCEPTION|ANR in|isn't responding|Force finishing" "$out/logcat-all.txt" | head -10
 fi
 echo "$([ $fail = 0 ] && echo PASS || echo FAIL)" >"$out/verdict.txt"

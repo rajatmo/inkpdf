@@ -503,7 +503,7 @@ Order: A4 and E0 first, together; E1; E2; E3; E4. Quality fixes from the owner's
   the address, a warning for tricks, Open, Copy. A real web view needs an engine on every platform (WebView2 is not FOSS, WebKitGTK is X11 only,
   Android needs Java glue): the owner chose the card first and the engine later.
 
-- **A PDF opens where it was left, and a list of the last ten (owner, 2026-11-12). Done 2026-11-12, in 1.8.0.** `recent.rs` (domain, pure: the list,
+- **A PDF opens where it was left, and a list of the last ten (owner, 2026-11-12). Done 2026-11-12, in 1.8.1 (1.8.0 was tagged and not released).** `recent.rs` (domain, pure: the list,
   a `Place`, the text of `recent.txt`), `app/config.rs` (the file, beside the settings), `app/files.rs` (`install` remembers the place of the document left
   and shows the one opened as it was left; `reopen_last` at the start), `editor/recent.rs` (`place`, `show_place`, the card), `toolbar/recent_card.rs`,
   `Item::Recent` (a clock, between Open and Save), `Request::OpenRecent`. Off in a run that is a check (`Options::remembers`). Not done: the real-input
@@ -570,7 +570,7 @@ Owner-run checks per milestone (say which ones in the pull request):
 | Latency and idle CPU | `tools/e2e/latency.ps1` and the numbers in section 1; idle window 0% (Windows; Linux and Android: `--stats` on hardware) |
 | Linux and Android | `tools/e2e/run.ps1 -Platform linux,android` (above), `tools/e2e/linux-smoke.sh` (virtual display), the CI `android` and `android-emulator` jobs, and a try on a real tablet with a stylus (`adb logcat -s inkpdf` if it misbehaves) |
 | Soak | open and close the overview, add/delete/undo pages and draw for 30 rounds; memory, handles and threads must be flat after the texture cache fills (budget 768 MB) |
-| Release | bump `apps/inkpdf/Cargo.toml`, rename the CHANGELOG heading (`## 1.8.0`), push `main`, then push the tag `v` and the version (`git tag v1.8.0; git push origin v1.8.0`): `.github/workflows/release.yml` builds the installer, the portable zip, the Linux tarball and AppImage and the APK with the scripts below and publishes the release, with the changelog section as its notes (it refuses a tag that is not the version). By hand, as before: `apps/inkpdf/installer/build.ps1` and `build-portable.ps1` (Windows), `tools/linux/build-portable.sh` and `build-appimage.sh` (Linux), `tools/android/build-apk.sh` (Android). |
+| Release | bump `apps/inkpdf/Cargo.toml`, rename the CHANGELOG heading (`## 1.8.1`), push `main`, then push the tag `v` and the version (`git tag v1.8.1; git push origin v1.8.1`): `.github/workflows/release.yml` builds the installer, the portable zip, the Linux tarball and AppImage and the APK with the scripts below and publishes the release, with the changelog section as its notes (it refuses a tag that is not the version). By hand, as before: `apps/inkpdf/installer/build.ps1` and `build-portable.ps1` (Windows), `tools/linux/build-portable.sh` and `build-appimage.sh` (Linux), `tools/android/build-apk.sh` (Android). |
 
 ## 8. Open questions for the owner (ask, do not assume)
 

@@ -1,6 +1,8 @@
 # Changelog
 
-## 1.8.0
+## 1.8.1
+(1.8.0 was tagged and never released: its packages were not all built. This is what it was to be.)
+
 - **A PDF opens where you left it.** The page, how far down it, and the zoom are remembered for each PDF when another is opened, when it is saved and when
   the program is closed (on Android also when the app goes to the background), and the PDF is shown so again the next time it is opened, however it is
   opened: the picker, the list below, a file dropped on the window, "Open with" or the command line. A zoom that followed the width of the window follows the
@@ -14,7 +16,7 @@
 - The list is a small text file, `recent.txt`, beside `settings.txt` (deleting it forgets the list; a portable copy keeps its own). A run that is a check or a
   measurement (`--layout`, `--inject`, `--record`, `--replay`, `--bench`, `--exit-after`, `--select-all`) neither reads nor writes it, so the real-input checks
   begin as they always did.
-- **Releases are made by a tag.** Pushing the tag of a version (`v1.8.0`) builds the Windows installer and portable zip, the Linux tarball and AppImage
+- **Releases are made by a tag.** Pushing the tag of a version (`v1.8.1`) builds the Windows installer and portable zip, the Linux tarball and AppImage
   and the Android APK with the scripts a PC uses, and publishes them as a GitHub release with this file's section as its notes
   (`.github/workflows/release.yml`; run by hand it only builds them, as a rehearsal).
 

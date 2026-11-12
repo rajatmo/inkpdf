@@ -33,7 +33,13 @@ adb shell "mkdir -p $data/InkPDF; echo 'tool pen' > $data/InkPDF/settings.txt" >
 adb shell settings put secure immersive_mode_confirmations confirmed >/dev/null 2>&1
 # (The launcher is the Java `Host` activity since the file picker and clipboard came in: a NativeActivity of its own.)
 adb shell am start -n app.inkpdf.test/.Host >/dev/null
-sleep 20
+# The app says where its buttons are once it has drawn a frame: that is waited for (a hosted emulator can take a minute to get there), and then
+# a little more for the window to settle.
+for _ in $(seq 60); do
+    adb shell "test -s $data/layout.json" >/dev/null 2>&1 && break
+    sleep 2
+done
+sleep 8
 
 shot() { adb exec-out screencap -p >"$out/$1.png"; }
 alive() { [ -n "$(adb shell pidof app.inkpdf.test | tr -d '\r')" ]; }
@@ -79,6 +85,13 @@ adb logcat -d -s inkpdf >"$out/logcat-inkpdf.txt"
 adb logcat -d >"$out/logcat-all.txt"
 check "the app reported its GPU" "grep -q 'GPU:' '$out/logcat-inkpdf.txt'"
 check "nothing panicked" "! grep -q 'panicked' '$out/logcat-inkpdf.txt'"
+# (What would say why, where the pictures cannot be looked at: what the app wrote, what has the screen, and whether the layout was written.)
+if [ $fail != 0 ]; then
+    echo "---- the app's log:"; tail -40 "$out/logcat-inkpdf.txt"
+    echo "---- the window that has the screen:"; adb shell dumpsys window 2>/dev/null | grep -E "mCurrentFocus|mFocusedApp" | head -4
+    echo "---- the layout:"; adb shell "ls -l $data; head -c 300 $data/layout.json" 2>&1 | tr -d ''
+    echo "---- crashes and dialogs:"; grep -E "FATAL EXCEPTION|ANR in|isn't responding|Force finishing" "$out/logcat-all.txt" | head -10
+fi
 echo "$([ $fail = 0 ] && echo PASS || echo FAIL)" >"$out/verdict.txt"
 cat "$out/verdict.txt"
 exit "$fail"

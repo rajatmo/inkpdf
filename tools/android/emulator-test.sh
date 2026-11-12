@@ -25,6 +25,12 @@ adb shell am force-stop app.inkpdf.test
 adb logcat -c
 data=/sdcard/Android/data/app.inkpdf.test/files
 adb shell "mkdir -p $data; rm -f $data/layout.json; touch $data/layout.on" >/dev/null 2>&1
+# The program starts on the selection of text, with which a stylus draws nothing: the check of ink is made with the pen. (With layout.on the
+# settings are read from this folder.)
+adb shell "mkdir -p $data/InkPDF; echo 'tool pen' > $data/InkPDF/settings.txt" >/dev/null 2>&1
+# The app starts with the system's bars hidden, and the first time any app does that on a device the system puts a card over it ("Viewing full
+# screen", with a button to press): a new emulator would show it, over the buttons these checks press. It is told the card has been seen.
+adb shell settings put secure immersive_mode_confirmations confirmed >/dev/null 2>&1
 # (The launcher is the Java `Host` activity since the file picker and clipboard came in: a NativeActivity of its own.)
 adb shell am start -n app.inkpdf.test/.Host >/dev/null
 sleep 20

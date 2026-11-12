@@ -36,7 +36,15 @@ for _ in $(seq 60); do
     adb shell "test -s $data/layout.json" >/dev/null 2>&1 && break
     sleep 2
 done
+# And its window has to be the one the system gives input to: a press sent before that waits, and after five seconds the system says the app
+# is not responding and puts a card of its own over it. (A hosted emulator draws in software, and can be that slow to settle.)
+focused() { adb shell dumpsys window 2>/dev/null | grep mCurrentFocus | grep -q 'app.inkpdf.test/'; }
+for _ in $(seq 60); do
+    focused && break
+    sleep 2
+done
 sleep 8
+focused || echo "(the app's window does not have the screen: $(adb shell dumpsys window 2>/dev/null | grep mCurrentFocus | head -1))"
 
 shot() { adb exec-out screencap -p >"$out/$1.png"; }
 alive() { [ -n "$(adb shell pidof app.inkpdf.test | tr -d '\r')" ]; }
